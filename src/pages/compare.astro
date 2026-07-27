@@ -35,7 +35,13 @@ const rows = entries.map((entry) => {
   const a = getAlgorithm(entry.data.algorithmId);
   const runnable = RUNNABLE_ALGORITHM_IDS.includes(entry.data.algorithmId);
   const declared = a?.implementation_status ?? "planned";
-  const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+  const effective = runnable
+    ? declared === "partial"
+      ? "partial"
+      : "runnable"
+    : declared === "explanation-only"
+      ? "explanation-only"
+      : "planned";
   const g = a?.guarantees;
   const problems = a?.problem_types ?? [];
   const online =

@@ -11,6 +11,9 @@ import { bcbsSolver, cbsSolver, ecbsSolver, eecbsSolver, icbsSolver } from "./cb
 import { pbsSolver } from "./pbs/pbs.js";
 import { pibtSolver } from "./pibt/pibt.js";
 import { winPibtSolver } from "./pibt/winpibt.js";
+import { ictsSolver } from "./joint/icts.js";
+import { mstarSolver } from "./joint/mstar.js";
+import { pushAndRotateSolver, pushAndSwapSolver } from "./push/solvers.js";
 
 /**
  * Solver の登録所。
@@ -45,6 +48,10 @@ const SOLVERS: readonly MapfSolver[] = [
   pbsSolver,
   pibtSolver,
   winPibtSolver,
+  ictsSolver,
+  mstarSolver,
+  pushAndSwapSolver,
+  pushAndRotateSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

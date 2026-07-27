@@ -158,4 +158,28 @@ describe("解の不変条件（反復テスト）", () => {
       expect(solvedCount, `${solverId} が一件も solved を返していない`).toBeGreaterThan(0);
     }
   });
+
+  it("Batch 4 の各 Solver が solved を返すとき、経路は常に妥当", async () => {
+    for (const solverId of ["icts", "mstar", "push-and-swap", "push-and-rotate"] as const) {
+      let solvedCount = 0;
+      for (let seed = 1; seed <= 6; seed += 1) {
+        const scenario = randomScenario(seed);
+        if (scenario.agents.length === 0) continue;
+        const result = await runInline({
+          solverId,
+          scenario,
+          options: {
+            ...DEFAULT_SOLVER_OPTIONS,
+            maxExpansions: 200_000,
+            maxHorizon: 600,
+            ...(solverId === "icts" ? { extra: { maxIndividualCost: 40 } } : {}),
+          },
+        });
+        if (result.outcome !== "solved") continue;
+        solvedCount += 1;
+        expect(checkPaths(scenario, result.paths), `${solverId} seed=${seed}`).toEqual([]);
+      }
+      expect(solvedCount, `${solverId} が一件も solved を返していない`).toBeGreaterThan(0);
+    }
+  });
 });

@@ -12,7 +12,13 @@ const fm = entry.data;
 const algo = getAlgorithm(fm.algorithmId);
 const runnable = RUNNABLE_ALGORITHM_IDS.includes(fm.algorithmId);
 const declared = algo?.implementation_status ?? "planned";
-const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+const effective = runnable
+  ? declared === "partial"
+    ? "partial"
+    : "runnable"
+  : declared === "explanation-only"
+    ? "explanation-only"
+    : "planned";
 
 const LABEL: Record<string, string> = {
   runnable: "実行可",

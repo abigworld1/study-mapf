@@ -3,14 +3,120 @@ title: "ICTS"
 algorithmId: icts
 originalName: "Increasing Cost Tree Search"
 order: 200
-summary: ""
-status: draft
+summary: "agent ごとの許容 cost vector を小さい順に列挙し、MDD の直積で衝突のない組合せを探す SOC 最適解法。"
+status: reviewed
 primarySources:
   - paperId: icts-ijcai-2011
+    sections: ["2", "4", "5", "5.1", "5.2", "6", "8"]
+    pages: [1, 2, 3, 4, 5, 6]
 implementationReferences:
   - repositoryId: hog2
+lastReviewed: "2026-07-27"
+simulatorSolverId: icts
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="icts" />
+## 概要
+
+Increasing Cost Tree Search（ICTS）は、MAPF を 2 層に分けます。high level は各 agent の path cost を並べた vector `(C1,…,Ck)` を小さい順に増やし、low level はその cost を厳密に満たす path の組合せが衝突なしで存在するかを調べます<SourceCitation paperId="icts-ijcai-2011" section="5" page={3} />。
+
+## まず何がうれしいのか
+
+joint A\* は cell configuration と時刻を直接広げます。ICTS は先に「各 agent が何 step 使うか」だけを決めます。同じ cost の個別 path は Multi-value Decision Diagram（MDD）へまとめるため、明らかに短すぎる path や goal へ戻れない cell を low level に持ち込みません。
+
+## 前提となる知識
+
+- breadth-first search（BFS）と shortest-path distance
+- sum of costs（SOC）と Sum of Individual Costs（SIC）
+- vertex conflict / edge-swap conflict
+- layered directed acyclic graph（DAG）
+
+## 対象問題
+
+原論文は 4 近傍 grid、離散時間、move / wait を扱います。2 agent が同じ vertex を同時占有することと、同じ edge を逆向きに同時通過することを禁止します。目的は各 agent が goal に着くまでの step 数の和です<SourceCitation paperId="icts-ijcai-2011" section="2" page={2} />。これはサイト既定の following 許可、edge-swap 禁止、stay at goal、SOC と一致します。
+
+## 中心となるアイデア
+
+ICT root は、各 agent が他 agent を無視した shortest-path distance の vector です。child は 1 成分だけを 1 増やします。したがって root からの深さ `d` にある全 node の SOC は `SIC+d` です。level-order で最初に feasible な node が見つかれば、それより小さい SOC はすべて検査済みです<SourceCitation paperId="icts-ijcai-2011" section="5.1" page={3} />。
+
+cost `Ci` の MDD は、時刻 `t` の cell のうち「start から `t` step で来られ、残り `Ci-t` step で goal へ行ける」ものだけを持ちます。全 MDD の同時遷移を作り、conflict のある組を除けば feasibility を判定できます<SourceCitation paperId="icts-ijcai-2011" section="5.2" page={3} />。
+
+## アルゴリズムの手順
+
+1. 各 agent の true distance を求め、root cost vector を作ります。
+2. ICT node を FIFO queue から取り出します。
+3. 各 `Ci` について exact-cost MDD を構築します。
+4. optional pairwise pruning で 2-agent MDD の各組が feasible か先に調べます。
+5. k-agent MDD の直積を探索し、vertex / edge-swap conflict を除きます。
+6. feasible なら configuration 列を path へ戻します。
+7. infeasible なら 1 成分を 1 増やした child を agent 順に生成します。
+
+## 小さな例
+
+2 agent の個別最短距離が `(2,2)` なら root SOC は 4 です。その組合せが中央 cell で衝突する場合、次は `(3,2)` と `(2,3)` を調べます。前者で一方が 1 step 待つ合法解が見つかれば SOC 5 です。SOC 4 の全候補は root で不可能と判定済みなので、SOC 5 が最適です。
+
+## データ構造
+
+- ICT node: cost vector、SOC、生成 ID
+- MDD layer: 時刻ごとの cell index 集合
+- MDD edge: 次 layer へ移れる cell index
+- low-level state: `(time, joint configuration)`
+- transposition set: 同じ layer/configuration の再探索を防止
+
+短い MDD は自身の cost で goal に達した後、長い MDD の最終 layer まで dummy goal node で延長します<SourceCitation paperId="icts-ijcai-2011" section="5.2" page={3} />。
+
+## 疑似コード
+
+```text
+root.costs ← individualShortestDistances()
+OPEN ← FIFO(root)
+
+while OPEN is not empty:
+  costs ← OPEN.pop()
+  mdds ← exactCostMDD(agent[i], costs[i]) for every i
+  if pairwiseFeasible(mdds) and jointMddSearch(mdds) succeeds:
+    return reconstructed paths
+  for i in input agent order:
+    OPEN.push(costs with costs[i] increased by 1)
+return failure
+```
+
+原論文 Algorithm 1 の 2 層 control flowを、サイトの MDD builder と `TimedPath` 復元に合わせて短く再構成しています<SourceCitation paperId="icts-ijcai-2011" label="Algorithm 1" page={4} />。
+
+## 実装上の注意
+
+MDD は「最短以下」ではなく、指定 cost で goal に終わる path を表します。goal へ早く着く path も、余った時間に wait して exact cost を満たせます。low level は vertex conflict だけでなく opposite edge transition も検査します。
+
+pairwise pruning は必要条件です。どれか 2 体が両立しなければ全体も両立しませんが、全 pair が両立しても k 体同時に両立するとは限りません<SourceCitation paperId="icts-ijcai-2011" section="8" page={5} />。
+
+## よくある誤解
+
+- ICTS の high level は path を持たず、cost vector だけを持ちます。
+- MDD の node 数が path 数と同じとは限りません。共通 prefix / suffix を共有します。
+- makespan 最適ではなく SOC 最適を狙います。
+
+<Caution title="ブラウザの horizon は解なし証明ではありません">
+  原論文の ICT は必要なだけ cost を増やせます。サイト版が `maxIndividualCost`、展開上限、timeout
+  で止まった場合は `node-limit` / `timeout` であり、一般の no-solution ではありません。
+</Caution>
+
+## 他手法との比較
+
+- CBS は conflict を見つけて agent-specific constraint を増やします。
+- ICTS は cost を増やし、同じ cost 内の path 組合せを MDD でまとめます。
+- joint-state A\* は cost と configuration を 1 層で探索します。
+
+## サイト上の実装との差異
+
+サイト版は原論文 Algorithm 1 の basic ICTS と pairwise feasibility pruning を実装します。MDD は ICT node ごとに再構築し、AIJ 拡張版の MDD reuse / sparsification と Independence Detection は未対応です。同一 level は agent 入力順、MDD successor は row-major cell 順で決定します。
+
+`hog2` の登録 commit を検索しましたが、この checkout に ICTS source は見つからなかったため、公開実装との一致は主張しません。`maxIndividualCost`、共有展開上限、timeout、AbortSignal はブラウザ用の安全弁です。
+
+## 実験してみる
+
+<SimulatorLink solverId="icts" />
+
+`swap-conflict` を detailed trace で実行し、`create-ict-node` → `build-mdd` → conflict / prune → 次の cost vector、という流れを追ってください。小規模例では result の SOC が oracle の SOC と一致するテストも入っています。

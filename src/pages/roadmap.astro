@@ -19,7 +19,13 @@ function implStateOf(algorithmId: string): { label: string; runnable: boolean } 
   const algo = getAlgorithm(algorithmId);
   const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
   const declared = algo?.implementation_status ?? "planned";
-  const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+  const effective = runnable
+    ? declared === "partial"
+      ? "partial"
+      : "runnable"
+    : declared === "explanation-only"
+      ? "explanation-only"
+      : "planned";
   return { label: IMPL_LABEL[effective] ?? "準備中", runnable };
 }
 

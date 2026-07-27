@@ -55,6 +55,16 @@ test.describe("サイト全体", () => {
     await expect(page.getByRole("heading", { name: /完全性・最適性/ })).toBeVisible();
   });
 
+  test("Batch 4 の実装状態がページと一致する", async ({ page }) => {
+    await page.goto("./algorithms/icts/");
+    await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "サイト上の実装との差異" })).toBeVisible();
+
+    await page.goto("./algorithms/push-and-rotate/");
+    await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+    await expect(page.locator(".sim-link")).toContainText("biconnected subproblem merge");
+  });
+
   test("解説準備中のページは推測で埋めていない", async ({ page }) => {
     await page.goto("./algorithms/lacam/");
     await expect(page.getByRole("heading", { name: "解説準備中" })).toBeVisible();
@@ -117,6 +127,10 @@ test.describe("シミュレータ", () => {
     await expect(solverSelect).toContainText("PBS");
     await expect(solverSelect).toContainText("PIBT");
     await expect(solverSelect).toContainText("winPIBT");
+    await expect(solverSelect).toContainText("ICTS");
+    await expect(solverSelect).toContainText("M*");
+    await expect(solverSelect).toContainText("Push and Swap");
+    await expect(solverSelect).toContainText("Push and Rotate");
     await expect(solverSelect).not.toContainText("LaCAM");
   });
 

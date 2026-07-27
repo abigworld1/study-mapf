@@ -655,13 +655,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [mstar-aij-2015]
   implementation_repository_ids: [libmultirobotplanning, public-cppmomapf]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: "mstar-aij-2015 Theorem 1「M* is complete and optimal.」（Lemma 3・6・7 が前提補題）"
-  notes: "まず各エージェントを個別に計画し、衝突が起きた箇所でだけ探索空間の次元を局所的に上げる（subdimensional expansion）。PRIMAL の模倣学習の教師は ODrM*。原論文の保証の主張は PDF 1 ページ目から抽出できなかったため unknown。"
+  guarantee_evidence: "mstar-aij-2015 p.30 Theorem 1「M* is complete and optimal.」（Lemma 3・6・7 が前提補題）"
+  notes: "まず各エージェントを個別に計画し、衝突が起きた箇所でだけ探索空間の次元を局所的に上げる（subdimensional expansion）。PRIMAL の模倣学習の教師は ODrM*。"
 
 - id: recursive-mstar
   display_name: "Recursive M* (rM*)"
@@ -685,12 +685,12 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [icts-ijcai-2011]
   implementation_repository_ids: [hog2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: "icts-ijcai-2011 のタイトル「The Increasing Cost Tree Search for Optimal Multi-agent Pathfinding」。定理番号は PDF 取得後、可能なら AIJ 2013 拡張版（DOI 10.1016/j.artint.2012.11.006）で追記すること。"
+  guarantee_evidence: "icts-ijcai-2011 p.1 Abstract は ICTS を optimal MAPF algorithm とし、p.2 §4 は optimal-cost solution を返す ICT search を定義する。unsolvable instance の有限停止を明示した定理は確認できないため complete は unknown。"
   notes: "高レベルで各エージェントのコストの組を列挙し、低レベルで MDD の交差により実現可能性を判定する二層構造。CBS と対比して説明すると分かりやすい。"
 
 # =============================================================================
@@ -704,12 +704,12 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [push-and-swap-ijcai-2011]
   implementation_repository_ids: [pibt2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: conditional
+    complete: false
     optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: "push-and-swap-ijcai-2011 タイトル「Fast Cooperative Path-Finding with Completeness Guarantees」/ cbs-aij-2015 p.5「Both TASS and Push and Swap do not return an optimal solution and guarantee completeness for special cases only.」成立クラスに条件があるため conditional。"
+  guarantee_evidence: "push-and-swap-ijcai-2011 p.4 Theorem 3.1 は n≤|V|-2 で complete と主張するが、後続一次資料 push-and-rotate-aamas-2013 p.1 および pp.2-4 は同じ条件内の反例と agent 処理順依存を示す。最適性は push-and-swap-ijcai-2011 p.7 §5 が solution-quality guarantee を目的にしないと明記。"
   notes: "★重要★ push-and-rotate-aamas-2013 の 1 ページ目脚注が「一部のインスタンスでは Push and Swap が解を見つけられるかどうかがエージェントの処理順に依存する」と指摘している。完全性を説明する際は必ず両論文を併記すること（SOURCE_POLICY.md 第 4 条）。"
 
 - id: push-and-rotate
@@ -719,13 +719,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [push-and-rotate-aamas-2013]
   implementation_repository_ids: [push-and-rotate-cbs-pp]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: conditional
     optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: "cbs-aij-2015 p.5「Push and Rotate [10], a variant of Push and Swap, is complete for graphs where at least two vertices are always unoccupied, i.e., k ≤ |V| − 2.」空き頂点が 2 つ以上という条件付き。同箇所が Push and Swap は最適解を返さないと明記している。"
-  notes: "Push / Swap / Rotate の 3 操作。解の質は保証されないが、対象クラス内では解を返す。"
+  guarantee_evidence: "push-and-rotate-aamas-2013 p.5 Theorem 1 は各 connected component に少なくとも 2 個の unoccupied vertices がある場合の completeness を証明する。p.6 §6 は solution quality の改善を future work とし、最適性・cost bound を主張しない。"
+  notes: "Algorithms 1-4 の subproblem decomposition / priority と Push / Swap / Rotate。解の質は保証されないが、対象クラス内では解を返す。browser の timeout / node / move 上限による打ち切りは保証の対象外。"
 
 - id: pibt
   display_name: "PIBT (Priority Inheritance with Backtracking)"

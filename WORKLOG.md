@@ -1178,3 +1178,122 @@ PBS だけ不揃いだった。
 ★ PIBT と winPIBT で値が違う点に注意。PIBT は分散実装への適性を主張しているが、
 winPIBT は論文自身が集中型として提示し、分散化には困難があると述べている。
 PBS は原論文に自らの方式を述べた記述が無いため未記入のまま。
+
+---
+
+## 2026-07-27 — Batch 4: ICTS / M* / Push and Swap / Push and Rotate（担当: Codex）
+
+### 1. 対象アルゴリズム
+
+- ICTS（Increasing Cost Tree Search）
+- M*（Subdimensional Expansion）
+- Push and Swap
+- Push and Rotate
+
+4 手法とも `runnable / paper-faithful`。Push and Rotate は会議版 Algorithms 1–4 と、同論文が
+primitive の詳細として参照する著者 thesis Algorithms 4.1.1–4.2.11 まで実装した。
+
+### 2. 参照した論文と節
+
+- `icts-ijcai-2011`: PDF pp.1-6、§2、§4-6、§8、Algorithm 1
+- `mstar-aij-2015`: PDF pp.7-10, 16-31、§3-5.1、Algorithms 1-2、Theorem 1
+- `push-and-swap-ijcai-2011`: PDF pp.2-7、§1.2、§2-3.2、§5、Algorithms 1-3、Theorem 3.1
+- `push-and-rotate-aamas-2013`: PDF pp.1-8、§2-4.3、§6、Algorithms 1-4、Theorem 1
+- Push and Rotate 会議論文 p.6 が primitive の完全仕様として参照する Boris de Wilde の 2012 TU Delft
+  MSc thesis、Algorithms 4.1.1-4.2.11（調査用に `/tmp` へ取得し、リポジトリには同梱していない）
+
+4 本とも marker fidelity check は「要確認 0」。Algorithm / Theorem の内容とページは PDF image / text を
+人手で確認したが、全文の行単位照合ではないため metadata の `checked_against_pdf` は false のまま。
+
+### 3. 参照した公開実装
+
+- `hog2` `af9d42d0`: 登録 checkout に ICTS source が見つからず、比較対象にできなかった
+- `libmultirobotplanning` `4c75fa20`: M* source が無かった
+- `public-cppmomapf` `80bc...`: multi-objective MOM* であり basic M* の oracle にはしなかった
+- `pibt2` `faab5b91`: Push and Swap の priority / clear / compression の差異を閲覧。
+  `grid-pathfinding` と `googletest` submodule 未取得で CMake configure 失敗
+- `push-and-rotate-cbs-pp` `bba48f17`: LICENSE 不在なので read-only。CMake configure は成功したが、
+  現行 GCC で `node.h` の `size_t` header 不足により build 失敗。source は修正しなかった
+
+第三者コードは転記しておらず、`THIRD_PARTY_NOTICES.md` の変更は無い。
+
+### 4. 実装したファイル
+
+- `src/solvers/joint/icts.ts`: ICT BFS、exact-cost MDD、k-agent MDD DFS、pairwise pruning
+- `src/solvers/joint/mstar.ts`: basic M*、individual policy、limited neighbors、collision-set backpropagation
+- `src/solvers/push/decomposition.ts`: iterative Tarjan、subproblem merge / agent assignment / priority propagation
+- `src/solvers/push/engine.ts`: 検査付き逐次 move、4-stage clear、multipush、transactional swap、exchange / reverse、空き／満杯 cycle rotate
+- `src/solvers/push/solvers.ts`: Push and Swap と Push and Rotate の API wrapper、plan / resolve、guard / warnings
+- `src/lib/model/types.ts`, `src/solvers/limits.ts`: Batch 4 の可視化 event と trace level
+- `src/solvers/registry.ts`: 4 Solver を登録
+- partial solver を registry 登録だけで runnable 表示へ格上げしていた共通 status 判定を、
+  `AlgorithmStatus.astro`、`AlgorithmCard.astro`、比較表、roadmap で修正
+
+### 5. 追加・更新したテスト
+
+`tests/unit/batch4-solvers.test.ts` を追加し、`tests/unit/invariants.test.ts` と E2E を更新した。
+
+- ICTS / M* の小規模 2-agent instance を `jointStateOptimalSumOfCosts()` と比較
+- `checkPaths()`、SOC / makespan 再計算、determinism
+- ICT node / MDD / collision-set / push primitive trace
+- horizon、timeout、node limit、AbortSignal、input limit、trace limit、unsupported rules
+- Push の空き 2 vertex guard、agentOrder validation、失敗時の非存在非証明 warning
+- Push and Rotate の空き／満杯 cycle、dense swap、isthmus subproblem / priority、空き 2 個だけの二部屋 graph
+- `jointStateBfs()` で存在を確認した 3×2 の 36 configuration、random 6 seed の Batch 4 不変条件
+- simulator 選択肢と runnable badge の E2E
+
+既存テストは削除・skip・弱体化していない。
+
+### 6-7. テスト・ビルド結果
+
+```text
+sources:validate  errors=0 warnings=6（既知 warning のみ）
+marker fidelity   4 papers / 要確認 0
+format:check      All matched files use Prettier code style!
+lint              0 problems
+typecheck         0 errors（92 files、既存 Astro deprecation hints 22）
+test              186 passed（11 files）
+build             62 pages
+e2e               30 passed（Chromium desktop + mobile）
+```
+
+### 8. 理論保証と manifest への書き戻し
+
+- ICTS: `complete: unknown`, `optimal: true`, `bounded_suboptimal: false`。
+  p.1 Abstract / p.2 §4 は optimal を明示するが unsolvable instance の有限停止 theorem は未確認
+- M*: `complete: true`, `optimal: true`, `bounded_suboptimal: false`。
+  p.30 Theorem 1 を直接確認
+- Push and Swap: `complete: conditional → false`, `optimal: false`, `bounded_suboptimal: false`。
+  IJCAI 2011 Theorem 3.1 の主張に対し、AAMAS 2013 が同一条件内の反例を提示
+- Push and Rotate: `complete: conditional`, `optimal: false`, `bounded_suboptimal: false`。
+  p.5 Theorem 1 の条件は各 connected component に空き vertex 2 個以上。browser safety limit による
+  `timeout` / `node-limit` は保証の対象外
+
+unknown を含む algorithm 数は 58 / 77 のまま（ICTS の complete を推測せず維持）。
+
+### 9. 論文と公開実装との差異
+
+- ICTS / M* は登録 checkout に対応する basic solver source が無く、独立 oracle 比較だけを行った
+- M* の edge collision は中間 vertex を追加せず、site transition 上の edge-swap として直接検出
+- `pibt2` Push and Swap は start-goal distance priority と plan compression を使うが、browser は input order
+  と primitive の逐次 frame を採用。IJCAI 版 clear の欠落ケースは後続一次資料の 4-stage clear で補正
+- Push and Rotate 公開実装は LICENSE 不在なので閲覧のみ。コードを修正・転記していない
+- Push and Rotate Algorithm 4 の trail `q` は、証明が要求する displaced finished agent の位置を保持するため、
+  本文の「通過 path」に合わせ top-level planning の始点を含めた
+
+### 10. ブラウザ版で簡略化した部分
+
+- 4 手法とも 4 近傍 unit-cost grid と one-shot MAPF に限定
+- ICTS は MDD を ICT node ごとに再構築し、ID / AIJ 拡張版の reuse / sparsification を含まない
+- M* は basic variant のみ。recursive / OD / EPEM / inflated M* は含まない
+- Push and Swap は smoothing / parallel compression を含まない
+- Push and Rotate は一般 graph import、solution smoothing、connected component の並列 schedule を含まない
+
+### 11. 未対応部分
+
+一般 graph file import、solution smoothing、論文 benchmark map 全件の再現、公開実装との固定 output 比較。
+公開実装比較は上記 build blocker のため未完了で、`reference-validated` とはしていない。
+
+### 12. 次の推奨バッチ
+
+Batch 5 の `lacam` / `lacam-star`。

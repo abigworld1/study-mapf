@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-07-27（Codex / Batch 3 完了）
+最終更新: 2026-07-27（Codex / Batch 4 完了）
 
 ---
 
@@ -48,17 +48,20 @@
 | `pbs`                  | PBS              | runnable | reference-validated | PT DFS、partial-order UpdatePlan、2 段 CAT。3×2 fixture を author implementation と照合。[ノート](docs/notes/implementation/pbs.md) |
 | `pibt`                 | PIBT             | runnable | reference-validated | Algorithm 1 と one-shot wrapper。2×2 rotation を pypibt と照合。[ノート](docs/notes/implementation/pibt.md)                         |
 | `winpibt`              | winPIBT          | runnable | paper-faithful      | Algorithms 1–2、disentangled provisional paths、retroactive inheritance。[ノート](docs/notes/implementation/winpibt.md)             |
+| `icts`                 | ICTS             | runnable | paper-faithful      | ICT BFS、exact-cost MDD、k-agent search、pairwise pruning。[ノート](docs/notes/implementation/icts.md)                              |
+| `mstar`                | M*               | runnable | paper-faithful      | basic M*、limited neighbors、collision-set backpropagation。[ノート](docs/notes/implementation/mstar.md)                            |
+| `push-and-swap`        | Push and Swap    | runnable | paper-faithful      | push / clear / multipush / exchange / reverse。後続論文の反例を反映。[ノート](docs/notes/implementation/push-and-swap.md)           |
+| `push-and-rotate`      | Push and Rotate  | runnable | paper-faithful      | subproblem 分解・priority と push / swap / rotate / resolve。[ノート](docs/notes/implementation/push-and-rotate.md)                 |
 
 ---
 
 ## 未実装（解説ページのみ存在）
 
-以下 23 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
+以下 19 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
 実装状況は `docs/sources/algorithms.yaml` の `implementation_status` を参照。
 
 | バッチ  | 対象                                                                     |
 | ------- | ------------------------------------------------------------------------ |
-| Batch 4 | `icts`, `mstar`, `push-and-swap`, `push-and-rotate`                      |
 | Batch 5 | `lacam`, `lacam-star`                                                    |
 | Batch 6 | `mapf-lns`, `mapf-lns2`, `rhcr`                                          |
 | Batch 7 | `hungarian-method`, `min-cost-max-flow`, `gale-shapley`, `cbm`, `cbs-ta` |
@@ -93,6 +96,8 @@
 | `winpibt`              | 条件付き | 不明               | winpibt-2019 p.7 Theorem 4.3。dodgeable + finite window の reachability |
 | `lacam-star`           | あり     | 条件付き           | 本文は「complete and optimal」だがタイトルは Eventually Optimal         |
 | `push-and-rotate`      | 条件付き | なし               | 空き頂点が 2 つ以上（k ≤ \|V\| − 2）                                    |
+| `push-and-swap`        | なし     | なし               | 後続 Push and Rotate 論文が原論文 Theorem 3.1 の同一条件内反例を提示    |
+| `icts`                 | 不明     | 最適               | icts-ijcai-2011 p.1 Abstract / p.2 §4。有限 no-solution 証明は未確認    |
 | `sipp`                 | あり     | time-minimal       | sipp-icra-2011 p.5 Theorem 1 / 2                                        |
 | `prioritized-planning` | なし     | なし               | pbs-aaai-2019 p.2 Theorem 1、p.3 Theorem 4 / Corollary 5                |
 | `cooperative-astar`    | なし     | 不明               | cooperative-pathfinding-2005 p.2 Figure 1 と本文                        |

@@ -7,7 +7,7 @@ import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
  *
  * ★ 「実装済み」と誤認させないことが最優先。
  *   シミュレータで実際に動くかどうかは registry（= 実際に登録された Solver）から取り、
- *   algorithms.yaml の宣言だけを信用しない。両者が食い違ったら registry を優先する。
+ *   runnable / partial の完成度は manifest から取る。
  */
 interface Props {
   algorithmId: string;
@@ -20,9 +20,16 @@ const { algorithmId, contentStatus, showContent = true } = Astro.props;
 const algo = getAlgorithm(algorithmId);
 const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
 
-// registry に無いのに runnable を名乗っている場合は、実態（= 動かない）に合わせる。
+// registry に無い runnable / partial は実態（= 動かない）に合わせる。
+// registry にある partial は「動くが一部」のまま表示し、runnable へ格上げしない。
 const declared = algo?.implementation_status ?? "planned";
-const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+const effective = runnable
+  ? declared === "partial"
+    ? "partial"
+    : "runnable"
+  : declared === "explanation-only"
+    ? "explanation-only"
+    : "planned";
 
 const IMPL: Record<string, { label: string; tone: string; help: string }> = {
   runnable: {

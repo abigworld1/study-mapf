@@ -456,6 +456,61 @@ export type SolverEvent =
       readonly agentId: AgentId;
       readonly candidates: readonly { cell: Cell; score: number }[];
     }
+  // ------------------------------------------------------------ ICTS / M*
+  | {
+      readonly type: "create-ict-node";
+      readonly nodeId: string;
+      readonly costs: readonly number[];
+      readonly totalCost: number;
+    }
+  | {
+      readonly type: "build-mdd";
+      readonly agentId: AgentId;
+      readonly cost: number;
+      readonly nodeCount: number;
+    }
+  | {
+      readonly type: "prune-ict-node";
+      readonly nodeId: string;
+      readonly reason: "pairwise" | "horizon" | "duplicate";
+    }
+  | {
+      readonly type: "update-collision-set";
+      readonly configId: string;
+      readonly agentIds: readonly AgentId[];
+    }
+  | {
+      readonly type: "backpropagate-collision";
+      readonly fromConfigId: string;
+      readonly toConfigId: string;
+      readonly agentIds: readonly AgentId[];
+    }
+  // ------------------------------------------------------------ Push 系
+  | {
+      readonly type: "push-agent";
+      readonly agentId: AgentId;
+      readonly from: Cell;
+      readonly to: Cell;
+      readonly reason: "plan" | "clear" | "multipush" | "resolve";
+    }
+  | { readonly type: "clear-vertex"; readonly cell: Cell; readonly emptyCell: Cell }
+  | {
+      readonly type: "swap-agents";
+      readonly agentA: AgentId;
+      readonly agentB: AgentId;
+      readonly phase: "start" | "finish";
+    }
+  | {
+      readonly type: "rotate-cycle";
+      readonly agentIds: readonly AgentId[];
+      readonly cells: readonly Cell[];
+    }
+  | {
+      readonly type: "create-subproblem";
+      readonly subproblemId: string;
+      readonly cells: readonly Cell[];
+      readonly agentIds: readonly AgentId[];
+    }
   // ------------------------------------------------------------ LaCAM
   /** 構成（全エージェント位置の組）を展開した。 */
   | { readonly type: "configuration-expand"; readonly configId: string; readonly depth: number }

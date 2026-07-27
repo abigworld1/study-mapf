@@ -3,14 +3,130 @@ title: "Push and Rotate"
 algorithmId: push-and-rotate
 originalName: "Push and Rotate"
 order: 410
-summary: ""
-status: draft
+summary: "Push and Swap の反例を subproblem priority、rotate、resolve で補う条件付き完全な rule-based 手法。"
+status: reviewed
 primarySources:
   - paperId: push-and-rotate-aamas-2013
+    sections: ["2", "3", "4", "4.1", "4.2", "4.3", "6"]
+    pages: [1, 2, 3, 4, 5, 6, 7, 8]
 implementationReferences:
   - repositoryId: push-and-rotate-cbs-pp
+lastReviewed: "2026-07-27"
+simulatorSolverId: push-and-rotate
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="push-and-rotate" />
+## 概要
+
+Push and Rotate は Push and Swap の反例を分析し、graph を subproblem に分ける priority、cycle 上の `rotate`、goal から動かされた agent を戻す `resolve` を加えた手法です。各 connected component に空き vertex が 2 個以上ある class で completeness を示します<SourceCitation paperId="push-and-rotate-aamas-2013" label="Theorem 1" page={5} />。
+
+## まず何がうれしいのか
+
+単純な agent order では isthmus（くびれ）を goal が先に塞ぎ、後続 agent が通れなくなります。Push and Rotate は biconnected な領域と isthmus の関係から subproblem priority を作り、先に通すべき agent を決めます。trail が cycle を作れば、swap だけに頼らず cycle 全体を回せます。
+
+## 前提となる知識
+
+- Push and Swap の push / clear / multipush / exchange
+- connected component、biconnected component、isthmus / articulation
+- partial priority relation
+- simple cycle と rotation
+
+## 対象問題
+
+原論文は undirected graph 上の pebble motion を扱います。各 connected component には少なくとも 2 個の unoccupied vertex が必要です<SourceCitation paperId="push-and-rotate-aamas-2013" section="4.3" page={5} />。サイトの問題表現は 4 近傍 grid なので、walkable cell を vertex、隣接を edge と読み替えます。
+
+## 中心となるアイデア
+
+前処理は graph を biconnected components に分け、利用可能な空き vertex 数に応じて隣接領域を subproblem へ統合します。isthmus を挟んで、一方の goal assignment が他方の通行を妨げるなら priority relation を付けます<SourceCitation paperId="push-and-rotate-aamas-2013" section="4.1" page={3} />。
+
+実行時の中心は次の 3 primitive です。
+
+- `push`: path 上の blocker を空き vertex へ押し出す
+- `swap`: degree 3 以上の場所と空き 2 vertex で隣接 agent を交換する
+- `rotate`: planning trail が cycle を閉じたとき、cycle 上の assignment を回す
+
+goal へ置いた agent が一時的に動いた場合は `resolve` が push または再帰的な planning で戻します。`reverse` は swap の準備中に動かした対象外 agent を元へ戻す処理です<SourceCitation paperId="push-and-rotate-aamas-2013" section="4.2" page={4} />。
+
+## アルゴリズムの手順
+
+1. graph の biconnected components を求めます。
+2. 空き vertex 数で扱える範囲を subproblem へ merge します。
+3. isthmus と goal assignment から subproblem / agent priority を作ります。
+4. higher-priority agent から goal への shortest path を計画します。
+5. path を push し、行き詰まりでは swap を使います。
+6. trail が過去 vertex と交わって cycle になれば rotate します。
+7. 一時的に動いた finished agent を resolve し、全 agent が goal なら終了します。
+
+## 小さな例
+
+2 つの広い部屋が 1 cell の通路で接続され、通路 cell 自体が agent `b` の goal だとします。`b` を先に置くと、反対側へ行く `a` が通れません。priority 前処理は `a` を含む通過 subproblem を先にし、`a` が渡ってから `b` を通路 goal へ置きます。
+
+## データ構造
+
+- vertex assignment / occupancy / sequential move records
+- biconnected component と merged subproblem
+- subproblem priority relation
+- finished set `F`
+- current planning trail `q`
+- swap transaction と reverse move list
+
+## 疑似コード
+
+```text
+subproblems ← merge(biconnectedComponents(graph), emptyCount)
+priorities ← precedenceAcrossIsthmuses(subproblems, goals)
+
+while unfinished agents remain:
+  agent ← a highest-priority unfinished agent
+  path ← shortestPath(agent, goal(agent))
+  trail ← path including the current vertex
+  while path remains:
+    next ← next vertex on path
+    if next is already in trail: rotate(the closed cycle)
+    else if push(agent, next) fails and swap(agent, blocker) fails: return failure
+    append next to trail
+  resolve any finished agents moved by this plan
+return plan
+```
+
+原論文 Algorithms 1–4 の decomposition、priority、main loop を教材用に短く再構成しています<SourceCitation paperId="push-and-rotate-aamas-2013" label="Algorithm 1" page={4} /><SourceCitation paperId="push-and-rotate-aamas-2013" label="Algorithm 4" page={5} />。会議版が省略する primitive の詳細は、同論文 p.6 が参照する著者修士論文 Algorithms 4.2.1–4.2.11 でも確認しました。
+
+## 実装上の注意
+
+空き vertex が全 graph で 2 個あっても、分断された component の片側に偏れば条件を満たしません。component ごとに数えます。また random な同 priority 選択を決定的にする場合も `Math.random()` ではなく seed 付き乱数を使う必要があります。
+
+## よくある誤解
+
+- rotate は edge-swap を許可する操作ではなく、合法 move 列として assignment を回す primitive です。
+- 空き 2 vertex は performance hint ではなく completeness class の条件です。
+- shortest solution を保証しません。論文は solution quality の改善を future work に挙げます<SourceCitation paperId="push-and-rotate-aamas-2013" section="6" page={6} />。
+
+<Caution title="条件付き完全性とブラウザ安全上限">
+  サイト版は Algorithms 1–4 と全 primitive を実装していますが、Theorem 1 の条件は各 connected
+  component に空き vertex が 2 個以上あることです。さらに browser の timeout / expansion / move
+  上限で打ち切った結果は解なし証明ではありません。一般 graph import、 smoothing、非一様 edge cost
+  は対象外です。
+</Caution>
+
+## 他手法との比較
+
+- Push and Swap は処理順依存の反例を持ちます。
+- Push and Rotate は priority / rotate / resolve でその class を広く覆います。
+- search-based optimal solver と違い、move 数の最小化や bounded-suboptimality は保証しません。
+
+## サイト上の実装との差異
+
+サイト版は iterative Tarjan、`m - 2` 距離での subproblem merge、agent assignment、isthmus-based priority と propagation、seed 付き同 priority 選択、push、4-stage clear、multipush、exchange、reverse、空き／満杯 cycle の rotate、finished-agent resolve を実装します。`agentOrder` による上書きは、原論文の priority を壊すため受け付けません。
+
+Algorithm 4 は `q` を空列で初期化して移動先だけを append する表記ですが、同頁の完全性説明は swap で後退した finished agent の現在地が `q` 上にあることを使います。サイト版は本文の「通過 path」という説明に合わせ、top-level planning の始点も trail に含めます。これにより最初の swap で動いた finished agent も `resolve` が検出できます。
+
+登録された `push-and-rotate-cbs-pp` は LICENSE 不在です。output comparison のための閲覧に限定し、コードは一切転記していません。CMake configure は成功しましたが、現行 GCC では `node.h` の `size_t` に必要な header が無く build に失敗しました。read-only source は修正していないため、完全実装との output 比較は未完了です。
+
+## 実験してみる
+
+<SimulatorLink solverId="push-and-rotate" />
+
+まず 3×2 の交換例で push / swap / rotate の逐次 frame を確認してください。次に、2 つの部屋を細い isthmus でつないだ map を作り、`create-subproblem`、`set-priority`、`priority-order` の順で前処理が可視化されることを観察してください。空きを 1 個へ減らすと対象 class 外として拒否される違いも確認できます。

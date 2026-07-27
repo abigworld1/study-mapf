@@ -3,15 +3,131 @@ title: "M*"
 algorithmId: mstar
 originalName: "Subdimensional Expansion / M*"
 order: 210
-summary: ""
-status: draft
+summary: "通常は個別 policy だけを進み、衝突した agent だけを局所的に joint search へ結合する SOC 最適解法。"
+status: reviewed
 primarySources:
   - paperId: mstar-aij-2015
+    sections: ["3", "4", "4.1", "4.2", "4.3", "4.4", "5.1"]
+    pages: [7, 8, 9, 10, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 implementationReferences:
   - repositoryId: libmultirobotplanning
   - repositoryId: public-cppmomapf
+lastReviewed: "2026-07-27"
+simulatorSolverId: mstar
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="mstar" />
+## 概要
+
+M\* は subdimensional expansion を使う optimal MAPF search です。衝突していない agent は各自の shortest-path policy に従う 1 通りだけを生成し、衝突に関係した agent だけ move の直積を広げます。joint configuration space 全体を最初から展開しません<SourceCitation paperId="mstar-aij-2015" section="4" page={16} />。
+
+## まず何がうれしいのか
+
+agent が 10 体いても、実際に狭い入口で衝突するのが 2 体だけなら、その場所では 2 体分だけを coupled search にできます。衝突しない 8 体には個別 policy の successor しか作らないため、直積の指数爆発を相互作用する部分へ限定します。
+
+## 前提となる知識
+
+- A\*、admissible heuristic、OPEN / CLOSED
+- joint configuration と tensor product graph
+- individual shortest-path policy
+- vertex / edge-swap conflict
+
+## 対象問題
+
+原論文は robot ごとの configuration graph と edge cost の和で定義します。joint path cost は individual path cost の合計です<SourceCitation paperId="mstar-aij-2015" section="3" page={9} />。サイト版は unit-cost 4 近傍 gridへ特殊化し、goal で stay し続ける action だけを 0 cost、それ以外を 1 cost として SOC に合わせます。
+
+## 中心となるアイデア
+
+各 joint node `v` は collision set `C(v)` を持ちます。
+
+- `i ∉ C(v)`: agent `i` は individual policy の successor 1 個だけ
+- `i ∈ C(v)`: agent `i` は move / wait の全 successor
+
+limited-neighbor set から生成した先で collision が起きると、その agent 集合を predecessor へ伝えます。さらに、その predecessor へ到達し得る過去 node を backpropagation set でたどり、collision set を単調に増やして OPEN へ戻します<SourceCitation paperId="mstar-aij-2015" section="4.3" page={20} />。
+
+## アルゴリズムの手順
+
+1. goal から逆向き BFS し、各 agent の distance と決定的 individual policy を作ります。
+2. start joint configuration を A\* OPEN へ入れます。
+3. node の collision set 外は policy successor、内側は全 move / wait を列挙します。
+4. successor transition が衝突すれば、関係 agent を現在 node と ancestors へ backpropagate します。
+5. 衝突しない successor は `g + SIC heuristic` で OPEN へ入れます。
+6. collision set が増えた closed node は再展開します。
+7. joint goal が pop されたら parent chain を返します。
+
+## 小さな例
+
+別々の通路を進む 2 agent なら、各 configuration の collision set は空で successor は 1 個です。交差点へ同時に入ると `{a1,a2}` が backpropagate されます。その手前を再展開すると両 agent の wait / move の直積が現れ、一方が待つ branch を選べます。
+
+## データ構造
+
+- joint node: positions、`g`、SIC `h`、parent、depth、生成順
+- collision set: その node で coupled にする agent index
+- backpropagation set: collision 情報を戻す predecessor key
+- individual policy: cell index ごとの shortest successor
+- OPEN: `(f,h,生成順,configuration key)` の決定順
+
+SIC heuristic は各 agent の個別 cost-to-go の和で、joint optimum を過大評価しません<SourceCitation paperId="mstar-aij-2015" section="4.3" page={20} />。
+
+## 疑似コード
+
+```text
+OPEN ← {start configuration}
+
+while OPEN is not empty:
+  v ← minimum (g(v)+SIC(v))
+  if v is joint goal: return parents(v)
+
+  for vNext in limitedNeighbors(v, collisionSet(v)):
+    backSet(vNext).add(v)
+    if transition v→vNext collides:
+      backPropagate(v, colliding agents)
+    else:
+      relax(v, vNext)
+return failure
+
+backPropagate(v, agents):
+  if agents add anything to collisionSet(v):
+    reopen(v)
+    backPropagate(each predecessor in backSet(v), agents)
+```
+
+原論文 Algorithms 1–2 の search と backpropagation を、edge-swap を直接検査するサイトの configuration transition に合わせて再構成しています<SourceCitation paperId="mstar-aij-2015" label="Algorithm 1" page={21} /><SourceCitation paperId="mstar-aij-2015" label="Algorithm 2" page={22} />。
+
+## 実装上の注意
+
+collision set は局所的な「今衝突した pair」だけではありません。先で見つかった collision を、そこへ流れ込む node まで戻さないと、必要な branch を過去で生成できません。集合が増えた node は CLOSED のままにせず再度 OPEN へ入れます。
+
+原論文は edge collision を graph の中間 vertex へ変換できると説明します。サイト版は edge-swap transition を直接検出し、関係する 2 agent を同じ collision set へ入れます。
+
+## よくある誤解
+
+- M\* の `M` は meta-agent CBS ではありません。
+- collision set は agent を永久に全域で結合しません。node ごとに持ちます。
+- individual policy を 1 本に決めても、collision backpropagation が必要箇所の alternative を復元します。
+
+<Caution title="M* の variant を混同しない">
+  このページは basic M* です。recursive M*、Operator Decomposition M*、inflated M*
+  は探索空間や保証条件が異なり、サイト版には含めていません。
+</Caution>
+
+## 他手法との比較
+
+- joint A\* は全 agent の全 action を各 node で直積化します。
+- M\* は collision set 内だけを直積化します。
+- CBS は path-level conflict を constraint tree で分岐し、M\* は configuration-level search の次元を局所的に増やします。
+
+## サイト上の実装との差異
+
+サイト版は Algorithms 1–2 の basic M\* を 4 近傍 unit-cost grid に実装します。edge-swap は中間 vertex を物理的に追加せず transition 上で検査します。同点 policy は row-major cell、A\* tie は `f,h,生成順,key` です。recursive / OD / EPEM / inflated variant は未対応です。
+
+登録済み `libmultirobotplanning` commit には M* source がなく、`public-cppmomapf` は multi-objective MOM* なので basic M\* の固定出力比較には使いませんでした。小規模 instance は独立な SOC oracle と照合しています。
+
+## 実験してみる
+
+<SimulatorLink solverId="mstar" />
+
+`swap-conflict` の detailed trace で、空の collision set から `detect-conflict`、`update-collision-set`、`backpropagate-collision` を経て successor 数が増える様子を見てください。

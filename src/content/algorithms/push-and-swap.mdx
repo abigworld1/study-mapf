@@ -3,14 +3,126 @@ title: "Push and Swap"
 algorithmId: push-and-swap
 originalName: "Push and Swap"
 order: 400
-summary: ""
-status: draft
+summary: "空き vertex を使う push と局所的な swap primitive で agent を順に goal へ運ぶ rule-based 手法。"
+status: reviewed
 primarySources:
   - paperId: push-and-swap-ijcai-2011
+    sections: ["1.2", "2", "3", "3.1", "3.2", "5"]
+    pages: [2, 3, 4, 5, 6, 7]
+  - paperId: push-and-rotate-aamas-2013
+    sections: ["1", "3"]
+    pages: [1, 2, 3, 4]
 implementationReferences:
   - repositoryId: pibt2
+lastReviewed: "2026-07-27"
+simulatorSolverId: push-and-swap
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="push-and-swap" />
+## 概要
+
+Push and Swap は search tree を最適 cost 順に広げる代わりに、`push` と `swap` という局所操作で agent を priority 順に goal へ置く rule-based pathfinding です。各 action は 1 agent が隣接する空き vertex へ移る操作です<SourceCitation paperId="push-and-swap-ijcai-2011" section="2" page={2} />。
+
+## まず何がうれしいのか
+
+時間展開した全 configuration を探索せず、空き vertex を作業領域として障害 agent を動かします。逐次操作なので同じ timestep の vertex conflict や edge-swap conflict を作らず、長い path でも primitive の意味を追いやすい手法です。
+
+## 前提となる知識
+
+- undirected graph、degree、shortest path
+- occupancy（vertex が空か、どの agent がいるか）
+- priority-based planning
+- transactional update（失敗した局所操作を巻き戻す考え方）
+
+## 対象問題
+
+原論文は connected undirected graph `G=(V,E)` と `n ≤ |V|-2`、すなわち少なくとも 2 個の空き vertex を仮定します。1 step に 1 agent だけを隣接する空き vertex へ動かします<SourceCitation paperId="push-and-swap-ijcai-2011" section="2" page={2} />。サイト版は 4 近傍 grid graph に限定し、逐次 step を全 agent の `TimedPath` frame に変換します。
+
+## 中心となるアイデア
+
+`push` は planning agent の shortest path 上の次 vertex を空けます。そこに blocker がいれば、blocker から最寄りの空き vertex まで occupancy を連鎖的にずらし、planning agent を 1 step 進めます。
+
+`swap` は隣接する 2 agent を degree 3 以上の swap vertex まで `multipush` し、隣接空き vertex を 2 個作ります。6 move の exchange で 2 体の位置を交換し、準備中の move を agent 2 体だけ読み替えて逆再生します<SourceCitation paperId="push-and-swap-ijcai-2011" section="3.2" page={3} />。
+
+## アルゴリズムの手順
+
+1. priority 順に planning agent を 1 体選びます。
+2. goal への shortest path を求めます。
+3. 次 vertex が空なら 1 step move します。
+4. occupied なら blocker を nearest empty へ `push` します。
+5. push できなければ、degree 3 以上の候補へ 2 体を `multipush` して `swap` します。
+6. planning agent が goal に着いたら次 agent へ進みます。
+7. primitive がどれも適用できなければ、その priority order は失敗です。
+
+## 小さな例
+
+3×2 grid の上段両端に 2 agent を置き、goal を交換します。直線上では edge-swap になるため、そのまま交換できません。片方を degree 3 の中央へ運び、下段の空き 2 cell を使って exchange し、準備 move を逆再生すると 2 体の順序だけが入れ替わります。
+
+## データ構造
+
+- assignment: agent index → vertex index
+- occupancy: vertex index → agent index / empty
+- move record: agent、from、to、primitive reason
+- frame list: 各逐次 move 後の全 agent configuration
+- swap transaction: positions / occupancy / frame 長の snapshot
+
+## 疑似コード
+
+```text
+for agent in priorityOrder:
+  while agent is not at goal:
+    next ← second vertex of shortestPath(agent, goal)
+    if next is occupied:
+      if clear(next) fails:
+        if swap(agent, occupant(next)) fails: return failure
+        continue
+    move agent to next
+return sequential plan
+
+swap(a, b):
+  multipush pair to a degree≥3 vertex
+  clear two adjacent vertices
+  exchange a and b using six legal moves
+  reverse preparation moves with a/b identities exchanged
+```
+
+原論文 Algorithms 1–3 の main loop、push、swap を、サイトの `move / clear / swap` 実行器へ合わせて再構成しています<SourceCitation paperId="push-and-swap-ijcai-2011" label="Algorithm 1" page={2} /><SourceCitation paperId="push-and-swap-ijcai-2011" label="Algorithm 2" page={3} /><SourceCitation paperId="push-and-swap-ijcai-2011" label="Algorithm 3" page={3} />。
+
+## 実装上の注意
+
+swap candidate を試す途中で失敗しても、準備 move を本計画へ残してはいけません。サイト版は positions、occupancy、frame list を snapshot し、成功した trial だけを commit します。全 commit move は「隣接か」「移動先が空か」を実行時に検査します。
+
+## よくある誤解
+
+- `swap` は 2 agent の同時 edge-swap ではありません。空き vertex を使う合法な単独 move 列です。
+- path quality を最小化する手法ではありません。論文も quality guarantee を目的にしないと述べます<SourceCitation paperId="push-and-swap-ijcai-2011" section="5" page={7} />。
+- agent の処理順は結果を変えます。
+
+<Caution title="原論文の完全性主張には反例があります">
+  IJCAI 2011 論文は空き 2 vertex の条件で completeness を主張します
+  <SourceCitation paperId="push-and-swap-ijcai-2011" label="Theorem 3.1" page={4} />。 しかし後続の
+  Push and Rotate 論文は同じ class 内の反例と処理順依存を示します
+  <SourceCitation paperId="push-and-rotate-aamas-2013" section="3" page={2} />。
+  サイトは後続一次資料を優先し、complete と表示しません。
+</Caution>
+
+## 他手法との比較
+
+- Prioritized Planning は時空間予約で高 priority path を固定します。
+- Push and Swap は固定 agent を局所操作で一時退避し、準備操作を逆再生します。
+- Push and Rotate は counterexample を修正する subproblem priority と rotate / resolve を追加します。
+
+## サイト上の実装との差異
+
+サイト版は input order を既定 priority にし、`extra.agentOrder` で全 ID の明示順を受けます。shortest path、empty vertex、swap vertex の tie は row-major index です。原論文の `clear` は概略だけで後続論文が欠落ケースを示したため、サイト版は Push and Rotate の著者補足資料にある 4-stage clear を共通 primitive として採用します。solution smoothing / parallel compression は行わず、primitive の逐次 frame をそのまま表示します。
+
+`pibt2` commit `faab5b91…` は start-goal distance 降順、拡張 clear、既定 compression を使います。MIT license は確認しましたがコードは転記していません。この checkout は submodule 不足のため固定 build 比較を完了できていません。
+
+## 実験してみる
+
+<SimulatorLink solverId="push-and-swap" />
+
+3×2 の交換例を detailed trace で実行し、`push-agent`、`clear-vertex`、`swap-agents` を追ってください。`agentOrder` を逆にすると success / failure や move 数が変わる場合があります。
