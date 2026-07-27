@@ -3,10 +3,12 @@ title: "CBS"
 algorithmId: cbs
 originalName: "Conflict-Based Search"
 order: 100
-summary: ""
-status: draft
+summary: "衝突を制約へ変換し、制約木と単一エージェント探索を組み合わせる SOC 最適解法。"
+status: reviewed
 primarySources:
   - paperId: cbs-aij-2015
+    sections: ["4.1", "4.2", "4.3", "5.1", "5.2"]
+    pages: [8, 9, 10, 11, 12, 13]
   - paperId: cbs-aaai-2012
 implementationReferences:
   - repositoryId: libmultirobotplanning
@@ -14,8 +16,114 @@ implementationReferences:
   - repositoryId: push-and-rotate-cbs-pp
   - repositoryId: mapf-icbs
   - repositoryId: hog2
+lastReviewed: "2026-07-27"
+simulatorSolverId: cbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="cbs" />
+## 概要
+
+Conflict-Based Search（CBS）は、MAPF を「どの agent に、いつ、どこを禁止するか」という high-level search と、「その制約の下で 1 体の最短 path を探す」low-level search に分けます。high level は constraint tree（CT）を best-first で探索します<SourceCitation paperId="cbs-aij-2015" section="4.2" page={8} />。
+
+## まず何がうれしいのか
+
+全 agent の位置を 1 個の巨大な joint state にしません。衝突していない agent の path はそのまま残し、追加 constraint の対象になった 1 体だけを再計画します<SourceCitation paperId="cbs-aij-2015" section="4.2.3" page={9} />。相互作用が疎な問題では、直積探索より小さな探索へ分解できます。
+
+## 前提となる知識
+
+- A\* と admissible heuristic
+- Space-Time A\* の `(cell,time)` state
+- vertex conflict と edge-swap conflict
+- sum of costs（SOC）
+
+## 対象問題
+
+原論文の証明は有限 graph、離散時間、move / wait、SOC を扱います。論文は vertex conflict を中心に定義し、反対向きに同じ edge を横切れない設定では edge conflict も同様に扱えると説明します<SourceCitation paperId="cbs-aij-2015" section="4.2.5" page={10} />。サイト版は 4 近傍 grid、stay at goal を採用します。
+
+## 中心となるアイデア
+
+path 集合で conflict `C=(ai,aj,v,t)` が起きたなら、任意の合法解は `ai` または `aj` の少なくとも一方を `(v,t)` から外さなければなりません。そこで CT を 2 分岐し、左 child に `ai` の禁止 constraint、右 child に `aj` の禁止 constraint を加えます。両方を残すため、最適解を含む分岐を捨てません。
+
+## アルゴリズムの手順
+
+1. constraint が空の root を作り、各 agent の個別最短 path を求めます。
+2. root を SOC で並ぶ OPEN へ入れます。
+3. 最小 SOC の CT node を取り出し、path を時間順に検査します。
+4. conflict が無ければ、その path 集合を返します。
+5. conflict があれば 2 本の constraint を作り、2 child へ分岐します。
+6. 各 child で constraint 対象 agent だけを再計画し、成功した child を OPEN へ戻します。
+
+## 小さな例
+
+2 体が `t=2` に交差点 `D` へ入る root の SOC が 6 だとします。CBS は `(a1,D,2)` と `(a2,D,2)` の child を作ります。どちらも一方が 1 step 待つ path を持ち SOC は 7 です。SOC 7 の child を取り出して conflict が消えていれば、それが解になります。論文の Figure 4 もこの CT を示します<SourceCitation paperId="cbs-aij-2015" label="Figure 4" page={11} />。
+
+## データ構造
+
+- CT node: cumulative constraints、1 agent 1 path の solution、SOC、conflict 列
+- low-level OPEN: `(cell,time)`、`g`、`h`、parent
+- conflict avoidance table（CAT）: 同じ最短 cost の候補から他 agent と衝突しにくい path を選ぶ tie-break
+
+論文の low level は A\* を使い、state の空間位置と時刻が両方同じ場合だけ duplicate とみなします<SourceCitation paperId="cbs-aij-2015" section="4.3" page={11} />。
+
+## 疑似コード
+
+```text
+root.constraints ← empty
+root.paths ← shortestPath(agent, empty) for every agent
+OPEN ← {root}
+
+while OPEN is not empty:
+  node ← minimum (SOC, conflictCount, FIFO)
+  conflict ← firstConflict(node.paths)
+  if conflict does not exist:
+    return node.paths
+
+  for constraint in standardSplit(conflict):
+    child ← node + constraint
+    child.path[constraint.agent] ← shortestPath(child.constraints)
+    if the path exists:
+      OPEN.push(child)
+return failure
+```
+
+原論文 Algorithm 2 のうち CBS に対応する lines 1–10, 19–26 を、サイトの型へ合わせて再構成しています<SourceCitation paperId="cbs-aij-2015" label="Algorithm 2" page={10} />。MA-CBS 用の merge 処理は省略しています。
+
+## 実装上の注意
+
+edge-swap を分岐するときは、2 体に同じ edge constraint を与えてはいけません。`A: from→to` と `B: to→from` をそれぞれ禁止します。goal に将来の vertex constraint がある場合、low level は早い到着を goal として受理せず、待つか迂回して最後に到着する path を探します。
+
+high level の tie-break は論文どおり SOC、conflict 数、FIFO です。low level は true-distance heuristic を使い、同じ `f` では CAT conflict 数、`g` 降順、生成順で決定します。
+
+## よくある誤解
+
+- constraint は他 agent の path を固定する予約ではなく、ある agent の 1 状態または 1 edge だけを禁止します。
+- root の個別 path が衝突しても失敗ではありません。そこから CT の分岐が始まります。
+- `conflictsDetected` は探索中に見た総数、結果の `conflicts` は返却解に残った数です。
+
+<Caution title="CBS 単体は解なしを常に有限時間で証明しません">
+  論文は completeness を 2 つの claim に分けます。解が存在すれば CBS は返しますが、解が無い instance
+  を有限時間で識別する claim は常には成立せず、独立した solvability test が必要です
+  <SourceCitation paperId="cbs-aij-2015" section="5.2" label="Theorem 3" page={12} />
+  <SourceCitation paperId="cbs-aij-2015" section="5.2.2" page={13} />。
+</Caution>
+
+## 他手法との比較
+
+- ICBS は conflict の選び方と bypass を改善します。
+- BCBS / ECBS は focal search で最適性を `w` 倍保証へ緩めます。
+- Prioritized Planning は順序を固定して後続 agent だけを制約するため高速ですが、CBS のように両分岐を保持しません。
+
+## サイト上の実装との差異
+
+原論文の graph を 4 近傍 grid に限定し、`maxHorizon`、timeout、共有展開上限、AbortSignal を加えています。following conflict、diagonal、disappear at goal、positive constraint、MA-CBS は未対応です。有限 horizon で打ち切った実行には論文の理論保証を適用しません。
+
+`libmultirobotplanning` の CBS は確認しましたが、固定ケース比較用 build は環境に `yaml-cpp` header が無く失敗しました。コードは転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="cbs" />
+
+`swap-conflict` を detailed trace で実行し、`detect-conflict` → `add-constraint` → `low-level-replan` → `create-ct-node` の順を追ってください。SOC と CT node の lower bound が一致して終わることも確認できます。

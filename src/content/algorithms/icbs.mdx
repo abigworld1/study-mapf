@@ -3,15 +3,117 @@ title: "ICBS"
 algorithmId: icbs
 originalName: "Improved CBS"
 order: 130
-summary: ""
-status: draft
+summary: "cardinal conflict を優先し、同 cost の helpful bypass で CT 分岐を減らす CBS 改良。"
+status: reviewed
 primarySources:
   - paperId: icbs-ijcai-2015
+    pages: [1, 2, 3, 4, 5]
 implementationReferences:
   - repositoryId: mapf-icbs
   - repositoryId: cbsh2-rtc
+lastReviewed: "2026-07-27"
+simulatorSolverId: icbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="icbs" />
+## 概要
+
+Improved CBS（ICBS）は、CBS の意味を変えずに CT を小さくする改善群です。原論文は meta-agent、Bypassing Conflicts（BP）、Prioritizing Conflicts（PC）、Merge and Restart（MR）を統合した ICBS を示します<SourceCitation paperId="icbs-ijcai-2015" page={1} />。サイト版はこのうち PC と BP を実行できます。
+
+## まず何がうれしいのか
+
+CBS はどの conflict を先に split するかで CT サイズが大きく変わります。解 cost を必ず上げる cardinal conflict を先に処理すれば lower bound を早く上げられます。また、同じ cost の別 path へ差し替えるだけで conflict が減るなら、2 child を OPEN へ積む必要がありません。
+
+## 前提となる知識
+
+- CBS の CT と standard split
+- shortest path cost と MDD（Multi-Valued Decision Diagram）の関係
+- cardinal / semi-cardinal / non-cardinal conflict
+- helpful bypass
+
+## 対象問題
+
+one-shot MAPF の SOC 最適化です。PC と BP は low level が最短 path を返すことを前提にします。
+
+## 中心となるアイデア
+
+conflict から 2 child を作ったとき、両 child の cost が親より増えるなら cardinal、片方だけ増えるなら semi-cardinal、どちらも増えないなら non-cardinal です。論文は individual agent では path cost 固定の MDD の幅を使って分類し、meta-agent では child cost を直接調べます<SourceCitation paperId="icbs-ijcai-2015" page={5} />。
+
+BP は cardinal 以外の conflict で child を試し、同 cost で選択 conflict を避け、かつ node 全体の conflict 数を減らす path を helpful bypass として親へ採用します<SourceCitation paperId="icbs-ijcai-2015" page={4} />。
+
+## アルゴリズムの手順
+
+1. CT node の全 conflict を調べます。
+2. cardinal があれば即座に選びます。無ければ最初の semi-cardinal、最後に non-cardinal を選びます。
+3. cardinal 以外では 2 child の path を調べ、helpful bypass があれば constraint を保存せず親の path だけ差し替えます。
+4. bypass できなければ CBS と同じ 2 child を OPEN へ入れます。
+5. conflict-free node まで繰り返します。
+
+## 小さな例
+
+親 cost が 8 で 2 個の conflict を持つとします。ある split child が cost 8 のまま conflict を 1 個へ減らすなら、その path は helpful bypass です。親は constraint を追加せず path を採用し、もう片方の child も OPEN へ追加しません。cost 8 の探索層を保ったまま CT node 数を減らせます。
+
+## データ構造
+
+- CBS の CT node と constraints
+- node ごとの全 conflict 列
+- conflict classification と、対応する 2 child candidate
+- 原論文版では固定 cost の全 shortest path を層ごとに持つ MDD
+
+## 疑似コード
+
+```text
+while OPEN is not empty:
+  node ← minimum CBS key
+  if node has no conflicts: return node.paths
+
+  for conflict in node.conflicts:
+    children ← probe both standard-split branches
+    class ← compare child costs with node.cost
+    remember first cardinal, else first semi, else first non
+
+  chosen ← highest-priority remembered conflict
+  if chosen is not cardinal:
+    if a same-cost child reduces conflictCount:
+      node.paths ← child.paths
+      continue with node
+  insert both feasible children into OPEN
+```
+
+原論文 Algorithm 1 の PC（lines 9–10）と BP（lines 11–12）をサイト共通モデルへ再構成しています<SourceCitation paperId="icbs-ijcai-2015" label="Algorithm 1" page={2} />。
+
+## 実装上の注意
+
+helpful bypass は「選んだ conflict が消えた」だけでは足りません。同 cost、親 constraints と整合、node 全体の conflict 数減少が必要です。cardinal conflict には同 cost bypass が存在しないため、論文どおり BP を試しません<SourceCitation paperId="icbs-ijcai-2015" page={5} />。
+
+サイト版は MDD を構築せず、定義と等価な「両 constraint を加えて最短 cost が増えるか」を直接 probe します。この probe の low-level 展開も metrics と上限に含めます。
+
+## よくある誤解
+
+- cardinal は「見た目が狭い場所の conflict」ではなく、両 agent の constraint 後の最短 cost が増える conflict です。
+- bypass は constraint を親へ追加しません。child path だけを採用します。
+- PC / BP は最適性を緩める heuristic ではありません。
+
+<Caution title="このページで動くのは ICBS の PC+BP subset です">
+  論文の比較で ICBS(25) と呼ぶ完全版は MA-CBS(25)+BP+PC+MR です
+  <SourceCitation paperId="icbs-ijcai-2015" page={5} />
+  。サイト版は meta-agent の coupled low-level、merge threshold、merge-and-restart
+  をまだ実装していないため、実装状態を partial と表示します。
+</Caution>
+
+## 他手法との比較
+
+CBS は最初の conflict をそのまま選びます。ICBS の PC+BP は最適 cost を保ったまま conflict 選択と path tie を改善します。EECBS §4 は bounded path に合わせて classification と bypass 条件を再定義するため、ICBS の条件をそのまま流用できません。
+
+## サイト上の実装との差異
+
+MA-CBS と MR、MDD cache、meta-agent MDD は未対応です。`mapf-icbs` はライセンスファイルが無いため閲覧のみにし、`cbsh2-rtc` は USC 独自ライセンスのためコードを取り込んでいません。公開コードは一切転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="icbs" />
+
+detailed trace で `classify-conflict` と `bypass` を選んでください。cardinal では child cost が上がり、helpful bypass では SOC を保ったまま conflict 数だけが減ります。

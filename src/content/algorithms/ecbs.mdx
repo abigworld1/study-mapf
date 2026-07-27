@@ -3,15 +3,113 @@ title: "ECBS"
 algorithmId: ecbs
 originalName: "Enhanced CBS"
 order: 120
-summary: ""
-status: draft
+summary: "low-level の fMin を CT 下界へ持ち上げ、1 個の w で二層を柔軟に探索する手法。"
+status: reviewed
 primarySources:
   - paperId: bcbs-ecbs-socs-2014
+    pages: [5, 6]
 implementationReferences:
   - repositoryId: libmultirobotplanning
   - repositoryId: rhcr
+lastReviewed: "2026-07-27"
+simulatorSolverId: ecbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="ecbs" />
+## 概要
+
+Enhanced CBS（ECBS）は bounded low-level search を使いながら、各探索の OPEN 最小 `f` を捨てません。その和を CT node の lower bound `LB(N)` とし、`cost(N) <= w*minLB` の node を high-level FOCAL から選びます<SourceCitation paperId="bcbs-ecbs-socs-2014" page={6} />。
+
+## まず何がうれしいのか
+
+BCBS は全体の許容倍率を high / low に先に分けます。どの層へ余裕を渡すと効くかは map に依存します。ECBS は low level に `w` の自由度を渡しつつ、実際に残った lower bound を high level で追跡するため、固定配分より柔軟です。
+
+## 前提となる知識
+
+- CBS と focal search
+- low-level `fMin` が制約付き最短 path cost の下界になる理由
+- sum of lower bounds
+
+## 対象問題
+
+one-shot MAPF、SOC 最小化。サイト版は CBS と同じ 4 近傍・離散時間・stay at goal です。
+
+## 中心となるアイデア
+
+agent `i` の bounded low-level search が path `Pi` を返した時点で、OPEN の最小値を `fMin_i(N)` とします。これはその constraint 下の最短 path cost の下界で、返した path は `|Pi| <= w*fMin_i(N)` を満たします。したがって
+
+$$
+LB(N)=\sum_i fMin_i(N) \le cost(N) \le w\,LB(N)
+$$
+
+です。high-level OPEN 全体の最小 `LB` は optimal MAPF cost の下界になります<SourceCitation paperId="bcbs-ecbs-socs-2014" page={6} />。
+
+## アルゴリズムの手順
+
+1. 各 agent を weight `w` の low-level focal A\* で計画し、path と `fMin` を保存します。
+2. CT node の `LB` を `fMin` の和として計算します。
+3. high-level OPEN で最小 `LB` を求めます。
+4. `node.cost <= w*minLB` の node を FOCAL に入れます。
+5. conflict 数、cost、FIFO の順で 1 node を選びます。
+6. CBS と同じ split / replan を繰り返します。
+
+## 小さな例
+
+2 体の low-level path cost が 6 と 5、その探索時の `fMin` が 5 と 4 なら、CT node は `cost=11`, `LB=9` です。`w=1.5` なら `11<=13.5` なので候補になれます。別 node の `LB=8` が OPEN 最小なら、high-level FOCAL の上限は 12 です。
+
+## データ構造
+
+- agent ごとの current path と `fMin`
+- CT node の `cost`, `LB`, constraints, conflicts
+- high-level OPEN と FOCAL
+- CAT を secondary にした low-level OPEN / FOCAL
+
+## 疑似コード
+
+```text
+makeNode(constraints, paths):
+  for replanned agent i:
+    (paths[i], fMin[i]) ← focalAStar(weight=w)
+  node.LB ← sum(fMin)
+  node.cost ← sum(pathCost)
+
+while OPEN is not empty:
+  lowerBound ← minimum node.LB in OPEN
+  FOCAL ← {node | node.cost ≤ w * lowerBound}
+  node ← minimum (conflictCount, cost, FIFO) in FOCAL
+  if conflict-free: return node.paths
+  standardSplitAndReplan(node)
+```
+
+論文の “Enhanced CBS” 節の数式と node 選択を教材用に再構成しています<SourceCitation paperId="bcbs-ecbs-socs-2014" page={6} />。
+
+## 実装上の注意
+
+`LB(N)` を現在の path cost で代用すると bound の根拠が失われます。low-level goal を FOCAL から選ぶ直前の admissible `fMin` を返す必要があります。また、child で再計画しない agent の `fMin` は親から継承します。
+
+## よくある誤解
+
+- ECBS の high-level OPEN は CT cost だけで並ぶ通常 CBS の OPEN ではありません。
+- `metrics.lowerBound` は最終解の cost ではなく、選択時に OPEN が持つ admissible lower bound です。
+- ECBS の `w` は各層で掛け合わせる値ではありません。全体保証が同じ `w` です。
+
+<Caution title="FOCAL の conflict 数は保証そのものではありません">
+  conflict 数は候補内の順序を改善します。bound を支えるのは `fMin`、`LB`、`cost<=w*LB` の関係です。
+</Caution>
+
+## 他手法との比較
+
+BCBS は `wH*wL` を事前配分します。EECBS は ECBS の low level と lower bound を保ち、high level の node 選択を 3-list EES に変えます。
+
+## サイト上の実装との差異
+
+後年の ECBS 実装にある symmetry reasoning や高度な CT heuristic は入れていません。`libmultirobotplanning` commit `4c75fa20...` の `LB` と FOCAL 構造は確認しましたが、`yaml-cpp` header 不足で example build 比較はできませんでした。コードは転記していません。`rhcr` は USC 独自ライセンスなので閲覧用です。
+
+## 実験してみる
+
+<SimulatorLink solverId="ecbs" />
+
+`w=1` と `w=1.5` を比較し、`metrics.lowerBound`、SOC、`suboptimalityBound=SOC/lowerBound`、CT 展開数がどう変わるか観察してください。

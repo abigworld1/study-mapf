@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Scenario } from "@/lib/model/types";
-import { DEFAULT_RULES } from "@/lib/model/types";
+import { DEFAULT_RULES, DEFAULT_SOLVER_OPTIONS } from "@/lib/model/types";
 import { buildPreset, PRESETS } from "@/lib/model/scenario";
 import { createEmptyMap, isWalkable, withBlocked } from "@/lib/model/grid";
 import { runInline } from "@/solvers/client";
@@ -107,5 +107,28 @@ describe("解の不変条件（反復テスト）", () => {
     expect(violations.some((v) => v.rule === "同時刻に同じセル" || v.rule === "edge swap")).toBe(
       true,
     );
+  });
+
+  it("CBS Batch 2 の各 Solver が solved を返すとき、経路は常に妥当", async () => {
+    for (const solverId of ["cbs", "bcbs", "ecbs", "icbs", "eecbs"] as const) {
+      let solvedCount = 0;
+      for (let seed = 1; seed <= 12; seed += 1) {
+        const scenario = randomScenario(seed);
+        if (scenario.agents.length === 0) continue;
+        const result = await runInline({
+          solverId,
+          scenario,
+          options: {
+            ...DEFAULT_SOLVER_OPTIONS,
+            maxExpansions: 200_000,
+            ...(solverId === "cbs" || solverId === "icbs" ? {} : { suboptimalityFactor: 1.5 }),
+          },
+        });
+        if (result.outcome !== "solved") continue;
+        solvedCount += 1;
+        expect(checkPaths(scenario, result.paths), `${solverId} seed=${seed}`).toEqual([]);
+      }
+      expect(solvedCount, `${solverId} が一件も solved を返していない`).toBeGreaterThan(0);
+    }
   });
 });

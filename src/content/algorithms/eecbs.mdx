@@ -3,14 +3,121 @@ title: "EECBS"
 algorithmId: eecbs
 originalName: "Explicit Estimation CBS"
 order: 140
-summary: ""
-status: draft
+summary: "online error から残り cost を推定し、CLEANUP・OPEN・FOCAL を使い分ける bounded CBS。"
+status: reviewed
 primarySources:
   - paperId: eecbs-aaai-2021
+    sections: ["2.1", "2.2", "2.3", "3.2", "3.3", "3.4"]
+    pages: [2, 3, 4, 5, 6]
 implementationReferences:
   - repositoryId: eecbs
+lastReviewed: "2026-07-27"
+simulatorSolverId: eecbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="eecbs" />
+## 概要
+
+Explicit Estimation CBS（EECBS）は、ECBS の low-level bound を保ちつつ、high level に Explicit Estimation Search（EES）を使います。admissible lower bound だけでなく、残り conflict 数と過去の展開で観測した error から solution cost を推定します<SourceCitation paperId="eecbs-aaai-2021" section="3.3" page={5} />。
+
+## まず何がうれしいのか
+
+ECBS は conflict 数が少ない CT node を優先しますが、path cost と conflict 数が逆相関すると同じ枝の周辺を何度も行き来できます。EECBS は「goal に近そう」「推定 solution cost が良さそう」「lower bound を上げるべき」の 3 役を別 list に分け、状況に応じて選びます<SourceCitation paperId="eecbs-aaai-2021" section="3.1" page={3} />。
+
+## 前提となる知識
+
+- ECBS の `cost(N)` と `lb(N)`
+- focal search
+- distance-to-go `d` と inadmissible solution-cost estimate `fHat`
+- online one-step error
+
+## 対象問題
+
+原論文は vertex / swapping conflict、stay at target、sum of costs の MAPF variant を対象にします<SourceCitation paperId="eecbs-aaai-2021" section="2.1" page={2} />。サイト版もこの rule に合わせ、4 近傍 grid に限定します。
+
+## 中心となるアイデア
+
+high level は同じ active CT node を 3 通りに見ます。
+
+- CLEANUP: admissible `lb` 最小。bound を改善する安全網
+- OPEN: learned `fHat=cost+hHat` 最小。推定 solution cost が良い枝
+- FOCAL: `fHat <= w*minFHat` の中で conflict 数 `hc` 最小。goal に近い枝
+
+SELECTNODE はまず FOCAL best の実 cost が `w*bestLB` 以内ならそれを選び、次に OPEN best を同じ条件で試し、どちらも外なら CLEANUP best を選びます。このため選択 node は常に `cost(N)<=w*lb(bestLB)` を満たします<SourceCitation paperId="eecbs-aaai-2021" section="3.3" page={5} />。
+
+## アルゴリズムの手順
+
+1. ECBS と同じ bounded low-level focal search で root を作ります。
+2. active CT nodes から CLEANUP best、OPEN best、FOCAL best を求めます。
+3. EES の 3 条件で展開 node を選びます。
+4. conflict が無ければ返します。
+5. standard split と bounded low-level replan で children を作ります。
+6. 推定 `fHat` が最小の child から one-step distance / cost error を観測し、global average を更新します。
+7. 次の SELECTNODE で新しい推定を使います。
+
+## 小さな例
+
+CLEANUP best の `lb=10`、`w=1.2` なら実 cost の安全上限は 12 です。FOCAL best の `cost=13` は goal に近そうでも選べません。OPEN best が `cost=11` ならそれを選べます。両方が 12 を超える場合だけ `lb=10` の CLEANUP node を展開し、lower bound の改善を促します。
+
+## データ構造
+
+- CT node: constraints、bounded paths、cost、lb、conflicts / `hc`
+- CLEANUP / OPEN / FOCAL の 3 priority view
+- `meanDistanceError`, `meanCostError`, sample count
+- ECBS と同じ low-level OPEN / FOCAL
+
+## 疑似コード
+
+```text
+while active CT nodes are not empty:
+  bestLB ← minimum lb
+  bestFHat ← minimum learned fHat
+  bestD ← minimum hc among nodes with fHat ≤ w * bestFHat.fHat
+
+  if bestD.cost ≤ w * bestLB.lb: node ← bestD
+  else if bestFHat.cost ≤ w * bestLB.lb: node ← bestFHat
+  else: node ← bestLB
+
+  if node is conflict-free: return node.paths
+  children ← standardSplitAndBoundedReplan(node)
+  update one-step error from estimated-best child
+return failure
+```
+
+Algorithm 1 の基礎 high-level search と §3.3 の SELECTNODE を、list 更新の実装詳細を省いて再構成しています<SourceCitation paperId="eecbs-aaai-2021" label="Algorithm 1" page={6} /><SourceCitation paperId="eecbs-aaai-2021" section="3.3" page={5} />。
+
+## 実装上の注意
+
+`fHat` は admissible ではありません。bound の判定には必ず node の実 `cost` と CLEANUP の admissible `lb` を使います。online error の平均が不安定でも、CLEANUP を残すことで探索を進められます。
+
+原論文の one-step distance error は `hc(bestChild)-(hc(parent)-1)`、cost error は child と parent の cost 差です。サイト版は観測済み全展開の global running average を使います<SourceCitation paperId="eecbs-aaai-2021" section="3.4" page={5} />。
+
+## よくある誤解
+
+- EECBS は ECBS に heuristic を 1 個足しただけではなく、3 list の選択条件が中心です。
+- `fHat` が小さい node を無条件で選ぶと bounded-suboptimality を失います。
+- EECBS と EECBS+ は同じではありません。後者は §4 の複数改善を加えた実験構成です。
+
+<Caution title="§4 の改善は基礎 EECBS とは分けています">
+  論文 Algorithm 1 の説明は、まず WDG、symmetry reasoning、relaxed bypass を除いた基礎 EECBS
+  を定義し、その後 §4 で段階的に追加します
+  <SourceCitation paperId="eecbs-aaai-2021" label="Algorithm 1" page={6} />
+  。サイト版は §3 の基礎版です。
+</Caution>
+
+## 他手法との比較
+
+ECBS は high-level FOCAL を conflict 数だけで選びます。EECBS は learned cost estimate と CLEANUP fallback を追加します。ICBS の bypass / conflict classification は最短 path 用なので、bounded path の EECBS へ入れるには §4 の再定義が必要です。
+
+## サイト上の実装との差異
+
+§4 の relaxed bypass、PC、rectangle / corridor / target symmetry reasoning、adaptive WDG は未対応です。公開 `eecbs` commit `06ec7058...` はこれらを含みますが、USC の教育・研究・非営利限定ライセンスなので閲覧だけに留め、コードは転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="eecbs" />
+
+verbose trace の CT `expand-node` で `selectedFrom` を見てください。`focal`、`open`、`cleanup` が切り替わっても、返却 SOC と `metrics.lowerBound` の比が指定 `w` 以下であることを確認できます。

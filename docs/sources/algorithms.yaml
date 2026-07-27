@@ -293,13 +293,13 @@
   primary_paper_ids: [cbs-aij-2015, cbs-aaai-2012]
   implementation_repository_ids:
     [libmultirobotplanning, cbsh2-rtc, push-and-rotate-cbs-pp, mapf-icbs, hog2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: true
+    complete: conditional
     optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: "cbs-aij-2015 p.11「We begin with a proof that CBS returns the optimal solution followed by a proof of completeness.」/ p.12 Theorem 1「CBS returns an optimal solution.」/ p.18 Theorem 4「If Φ is admissible then CBSΦ is guaranteed to return the optimal solution.」（コスト関数を一般化した場合）"
-  notes: "高レベル（制約木 CT）と低レベル（単一エージェント時空間探索）の二層構造。本サイトの中核。制約の定義（頂点制約・辺制約）と CT の分岐規則は cbs-aij-2015 の記法に合わせる。"
+  guarantee_evidence: "cbs-aij-2015 p.12 Theorem 1「CBS returns an optimal solution.」/ p.12 Theorem 3「CBS will return a solution if one exists.」/ p.13 §5.2.2 は unsolvable problem の有限時間での識別（claim b）は CBS では常に成立せず、独立した solvability test が必要と明記するため、完全性を conditional とした。"
+  notes: "高レベル（制約木 CT）と低レベル（単一エージェント時空間探索）の二層構造。本サイトは standard split、SOC/conflict/FIFO tie-break、CAT low-level tie-break を実装。following / disappear / diagonal と有限 maxHorizon 外は未対応。"
 
 - id: ma-cbs
   display_name: "MA-CBS (Meta-Agent CBS)"
@@ -323,13 +323,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [icbs-ijcai-2015]
   implementation_repository_ids: [mapf-icbs, cbsh2-rtc]
-  implementation_status: planned
+  implementation_status: partial
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: conditional
+    optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "MA-CBS に Prioritizing Conflicts (PC) と Bypassing Conflicts (BP) を加えた版。PDF 本文で bypass 系 20 箇所、Prioritizing conflicts の記載を確認済み。"
+  guarantee_evidence: "icbs-ijcai-2015 p.1 は optimal MAPF を対象とし、ICBS を最適 CBS 系の MA-CBS・同 cost の BP・PC・MR を統合したものとして定義する。p.4 の valid bypass は同 cost を条件とする。ICBS 固有の完全性定理は無く、CBS と complete/optimal な coupled low level に依存するため complete は conditional とした。"
+  notes: "論文の完全版 ICBS(25) は MA-CBS(25)+BP+PC+MR。本サイトは PC と helpful BP を実装し、MDD と等価な child-cost 判定を使う。MA-CBS merge / MR は未対応のため partial。"
 
 - id: prioritizing-conflicts
   display_name: "衝突の優先順位付け (Prioritizing Conflicts)"
@@ -368,13 +368,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [bcbs-ecbs-socs-2014]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: false
     bounded_suboptimal: true
-  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6「Thus, BCBS and ECBS are complete.」/ p.1「bounded-suboptimal variants, where the returned solution is guaranteed to be within a constant factor」"
-  notes: "高レベルと低レベルの双方に focal search を入れ、係数を w1・w2 に分けて配分する。"
+  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6 Theorem 1 は BCBS(wH,wL) の返却 cost が高々 wH*wL*C* と証明し、同頁で「Thus, BCBS and ECBS are complete.」と明記する。"
+  notes: "高レベルと低レベルの双方に focal search を入れ、保証係数を wH・wL に分ける。本サイトの既定配分は wH=wL=sqrt(w)。"
 
 - id: ecbs
   display_name: "ECBS (Enhanced CBS)"
@@ -383,13 +383,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [bcbs-ecbs-socs-2014]
   implementation_repository_ids: [libmultirobotplanning, rhcr]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: false
     bounded_suboptimal: true
-  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6「Thus, BCBS and ECBS are complete.」/ eecbs-aaai-2021 p.1「ECBS ... is guaranteed to find solutions whose costs are no more than a user-specified factor away from optimal.」"
-  notes: "低レベルの探索木サイズを利用して高レベルの focal 集合を作る。RHCR の既定ソルバでもある。"
+  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6 は LB(N)=Σ fmin(i) を optimal cost の下界とし、cost(N)≤w*LB の FOCAL から返すため solution cost が高々 w*C* であると説明する。同頁で「Thus, BCBS and ECBS are complete.」と明記する。"
+  notes: "各 low-level OPEN の最小 f の和を CT lower bound にする。本サイトはこの LB と 2-level focal search を実装。RHCR の既定ソルバでもある。"
 
 - id: focal-search
   display_name: "Focal Search"
@@ -413,13 +413,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [eecbs-aaai-2021]
   implementation_repository_ids: [eecbs]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: false
     bounded_suboptimal: true
-  guarantee_evidence: "eecbs-aaai-2021 p.1「a new bounded-suboptimal variant of CBS」/ 同 p.1「ECBS ... sacrificing optimality and instead guaranteeing that the costs of its solutions are within a given factor of optimal.」EECBS 自身の完全性を明示する記述は PDF から見つけられなかったため complete は unknown のままにしてある。"
-  notes: "Explicit Estimation Search を CBS 高レベルへ適用し、非許容推定をオンライン学習で得る。"
+  guarantee_evidence: "eecbs-aaai-2021 p.5 式 (2) と直後は EECBS が cost(N)≤w*lb(bestlb) を満たす CT node だけを選び、bounded suboptimality を保証すると述べる。EECBS 自身の完全性を明示する記述は確認できないため complete は unknown のままとした。"
+  notes: "Explicit Estimation Search を CBS 高レベルへ適用し、非許容推定をオンライン学習で得る。本サイトは §3 の基礎 EECBS を実装し、§4 の BP/PC/symmetry/WDG は未対応。"
 
 - id: ccbs
   display_name: "CCBS (Continuous-time CBS)"

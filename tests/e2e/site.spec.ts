@@ -49,8 +49,8 @@ test.describe("サイト全体", () => {
   test("アルゴリズムページに実装状態と出典が出る", async ({ page }) => {
     await page.goto("./algorithms/cbs/");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("CBS");
-    // 未実装の手法を「実行可」と誤表示しないこと
-    await expect(page.getByText("シミュレータで実行可")).toHaveCount(0);
+    // Batch 2 で CBS を実装したため、registry とページ表示が一致すること
+    await expect(page.getByText("シミュレータで実行可")).toBeVisible();
     await expect(page.getByRole("heading", { name: "原論文" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /完全性・最適性/ })).toBeVisible();
   });
@@ -109,10 +109,12 @@ test.describe("シミュレータ", () => {
   });
 
   test("アルゴリズムを切り替えられる。未実装の手法は選択肢に出ない", async ({ page }) => {
-    const select = page.locator("select").first();
-    const options = await page.locator("select >> nth=2").locator("option").allTextContents();
-    expect(options.join(" ")).not.toContain("CBS");
-    expect(select).toBeTruthy();
+    const solverSelect = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) })
+      .getByRole("combobox");
+    await expect(solverSelect).toContainText("CBS");
+    await expect(solverSelect).not.toContainText("LaCAM");
   });
 
   test("JSON を書き出せる", async ({ page }) => {

@@ -25,7 +25,10 @@ describe("registry", () => {
   });
 
   it("未実装の id を要求しても例外を投げず、構造化エラーを返す", async () => {
-    const result = await runInline({ solverId: "cbs", scenario: buildPreset("open-grid", 1) });
+    const result = await runInline({
+      solverId: "not-a-real-solver",
+      scenario: buildPreset("open-grid", 1),
+    });
     expect(result.outcome).toBe("error");
     expect(result.error?.code).toBe("not-implemented");
   });

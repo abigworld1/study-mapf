@@ -893,3 +893,114 @@ e2e               26 passed（Chromium desktop + mobile）
 ### 次の推奨バッチ
 
 Batch 2: `cbs` / `bcbs` / `ecbs` / `icbs` / `eecbs`。
+
+---
+
+## 2026-07-27 — Batch 2 CBS family の独立実装（担当: Codex）
+
+### 1. 対象アルゴリズム
+
+`cbs`、`bcbs`、`ecbs`、`icbs`、`eecbs` の 5 件。CBS / BCBS / ECBS / EECBS は
+`runnable`、ICBS は PC+BP subset のため `partial` として registry へ登録した。
+
+### 2. 参照した論文と節
+
+- `cbs-aij-2015` PDF §§4.1–4.3, §§5.1–5.2、pp.8–13。Algorithm 2、edge conflict、
+  CAT tie-break、Theorem 1 / 3、unsolvable instance に関する §5.2.2
+- `bcbs-ecbs-socs-2014` PDF pp.5–6。focal search、BCBS、Theorem 1、ECBS の
+  `LB(N)=Σ fmin(i)` と完全性の記述
+- `icbs-ijcai-2015` PDF pp.1–5。Algorithm 1、MA-CBS / MR、helpful BP、PC、MDD 分類
+- `eecbs-aaai-2021` PDF §§2.1–3.4 と §4、pp.2–7。EES の 3 list、SELECTNODE、
+  online one-step error、Algorithm 1、基礎 EECBS と §4 enhancements の区別
+
+4 論文とも該当ページを PDF 画像で目視し、Marker fidelity は番号付き要素の欠落 0。
+各 `metadata.yaml` の reading / discrepancies / verification notes を更新した。
+
+### 3. 参照した公開実装
+
+- `libmultirobotplanning` commit `4c75fa20...`（MIT）: CBS / ECBS の high-level key、
+  low-level A* / A*-epsilon、earliest conflict を read-only で確認
+- `eecbs` commit `06ec7058...`（USC 教育・研究・非営利限定）: 3 heap、SELECTNODE、
+  online error と §4 enhancements を read-only で確認
+- `mapf-icbs` commit `a1357b98...`（ライセンス無し）: MA / PC / BP 構造と乱択
+  disjoint splitting を read-only で確認
+- `cbsh2-rtc` commit `a834df1e...`（USC 独自ライセンス）: 閲覧のみ
+
+`libmultirobotplanning` は `/tmp` で CMake configure に成功したが、環境に
+`yaml-cpp/yaml.h` が無く example build が失敗した。外部依存を追加せず、固定ケースの binary 比較は
+未実施。第三者コードは転記していないため `THIRD_PARTY_NOTICES.md` の変更は無い。
+
+### 4. 実装したファイル
+
+- `src/solvers/cbs/heap.ts`: 依存なし binary min-heap
+- `src/solvers/cbs/low-level.ts`: negative vertex / edge constraint、CAT secondary、
+  weight 1 または bounded focal の `(cell,time)` A*
+- `src/solvers/cbs/core.ts`: immutable CT data、standard split、CBS / BCBS / ECBS selection、
+  ICBS PC+BP、EECBS CLEANUP / OPEN / FOCAL と online error、共通 budget / trace / result
+- `src/solvers/cbs/solvers.ts`: 5 Solver metadata と option validation
+- `src/solvers/registry.ts`: 5 Solver を登録
+- `src/content/algorithms/{cbs,bcbs,ecbs,icbs,eecbs}.mdx`: 日本語解説を `reviewed` へ更新
+- `docs/notes/implementation/` に 5 件の実装前ノートを追加
+- `docs/sources/algorithms.yaml`、`IMPLEMENTATION_STATUS.md` を更新
+
+### 5. 追加・更新したテスト
+
+`tests/unit/batch2-solvers.test.ts` を追加し、既存 `solvers.test.ts`、`invariants.test.ts`、
+`site.spec.ts` を実装後の事実へ更新した。既存テストの削除・skip・弱体化はしていない。
+
+- CBS / ICBS と `jointStateOptimalSumOfCosts()` の certified SOC optimum 一致
+- BCBS / ECBS / EECBS の `cost <= w*optimal` と `w=1` の最適 cost
+- `checkPaths()` による固定例と 12 seed の反復不変条件
+- vertex / edge constraint、ICBS classification と実際の helpful bypass
+- CT / conflict / constraint / replan / bypass event と trace
+- 決定性、abort、timeout、global node limit、input guard、trace limit、option validation
+- E2E で CBS ページの runnable 表示、CBS が選択肢に入り LaCAM が入らないこと
+
+### 6–7. テスト・ビルド結果
+
+```text
+sources:validate  errors=0 warnings=6
+format:check      All matched files use Prettier code style!
+lint              0 problems
+typecheck         0 errors（81 files、既存 Astro deprecation hints 22）
+test              110 passed（9 files）
+build             62 pages
+e2e               26 passed（Chromium desktop + mobile）
+```
+
+`sources:validate` の既存 warning 5 件に、BCBS は独立実装が runnable だが登録済み公開参照実装が
+無いという正しい warning が 1 件増えた。架空の repository ID は追加していない。
+
+### 8. 理論保証と manifest への書き戻し
+
+- CBS: `complete: conditional`, `optimal: true`。Theorem 3 は解があれば返すが、§5.2.2 は
+  解なしの有限判定が常に成立しないと明記
+- BCBS: `complete: true`, `optimal: false`, `bounded_suboptimal: true`。
+  Theorem 1 の bound は `wH*wL`
+- ECBS: `complete: true`, `optimal: false`, `bounded_suboptimal: true`。
+  `LB(N)` と `w*C*` の導出
+- ICBS: `complete: conditional`, `optimal: true`。same-cost BP と optimal CBS 構成に基づくが、
+  ICBS 固有の完全性定理は無いため conditional
+- EECBS: `complete: unknown`, `optimal: false`, `bounded_suboptimal: true`。
+  p.5 式 (2) の選択条件を evidence にし、完全性は推測しない
+
+unknown が残る手法は 59 件から 58 件へ減った。
+
+### 9–10. 論文・公開実装との差異とブラウザ版の簡略化
+
+- CBS は論文の SOC / conflict / FIFO と CAT tie-break を採用。
+  `libmultirobotplanning` の CT heap は cost のみ
+- BCBS の単一 `w` は既定で `sqrt(w)` ずつ配分し、extra で `wH,wL` を明示可能
+- ICBS の分類は MDD の代わりに等価な 2 child の最短 cost を直接 probe
+- EECBS は §3 の基礎版。公開 implementation の §4 BP / PC / symmetry / WDG は含めない
+- 全手法に有限 `maxHorizon`、共有 expansion budget、timeout、AbortSignal、trace 上限を追加
+
+### 11. 未対応部分
+
+positive constraint / disjoint splitting、MA-CBS と coupled low level、ICBS merge-and-restart、
+EECBS §4 の relaxed bypass / PC / rectangle・corridor・target symmetry / adaptive WDG、
+following conflict、diagonal、disappear at goal、無限 horizon。
+
+### 12. 次の推奨バッチ
+
+Batch 3: `pbs` / `pibt` / `winpibt`。

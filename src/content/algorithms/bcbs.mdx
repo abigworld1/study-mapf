@@ -3,13 +3,108 @@ title: "BCBS"
 algorithmId: bcbs
 originalName: "Bounded CBS"
 order: 110
-summary: ""
-status: draft
+summary: "CBS の高・低レベルを focal search にし、係数の積で SOC を保証する手法。"
+status: reviewed
 primarySources:
   - paperId: bcbs-ecbs-socs-2014
+    pages: [5, 6]
 implementationReferences: []
+lastReviewed: "2026-07-27"
+simulatorSolverId: bcbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="bcbs" />
+## 概要
+
+Bounded CBS（BCBS）は、CBS の high level と low level の両方を focal search に置き換えます。low level の係数を `wL`、high level を `wH` とすると、返す SOC は optimal SOC の `wH*wL` 倍以内です<SourceCitation paperId="bcbs-ecbs-socs-2014" label="Theorem 1" page={6} />。
+
+## まず何がうれしいのか
+
+最適 path だけ、最小 SOC の CT node だけを選ぶ制限を緩め、衝突が少ない候補を先に試せます。許容する倍率を数式で固定するので、「速いかもしれないが品質は無制限」という greedy search とは違います。
+
+## 前提となる知識
+
+- CBS の constraint tree と standard split
+- A\* の `f=g+h`
+- focal search の OPEN / FOCAL
+- bounded suboptimality factor `w`
+
+## 対象問題
+
+one-shot MAPF の SOC 最小化です。サイト版の rule 範囲は CBS と同じです。
+
+## 中心となるアイデア
+
+focal search は OPEN の最小値 `fMin` に対して `f <= w*fMin` の node だけを FOCAL に入れ、別の heuristic で展開 node を選びます。admissible な第 1 key が bound を守り、第 2 key は goal に近そうな node を選べます<SourceCitation paperId="bcbs-ecbs-socs-2014" page={5} />。
+
+BCBS はこれを 2 階層へ適用します。low level は shortest path の `wL` 倍以内、high level は OPEN 最小 SOC の `wH` 倍以内から conflict 数最小を選びます。
+
+## アルゴリズムの手順
+
+1. low-level FOCAL で各 agent の constraint-consistent path を作ります。
+2. CT OPEN の最小 SOC を求めます。
+3. `cost <= wH*minCost` の CT node を high-level FOCAL に入れます。
+4. conflict 数が最小の node を展開します。
+5. CBS と同じ standard split と対象 agent の再計画を行います。
+6. conflict-free node を返します。
+
+## 小さな例
+
+CT OPEN の最小 SOC が 10、`wH=1.2` なら、SOC 12 までを FOCAL に入れられます。SOC 10 の node に conflict が 5 個、SOC 11 の node に 1 個なら、後者を先に展開できます。low level が `wL=1.25` なら全体の保証係数は `1.2*1.25=1.5` です。
+
+## データ構造
+
+- high-level OPEN / FOCAL と CT node の `cost`, `conflictCount`
+- low-level OPEN / FOCAL と `(cell,time)` の `f`, CAT conflict count
+- 2 係数 `wH`, `wL`
+
+## 疑似コード
+
+```text
+lowLevel(agent, constraints):
+  return focalAStar(f=g+h, secondary=CATConflicts, weight=wL)
+
+OPEN ← {makeRootWithLowLevelPaths()}
+while OPEN is not empty:
+  minCost ← minimum node.cost in OPEN
+  FOCAL ← {node | node.cost ≤ wH * minCost}
+  node ← minimum (conflictCount, cost, FIFO) in FOCAL
+  if node is conflict-free: return node.paths
+  split and replan as in CBS
+return failure
+```
+
+論文 p.6 の `BCBS(wH,wL)` の定義と Theorem 1 を、CBS 共通処理が見える形に再構成しています<SourceCitation paperId="bcbs-ecbs-socs-2014" page={6} />。
+
+## 実装上の注意
+
+ユーザーが全体 `w` だけを指定した場合、どちらか一方へ勝手に全部割り当てる必要はありません。サイト版は論文の実験にもある `wH=wL=sqrt(w)` を既定にします。`extra.highLevelWeight` と `extra.lowLevelWeight` を両方指定すれば配分を変えられます。
+
+## よくある誤解
+
+- 保証値は `max(wH,wL)` ではなく積です。
+- FOCAL の secondary heuristic は admissible でなくてもよいですが、FOCAL へ入れる第 1 条件は変えられません。
+- `w=1` は FOCAL が最小値の node だけになり、最適 CBS と同じ cost 保証になります。
+
+<Caution title="経験的な速さと bound は別です">
+  `w` を大きくすれば常に速くなるとは限りません。論文は domain によって high / low
+  への良い配分が異なると報告します
+  <SourceCitation paperId="bcbs-ecbs-socs-2014" page={6} />。
+</Caution>
+
+## 他手法との比較
+
+ECBS は `w` の固定配分を避け、各 low-level OPEN の `fMin` を high-level lower bound に使います。EECBS はさらに high level を Explicit Estimation Search に置き換えます。
+
+## サイト上の実装との差異
+
+論文が比較した GCBS や複数の conflict heuristic は実装せず、`hc` は path 集合の conflict 数に固定します。有限 horizon とブラウザ安全上限を加えています。マニフェストに BCBS の公開実装は登録されておらず、第三者コードは利用していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="bcbs" />
+
+`suboptimalityFactor=1.5` で実行した後、`highLevelWeight=1.5, lowLevelWeight=1.0` と `sqrt(1.5)` の均等配分を比べてください。同じ bound でも CT 展開と low-level 展開の配分が変わります。

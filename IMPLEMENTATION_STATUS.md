@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-07-27（Codex / Batch 1 + HCA* 完了）
+最終更新: 2026-07-27（Codex / Batch 2 完了）
 
 ---
 
@@ -40,17 +40,21 @@
 | `cooperative-astar`    | Cooperative A*   | runnable | paper-faithful | Manhattan + reservation table。[ノート](docs/notes/implementation/cooperative-astar.md)           |
 | `hca-star`             | HCA*             | runnable | paper-faithful | Algorithm 1 の on-demand RRA*。[ノート](docs/notes/implementation/hca-star.md)                    |
 | `whca-star`            | WHCA*            | runnable | paper-faithful | terminal edge、rolling window、RRA* 再利用。[ノート](docs/notes/implementation/whca-star.md)      |
+| `cbs`                  | CBS              | runnable | paper-faithful | standard split、SOC best-first、CAT。[ノート](docs/notes/implementation/cbs.md)                   |
+| `bcbs`                 | BCBS             | runnable | paper-faithful | high / low focal、保証係数 `wH*wL`。[ノート](docs/notes/implementation/bcbs.md)                   |
+| `ecbs`                 | ECBS             | runnable | paper-faithful | low-level `fMin` の和を CT lower bound に使用。[ノート](docs/notes/implementation/ecbs.md)        |
+| `icbs`                 | ICBS (PC+BP)     | partial  | paper-faithful | PC と helpful BP。MA-CBS / MR は未対応。[ノート](docs/notes/implementation/icbs.md)               |
+| `eecbs`                | EECBS            | runnable | paper-faithful | §3 の EES 3-list と online error。§4 改善は未対応。[ノート](docs/notes/implementation/eecbs.md)   |
 
 ---
 
 ## 未実装（解説ページのみ存在）
 
-以下 28 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
+以下 23 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
 実装状況は `docs/sources/algorithms.yaml` の `implementation_status` を参照。
 
 | バッチ  | 対象                                                                     |
 | ------- | ------------------------------------------------------------------------ |
-| Batch 2 | `cbs`, `bcbs`, `ecbs`, `icbs`, `eecbs`                                   |
 | Batch 3 | `pbs`, `pibt`, `winpibt`                                                 |
 | Batch 4 | `icts`, `mstar`, `push-and-swap`, `push-and-rotate`                      |
 | Batch 5 | `lacam`, `lacam-star`                                                    |
@@ -67,19 +71,21 @@
 
 ## 理論保証の確定状況
 
-`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **59 / 77**。
+`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **58 / 77**。
 
-根拠つきで確定済みなのは 28 手法（`guarantee_evidence` が入っているもの）。
+根拠つきで確定済みなのは 29 手法（`guarantee_evidence` が入っているもの）。
 主なもの:
 
 | algorithm-id           | 完全性   | 最適性             | 根拠                                                            |
 | ---------------------- | -------- | ------------------ | --------------------------------------------------------------- |
-| `cbs`                  | 不明     | 最適               | cbs-aij-2015 Theorem 1                                          |
+| `cbs`                  | 条件付き | 最適               | cbs-aij-2015 Theorem 1 / 3、§5.2.2                              |
+| `icbs`                 | 条件付き | 最適               | icbs-ijcai-2015 pp.1, 4。CBS と coupled low level に依存        |
 | `mstar`                | あり     | 最適               | mstar-aij-2015 Theorem 1                                        |
 | `ccbs`                 | あり     | 最適               | ccbs-ijcai-2019 アブストラクト                                  |
 | `cbm`                  | あり     | 最適               | cbm-tapf-aamas-2016 p.6                                         |
 | `cbs-ta`               | あり     | 最適               | cbs-ta-aamas-2018 Theorem 4.1 / 4.2                             |
 | `bcbs` `ecbs`          | あり     | なし（有界準最適） | bcbs-ecbs-socs-2014 p.6                                         |
+| `eecbs`                | 不明     | なし（有界準最適） | eecbs-aaai-2021 p.5 式 (2)                                      |
 | `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」      |
 | `lacam-star`           | あり     | 条件付き           | 本文は「complete and optimal」だがタイトルは Eventually Optimal |
 | `push-and-rotate`      | 条件付き | なし               | 空き頂点が 2 つ以上（k ≤ \|V\| − 2）                            |
