@@ -126,7 +126,9 @@ describe("LaCAM*", () => {
     expect(result.metrics.sumOfCosts).toBe(oracle.sumOfCosts);
     expect(result.metrics.makespan).toBe(4);
     expect(events.some((event) => event.type === "update-incumbent")).toBe(true);
-    expect(result.warnings?.some((warning) => warning.code === "simplified-behavior")).toBe(true);
+    // 探索を完遂しており、かつ上のコメントのとおり両目的関数が一致する
+    // fixture なので、但し書きは 1 つも要らない。
+    expect(result.warnings ?? []).toHaveLength(0);
   });
 
   it("既知 configuration への辺を追加して shortest-path tree を張り替える", async () => {

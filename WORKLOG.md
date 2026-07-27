@@ -1425,3 +1425,54 @@ Moving AI benchmark 全件、submodule 取得後の C++ 公式実装との固定
 ### 12. 次の推奨バッチ
 
 Batch 6 の `mapf-lns` / `mapf-lns2` / `rhcr`。
+
+---
+
+## 2026-07-27 Batch 5 レビュー後の修正（Claude Code）
+
+### 1. LaCAM* が打ち切って返した解を「最適ではない」と言うようにした
+
+予算を絞った LaCAM* は `node-limit` / `timeout` を返しつつ **経路も返す**。
+シミュレータは `setResult` を無条件に呼ぶのでその経路は再生できる。
+それにもかかわらず、最適でないことを述べる警告が無かった。
+
+LaCAM* の最適性は OPEN を空にしたときの主張であり
+（lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 が OPEN 完了時を optimal、
+user interruption 時を sub-optimal と分岐する）、途中経過の解には及ばない。
+`SOURCE_POLICY.md` 第 8 条がこの手法を名指ししている以上、ここは言わねばならない。
+
+`solutionResult` で outcome が solved でない場合に警告を出すようにした。
+実画面での確認:
+
+```text
+結果          時間切れ
+sum of costs  147
+⚠ 簡略化      探索を完遂する前に打ち切ったため、これは途中経過の解であって
+              最適解ではありません。LaCAM* の最適性は OPEN を空にした場合の保証です。
+```
+
+### 2. sum-of-loss の但し書きを、実際に食い違うときだけ出すようにした
+
+以前は solver 開始時に無条件で push していたため、両目的関数が一致する
+（= goal を離れる agent がいない）解でも必ず出ていた。検証した 5 インスタンスは
+すべて一致しており、警告は毎回無関係だった。結果として利用者は毎回
+関係ない警告を 1 件見せられ、指摘 1 の重要な警告を一度も見ないことになる。
+
+返した経路から sum-of-loss を計算し、`metrics.sumOfCosts` と異なるときだけ、
+両方の値を添えて出すようにした。
+
+なお `batch5-solvers.test.ts` の「OPEN exhaustion まで探索し…」は
+`simplified-behavior` の警告が常に出ることを期待していたが、同テストの
+コメント自身が「この fixture では両目的関数が一致する」と書いている。
+期待値を「但し書きは 1 つも出ない」へ反転させた。
+
+### 3. 実装状態の引き下げ規則を、バッチ進行で壊れないテストにした
+
+`implementation-state.test.ts` の「registry に無いなら planned へ引き下げる」は
+lacam を例に使っていたため、Batch 5 で lacam が実装された時点で成立しなくなり、
+バッチ登録の確認テストへ置き換えられて規則の検査が消えていた
+（登録確認は `batch5-solvers.test.ts` に既にある）。
+
+規則を純関数 `resolveImplementationState(declared, registered)` として切り出し、
+4 状態 × 2 の全 8 組合せを固定した。どの手法が実装済みかに依存しないので、
+以後のバッチで同じことは起きない。

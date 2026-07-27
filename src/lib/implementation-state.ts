@@ -16,16 +16,35 @@ import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
  */
 export type ImplementationState = "runnable" | "partial" | "explanation-only" | "planned";
 
-export function implementationStateOf(algorithmId: string): ImplementationState {
-  const declared = getAlgorithm(algorithmId)?.implementation_status ?? "planned";
+export type DeclaredStatus = "runnable" | "partial" | "explanation-only" | "planned";
 
-  if (RUNNABLE_ALGORITHM_IDS.includes(algorithmId)) {
+/**
+ * 規則そのもの。マニフェストにも registry にも触らない純関数。
+ *
+ * ★ 純関数として切り出してある理由:
+ *   以前はこの規則を「registry に無い lacam は planned へ落ちる」という形で
+ *   テストしていたが、lacam が実装された時点でそのテストは成り立たなくなり、
+ *   バッチ登録の確認テストへ置き換えられて規則の検査が消えた。
+ *   どの手法が実装済みかに依存しない形にしておけば、以後のバッチで
+ *   同じことは起きない。
+ */
+export function resolveImplementationState(
+  declared: DeclaredStatus,
+  registered: boolean,
+): ImplementationState {
+  if (registered) {
     // 動きはするが原論文の全機能ではない、という宣言は格上げしない。
     return declared === "partial" ? "partial" : "runnable";
   }
-
   // registry に無いなら動かない。「解説のみ」だけは意図的な状態なので残す。
   return declared === "explanation-only" ? "explanation-only" : "planned";
+}
+
+export function implementationStateOf(algorithmId: string): ImplementationState {
+  return resolveImplementationState(
+    getAlgorithm(algorithmId)?.implementation_status ?? "planned",
+    RUNNABLE_ALGORITHM_IDS.includes(algorithmId),
+  );
 }
 
 /** シミュレータで動かせるか。partial も動く点に注意。 */

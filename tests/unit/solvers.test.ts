@@ -103,6 +103,81 @@ describe("解けなかった理由の説明責任", () => {
       expect(result.warnings ?? [], `${solverId} が但し書き無しで打ち切った`).not.toHaveLength(0);
     }
   });
+
+  /*
+    ★ LaCAM* の最適性は OPEN を空にしたときの主張。
+      打ち切って途中経過の解を返すとき、シミュレータはその経路を再生するので、
+      最適でないことを言わないと表示された解が最適と受け取られる。
+      SOURCE_POLICY.md 第 8 条がこの手法を名指ししている。
+  */
+  it("LaCAM* は打ち切って解を返すとき、最適解でないと明示する", async () => {
+    let map = createEmptyMap(5, 2);
+    for (const cell of [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 3, y: 1 },
+      { x: 4, y: 1 },
+    ]) {
+      map = withBlocked(map, cell, true);
+    }
+    const scenario: Scenario = {
+      id: "pocket",
+      name: "pocket",
+      kind: "one-shot-mapf",
+      map,
+      agents: [
+        { id: "a1", start: { x: 0, y: 0 }, goal: { x: 4, y: 0 } },
+        { id: "a2", start: { x: 4, y: 0 }, goal: { x: 0, y: 0 } },
+      ],
+      rules: DEFAULT_RULES,
+      seed: 1,
+    };
+    const solver = getSolver("lacam-star")!;
+
+    const cut = await solver.solve(
+      scenario,
+      { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 30 },
+      createRecordingContext(1).context,
+    );
+    expect(cut.outcome, "この予算では探索を完遂しない想定").not.toBe("solved");
+    expect(cut.paths.length, "途中経過の解が返る想定").toBeGreaterThan(0);
+    expect(
+      (cut.warnings ?? []).some((w) => w.message.includes("最適解ではありません")),
+      "打ち切った解を最適でないと言っていない",
+    ).toBe(true);
+
+    // 完遂した場合は逆に、その但し書きを出してはいけない。
+    const full = await solver.solve(
+      scenario,
+      { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 2_000_000 },
+      createRecordingContext(1).context,
+    );
+    expect(full.outcome).toBe("solved");
+    expect((full.warnings ?? []).some((w) => w.message.includes("最適解ではありません"))).toBe(
+      false,
+    );
+  });
+
+  /*
+    ★ sum-of-loss と sum of costs の食い違いは、実際に食い違ったときだけ言う。
+      毎回出していると、上の「最適ではない」が埋もれる。
+  */
+  it("LaCAM* は目的関数が一致する解では sum-of-loss の但し書きを出さない", async () => {
+    const solver = getSolver("lacam-star")!;
+    const result = await solver.solve(
+      buildPreset("open-grid", 1),
+      { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 2_000_000 },
+      createRecordingContext(1).context,
+    );
+    expect(result.outcome).toBe("solved");
+    // このプリセットの解では goal を離れる agent がいないので sum-of-loss と
+    // sum of costs は一致する。一致しているのに但し書きを出すと、
+    // 上の「最適ではない」が埋もれる。
+    expect(
+      (result.warnings ?? []).filter((w) => w.message.includes("sum-of-loss")),
+      "目的関数が一致しているのに但し書きが出ている",
+    ).toHaveLength(0);
+  });
 });
 
 describe("A*（各エージェント独立）", () => {

@@ -13,6 +13,7 @@ import type {
   TimedPath,
 } from "@/lib/model/types.js";
 import {
+  cellEquals,
   cellIndex,
   cellKey,
   indexToCell,
@@ -133,13 +134,6 @@ async function solveLacam(
     warnings.push({
       code: "option-ignored",
       message: `${variant === "lacam" ? "LaCAM" : "LaCAM*"} は suboptimalityFactor を使用しません。`,
-    });
-  }
-  if (variant === "lacam-star") {
-    warnings.push({
-      code: "simplified-behavior",
-      message:
-        "LaCAM* の内部目的は原論文の sum-of-loss です。metrics.sumOfCosts はサイト共通定義で path から再計算するため、goal を離れる解では内部目的値と異なることがあります。",
     });
   }
 
@@ -513,12 +507,69 @@ async function solveLacam(
     if (result.conflicts.length > 0) {
       return internalError("LaCAM の configuration sequence に conflict が残りました。");
     }
+
+    if (variant === "lacam-star") {
+      /*
+        ★ LaCAM* の最適性は OPEN を空にしたときの主張である
+          （lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 が
+          OPEN 完了時を optimal、user interruption 時を sub-optimal と分ける）。
+          打ち切って incumbent を返す場合、その解は最適ではない。
+          シミュレータは outcome に関わらず経路を再生するので、
+          ここで言わないと利用者は表示された解を最適と受け取る
+          （SOURCE_POLICY.md 第 8 条が名指ししている手法である）。
+      */
+      if (outcome !== "solved") {
+        warnings.push({
+          code: "simplified-behavior",
+          message:
+            "探索を完遂する前に打ち切ったため、これは途中経過の解であって最適解ではありません。LaCAM* の最適性は OPEN を空にした場合の保証です。",
+        });
+      }
+
+      /*
+        ★ 原論文の目的関数は sum-of-loss（goal に留まり続けた遷移を 0 と数える）で、
+          サイトが表示する sum of costs（最後に goal へ落ち着く時刻の総和）とは別物。
+          論文 p.2 自身が flowtime は累積遷移コストで表せないと区別している。
+          ただし goal を離れる agent がいなければ両者は一致するので、
+          実際に食い違ったときだけ出す。毎回出すと本当に見てほしい
+          上の警告が埋もれる。
+      */
+      const loss = sumOfLossOf(paths);
+      if (loss !== result.metrics.sumOfCosts) {
+        warnings.push({
+          code: "simplified-behavior",
+          message:
+            `この解は LaCAM* の内部目的である sum-of-loss が ${loss}、` +
+            `サイト表示の sum of costs が ${result.metrics.sumOfCosts} で一致しません。` +
+            "goal を一度離れて戻る agent がいるためです。最適性の主張は前者に対するものです。",
+        });
+      }
+    }
     for (let time = 1; time < (paths[0]?.positions.length ?? 0); time += 1) {
       const positions: Record<string, Cell> = {};
       for (const path of paths) positions[path.agentId] = path.positions[time]!.cell;
       emit({ type: "move", time, positions });
     }
     return result;
+  }
+
+  /**
+   * 原論文 p.2 の sum-of-loss。
+   * cost_e(X, Y) := |{ i | ¬(X[i] = Y[i] = g_i) }| を経路列に沿って足す。
+   * goal に留まり続けた遷移だけが 0 になるので、必ず sum of costs 以下になる。
+   */
+  function sumOfLossOf(paths: readonly TimedPath[]): number {
+    let total = 0;
+    const horizon = paths[0]?.positions.length ?? 0;
+    for (let time = 0; time + 1 < horizon; time += 1) {
+      for (let index = 0; index < paths.length; index += 1) {
+        const from = paths[index]!.positions[time]!.cell;
+        const to = paths[index]!.positions[time + 1]!.cell;
+        const goal = agents[index]!.goal;
+        if (!(cellEquals(from, goal) && cellEquals(to, goal))) total += 1;
+      }
+    }
+    return total;
   }
 
   function stoppedResult(outcome: Exclude<StopState, null>): SolverResult {

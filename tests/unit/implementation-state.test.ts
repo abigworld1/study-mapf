@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { implementationStateOf, isRunnable } from "@/lib/implementation-state";
+import {
+  implementationStateOf,
+  isRunnable,
+  resolveImplementationState,
+  type DeclaredStatus,
+} from "@/lib/implementation-state";
 import { algorithms, getAlgorithm } from "@/lib/manifest";
 import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
 
@@ -24,12 +29,32 @@ describe("実装状態の判定", () => {
     expect(isRunnable("cbs")).toBe(true);
   });
 
-  it("Batch 5 の registry 登録と manifest 宣言が一致する", () => {
-    expect(RUNNABLE_ALGORITHM_IDS).toContain("lacam");
-    expect(RUNNABLE_ALGORITHM_IDS).toContain("lacam-star");
-    expect(implementationStateOf("lacam")).toBe("runnable");
-    expect(implementationStateOf("lacam-star")).toBe("runnable");
-    expect(isRunnable("lacam")).toBe(true);
+  /*
+    ★ 規則そのものを、どの手法が実装済みかに依存しない形で固定する。
+      以前は「registry に無い lacam は planned へ落ちる」と書いていたが、
+      Batch 5 で lacam が実装された時点で成り立たなくなり、
+      バッチ登録の確認テストへ置き換えられて規則の検査が消えた。
+      純関数を直接叩けば以後のバッチで同じことは起きない。
+  */
+  it("引き下げ規則を全組合せで固定する", () => {
+    const cases: [DeclaredStatus, boolean, string][] = [
+      // registry にある: 宣言どおり。ただし partial は格上げしない。
+      ["runnable", true, "runnable"],
+      ["partial", true, "partial"],
+      ["explanation-only", true, "runnable"],
+      ["planned", true, "runnable"],
+      // registry に無い: 動かないので引き下げる。「解説のみ」だけ残す。
+      ["runnable", false, "planned"],
+      ["partial", false, "planned"],
+      ["explanation-only", false, "explanation-only"],
+      ["planned", false, "planned"],
+    ];
+    for (const [declared, registered, expected] of cases) {
+      expect(
+        resolveImplementationState(declared, registered),
+        `declared=${declared} registered=${registered}`,
+      ).toBe(expected);
+    }
   });
 
   it("マニフェストに無い id は planned", () => {
