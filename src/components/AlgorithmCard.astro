@@ -1,7 +1,6 @@
 ---
 import { withBase } from "@/lib/paths";
-import { getAlgorithm } from "@/lib/manifest";
-import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import { implementationStateOf } from "@/lib/implementation-state";
 import type { CollectionEntry } from "astro:content";
 
 interface Props {
@@ -9,16 +8,7 @@ interface Props {
 }
 const { entry } = Astro.props;
 const fm = entry.data;
-const algo = getAlgorithm(fm.algorithmId);
-const runnable = RUNNABLE_ALGORITHM_IDS.includes(fm.algorithmId);
-const declared = algo?.implementation_status ?? "planned";
-const effective = runnable
-  ? declared === "partial"
-    ? "partial"
-    : "runnable"
-  : declared === "explanation-only"
-    ? "explanation-only"
-    : "planned";
+const effective = implementationStateOf(fm.algorithmId);
 
 const LABEL: Record<string, string> = {
   runnable: "実行可",

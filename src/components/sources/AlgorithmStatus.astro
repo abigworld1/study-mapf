@@ -1,13 +1,11 @@
 ---
-import { getAlgorithm } from "@/lib/manifest";
-import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import { implementationStateOf } from "@/lib/implementation-state";
 
 /**
  * 実装状態のバッジ。
  *
  * ★ 「実装済み」と誤認させないことが最優先。
- *   シミュレータで実際に動くかどうかは registry（= 実際に登録された Solver）から取り、
- *   runnable / partial の完成度は manifest から取る。
+ *   判定そのものは implementation-state.ts に一本化してある。ここで書き直さない。
  */
 interface Props {
   algorithmId: string;
@@ -17,19 +15,7 @@ interface Props {
 }
 
 const { algorithmId, contentStatus, showContent = true } = Astro.props;
-const algo = getAlgorithm(algorithmId);
-const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
-
-// registry に無い runnable / partial は実態（= 動かない）に合わせる。
-// registry にある partial は「動くが一部」のまま表示し、runnable へ格上げしない。
-const declared = algo?.implementation_status ?? "planned";
-const effective = runnable
-  ? declared === "partial"
-    ? "partial"
-    : "runnable"
-  : declared === "explanation-only"
-    ? "explanation-only"
-    : "planned";
+const effective = implementationStateOf(algorithmId);
 
 const IMPL: Record<string, { label: string; tone: string; help: string }> = {
   runnable: {

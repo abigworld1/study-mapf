@@ -1297,3 +1297,40 @@ unknown を含む algorithm 数は 58 / 77 のまま（ICTS の complete を推�
 ### 12. 次の推奨バッチ
 
 Batch 5 の `lacam` / `lacam-star`。
+
+---
+
+## 2026-07-27 Batch 4 レビュー後の修正（Claude Code）
+
+### 1. 反証による `false` を規則として明文化した
+
+`push-and-swap` の `complete: false` は正しい判断だが、規則が追いついていなかった。
+`algorithms.yaml` ヘッダと `SOURCE_POLICY.md` 第 7 条は `false` を
+「原論文が保証しないと明示している」とだけ定義していたため、
+規則だけを読んだ人が「原論文 p.4 Theorem 3.1 は完全と主張しているのだから
+`false` は誤り」と判断して差し戻せてしまう状態だった。
+
+両方に「原論文は主張しているが後続の一次資料が反証している」場合を追記し、
+次を必須にした。
+
+- `guarantee_evidence` に原論文の主張と反証資料の**両方**をページ番号つきで書く
+- 反証の根拠は一次資料に限る（二次資料・ブログ・issue コメントは不可）
+- 解説ページでも両論文を併記する
+
+### 2. 実装状態の判定を 1 箇所へ集約した
+
+同じ式が 4 ファイルに重複していた。
+
+- `src/components/AlgorithmCard.astro`
+- `src/components/sources/AlgorithmStatus.astro`
+- `src/pages/compare.astro`
+- `src/pages/roadmap.astro`
+
+Batch 4 で Codex が直した「registry にある partial が実行可と表示される」
+過大主張は、まさにこの重複が生んだものだった（ICBS が該当）。
+`src/lib/implementation-state.ts` に `implementationStateOf` /
+`isRunnable` を切り出し、4 箇所をすべて置き換えた。
+
+`tests/unit/implementation-state.test.ts` で規則そのものを固定した。
+特に「registry に無い手法が runnable / partial と表示されることは無い」を
+全 77 手法に対して検査しており、過大主張の一般形を封じている。

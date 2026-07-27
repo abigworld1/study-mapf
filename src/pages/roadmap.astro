@@ -2,7 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { withBase } from "@/lib/paths";
 import { getAlgorithm } from "@/lib/manifest";
-import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import { implementationStateOf, isRunnable } from "@/lib/implementation-state";
 
 const IMPL_LABEL: Record<string, string> = {
   runnable: "実行可",
@@ -12,21 +12,14 @@ const IMPL_LABEL: Record<string, string> = {
 };
 
 /**
- * 実装状態は宣言ではなく registry（実際に登録された Solver）から決める。
  * ★ テンプレート内に TypeScript の型注釈は書けないので、判定はここで済ませておく。
+ *   状態そのものの決め方は implementation-state.ts にある。
  */
 function implStateOf(algorithmId: string): { label: string; runnable: boolean } {
-  const algo = getAlgorithm(algorithmId);
-  const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
-  const declared = algo?.implementation_status ?? "planned";
-  const effective = runnable
-    ? declared === "partial"
-      ? "partial"
-      : "runnable"
-    : declared === "explanation-only"
-      ? "explanation-only"
-      : "planned";
-  return { label: IMPL_LABEL[effective] ?? "準備中", runnable };
+  return {
+    label: IMPL_LABEL[implementationStateOf(algorithmId)] ?? "準備中",
+    runnable: isRunnable(algorithmId),
+  };
 }
 
 const STAGES = [

@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { withBase } from "@/lib/paths";
 import { getAlgorithm, siteCategoryOf, siteCategoryLabel, SITE_CATEGORIES } from "@/lib/manifest";
-import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import { implementationStateOf, isRunnable } from "@/lib/implementation-state";
 
 /**
  * 比較表。
@@ -33,15 +33,7 @@ const G_LABEL: Record<string, string> = {
 
 const rows = entries.map((entry) => {
   const a = getAlgorithm(entry.data.algorithmId);
-  const runnable = RUNNABLE_ALGORITHM_IDS.includes(entry.data.algorithmId);
-  const declared = a?.implementation_status ?? "planned";
-  const effective = runnable
-    ? declared === "partial"
-      ? "partial"
-      : "runnable"
-    : declared === "explanation-only"
-      ? "explanation-only"
-      : "planned";
+  const effective = implementationStateOf(entry.data.algorithmId);
   const g = a?.guarantees;
   const problems = a?.problem_types ?? [];
   const online =
@@ -66,7 +58,7 @@ const rows = entries.map((entry) => {
     bounded: G_LABEL[String(g?.bounded_suboptimal ?? "unknown")] ?? "不明",
     online,
     impl: effective,
-    simulator: runnable,
+    simulator: isRunnable(entry.data.algorithmId),
   };
 });
 
