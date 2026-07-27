@@ -1,0 +1,115 @@
+---
+title: "HCA*"
+algorithmId: hca-star
+originalName: "Hierarchical Cooperative A*"
+order: 65
+summary: "CA* の heuristic を、RRA* で必要時に求める静的な真の距離へ強化する。"
+status: reviewed
+primarySources:
+  - paperId: cooperative-pathfinding-2005
+    pages: [2, 3]
+implementationReferences:
+  - repositoryId: pibt2
+lastReviewed: "2026-07-27"
+simulatorSolverId: hca-star
+---
+
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+Hierarchical Cooperative A*（HCA*）は、CA\* の探索手順を保ったまま heuristic を強くした手法です。時間軸と reservation table を無視した静的 2D map を抽象空間とし、そこにおけるゴールまでの最短距離を協調探索の heuristic にします<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## まず何がうれしいのか
+
+Manhattan distance は壁を無視するため、迷路ではゴールへ近そうで実は遠いセルを多く展開します。静的な真の距離（true distance）は壁を考慮しながら他 agent だけを無視するため、許容性を保ったまま協調探索をより正確に導きます。
+
+## 前提となる知識
+
+- CA\* と reservation table
+- abstraction による admissible heuristic
+- A\* で状態を展開した時点の最短距離
+
+## 対象問題
+
+対象モデルと固定 priority order は CA* と同じです。違うのは個別 Space-Time A* が使う heuristic だけです。したがって HCA\* も one-shot MAPF 全体を共同探索しません。
+
+## 中心となるアイデア
+
+各 agent ごとに Reverse Resumable A*（RRA*）を 1 個持ちます。RRA* はゴールから開始位置の方向へ逆向きに探索します。協調探索がセル `N` の抽象距離を要求したとき、`N` が Closed に無ければ、`N` を展開するまで RRA* を再開します。その後は確定した `g(N)` を何度でも再利用できます<SourceCitation paperId="cooperative-pathfinding-2005" label="Algorithm 1" page={3} />。
+
+## アルゴリズムの手順
+
+1. agent のゴールを根とする RRA\* の OPEN / Closed を初期化します。
+2. CA* と同じ固定順で Space-Time A* を始めます。
+3. 状態 `(cell,time)` の `h` が必要なら、RRA\* を `cell` まで再開します。
+4. 得た静的距離を `h` にして予約を避ける経路を探索します。
+5. 経路を予約し、次の agent へ進みます。
+
+## 小さな例
+
+ゴールが壁のすぐ向こうにあると、Manhattan distance は 1 でも、実際には壁を回って 9 歩かかることがあります。RRA\* は一度その回り道を展開すると距離 9 を返します。同じ周辺セルの距離要求では、その OPEN / Closed を再利用できます。
+
+## データ構造
+
+- 協調層: `(cell,time)` の OPEN、best-g、reservation table
+- 抽象層: agent ごとの RRA\* OPEN / Closed、静的距離 `g`
+- RRA\* の origin: agent の元の start、探索開始点: goal
+
+## 疑似コード
+
+```text
+function abstractDistance(cell):
+  if cell is in RRA.closed:
+    return RRA.g[cell]
+  while RRA.open is not empty:
+    current ← pop minimum f from RRA.open
+    move current to RRA.closed
+    if current.cell = cell:
+      return current.g
+    relax reverse neighbors of current
+  return infinity
+
+for agent in input order:
+  path ← SpaceTimeAStar(agent, reservations, h=abstractDistance)
+  reserve path or fail for this ordering
+```
+
+前半は Silver の Algorithm 1<SourceCitation paperId="cooperative-pathfinding-2005" label="Algorithm 1" page={3} />をサイトの grid 記法へ短く再構成しています。OPEN 更新の細部と successor reversal の行は実装説明へ移しました。
+
+## 実装上の注意
+
+論文は前向き探索と逆向き探索で同値分岐の向きを合わせる successor reversal を説明します<SourceCitation paperId="cooperative-pathfinding-2005" page={3} />。サイト版は grid 上で決定的な `f`、`g`、`y`、`x` 順を使いますが、任意 graph で論文と同じ path tie を再現するとは主張しません。
+
+RRA\* と協調探索は 1 個の global expansion budget を共有します。`expand-node` の `state.phase` が `abstract-rra` なら抽象探索、`cooperative` なら時空間探索です。
+
+## よくある誤解
+
+- hierarchical は空間の多段階縮約を必ず意味しません。本論文の HCA\* は時間と他 agent を落とす 1 個の domain abstraction です。
+- heuristic が強くなっても、固定順で経路を確定する不完全性は消えません。
+- RRA\* は全セル距離を最初に前計算するのではなく、要求に応じて再開します。
+
+<Caution title="CA* の順序依存はそのまま残ります">
+  HCA* は CA* の heuristic を置き換える手法です。先行 agent の経路が後続 agent
+  を塞ぐ場合、抽象距離が正確でも別の priority order を自動探索しません。
+</Caution>
+
+## 他手法との比較
+
+- CA\*: Manhattan heuristic。構造が単純ですが、壁の多い map では弱い見積もりです。
+- HCA*: on-demand RRA* distance。完全経路を固定順に計画します。
+- WHCA*: 同じ RRA* を使いながら、協調部分を window に限定して再計画します。
+
+## サイト上の実装との差異
+
+公開 `pibt2` の HCA は、長い静的距離を持つ agent を先にする優先規則と start / goal を考慮した tie-break を採用しています。本サイトは論文の CA* → HCA* の差を heuristic に限定して示すため、入力順を保ちます。`pibt2` はサブモジュール未取得のため実行比較できず、コードも転記していません。
+
+論文で明示されない edge-swap / following、有限 horizon、ブラウザ上限を追加しています。RRA\* の厳密な successor reversal は、上述の決定的 grid tie-break へ置き換えています。
+
+## 実験してみる
+
+<SimulatorLink solverId="hca-star" />
+
+壁の多い map で CA* と HCA* の `expandedNodes` を比べてください。経路 cost が同じでも、`abstract-rra` の前処理と cooperative search の展開配分が変わります。

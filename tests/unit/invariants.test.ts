@@ -1,107 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { Scenario, TimedPath } from "@/lib/model/types";
+import type { Scenario } from "@/lib/model/types";
 import { DEFAULT_RULES } from "@/lib/model/types";
 import { buildPreset, PRESETS } from "@/lib/model/scenario";
-import { cellEquals, createEmptyMap, isWalkable, withBlocked } from "@/lib/model/grid";
-import { positionAt } from "@/lib/model/conflicts";
+import { createEmptyMap, isWalkable, withBlocked } from "@/lib/model/grid";
 import { runInline } from "@/solvers/client";
 import { createRandom, randomInt } from "@/lib/model/random";
+import { checkPaths } from "../helpers/check-paths";
+
+export { checkPaths };
 
 /**
  * 反復テスト。
  * seed を変えながら多数のインスタンスを解き、解が満たすべき性質を毎回検査する。
  * 「solved と返したのに実は不正」という最悪の壊れ方を防ぐのが目的。
  */
-
-interface Violation {
-  rule: string;
-  detail: string;
-}
-
-function checkPaths(scenario: Scenario, paths: readonly TimedPath[]): Violation[] {
-  const violations: Violation[] = [];
-  const rules = scenario.rules;
-
-  for (const path of paths) {
-    const positions = path.positions;
-    if (positions.length === 0) {
-      violations.push({ rule: "空の経路", detail: path.agentId });
-      continue;
-    }
-
-    // 開始位置が一致しているか
-    const agent = scenario.agents.find((a) => a.id === path.agentId);
-    if (agent && !cellEquals(positions[0]!.cell, agent.start)) {
-      violations.push({ rule: "開始位置が違う", detail: path.agentId });
-    }
-
-    for (let i = 0; i < positions.length; i += 1) {
-      const p = positions[i]!;
-
-      // 壁を通らない
-      if (!isWalkable(scenario.map, p.cell)) {
-        violations.push({ rule: "壁を通過", detail: `${path.agentId}@t${p.time}` });
-      }
-
-      // 時刻が 1 ずつ増える
-      if (i > 0 && p.time !== positions[i - 1]!.time + 1) {
-        violations.push({ rule: "時刻が連続していない", detail: `${path.agentId}@t${p.time}` });
-      }
-
-      // 隣接しないセルへ跳ばない
-      if (i > 0) {
-        const prev = positions[i - 1]!;
-        const dx = Math.abs(p.cell.x - prev.cell.x);
-        const dy = Math.abs(p.cell.y - prev.cell.y);
-        const ok = rules.allowDiagonal ? dx <= 1 && dy <= 1 : dx + dy <= 1;
-        if (!ok) {
-          violations.push({ rule: "隣接しないセルへ移動", detail: `${path.agentId}@t${p.time}` });
-        }
-      }
-    }
-
-    // ゴールへ到達している
-    if (agent?.goal) {
-      const last = positions[positions.length - 1]!;
-      if (!cellEquals(last.cell, agent.goal)) {
-        violations.push({ rule: "ゴール未到達", detail: path.agentId });
-      }
-    }
-  }
-
-  // 同時刻に同じセルを占有しない / 入れ替わらない
-  const horizon = Math.max(0, ...paths.map((p) => p.positions[p.positions.length - 1]?.time ?? 0));
-  for (let t = 0; t <= horizon; t += 1) {
-    const seen = new Map<string, string>();
-    for (const path of paths) {
-      const cell = positionAt(path, t, rules);
-      if (!cell) continue;
-      const key = `${cell.x},${cell.y}`;
-      const other = seen.get(key);
-      if (other) {
-        violations.push({ rule: "同時刻に同じセル", detail: `${other}/${path.agentId}@t${t}` });
-      }
-      seen.set(key, path.agentId);
-    }
-    if (t === 0 || !rules.forbidEdgeSwap) continue;
-    for (let i = 0; i < paths.length; i += 1) {
-      for (let j = i + 1; j < paths.length; j += 1) {
-        const a = paths[i]!;
-        const b = paths[j]!;
-        const aPrev = positionAt(a, t - 1, rules);
-        const aNow = positionAt(a, t, rules);
-        const bPrev = positionAt(b, t - 1, rules);
-        const bNow = positionAt(b, t, rules);
-        if (!aPrev || !aNow || !bPrev || !bNow) continue;
-        if (cellEquals(aPrev, bNow) && cellEquals(aNow, bPrev) && !cellEquals(aPrev, aNow)) {
-          violations.push({ rule: "edge swap", detail: `${a.agentId}/${b.agentId}@t${t}` });
-        }
-      }
-    }
-  }
-
-  return violations;
-}
 
 /** seed からランダムな小さいインスタンスを作る。壁が開始・目標に被らないようにする。 */
 function randomScenario(seed: number): Scenario {

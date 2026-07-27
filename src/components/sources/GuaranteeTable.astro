@@ -99,6 +99,19 @@ const PROBLEM_LABEL: Record<string, string> = {
         </table>
       </div>
 
+      {/*
+        ★ notes は「保証が及ぶ範囲」の但し書きを持つことが多いので必ず出す。
+          例: SIPP の Theorem 1/2 は単一エージェント問題の保証であって、
+          固定優先順位の MAPF ラッパーには及ばない。
+          これを隠すと表の「完全性: あり / 最適性: 最適」だけが読まれ、
+          過大な主張として伝わる（SOURCE_POLICY.md 第 8 条）。
+      */}
+      {algo.notes && (
+        <p class="caveat">
+          <strong>適用範囲の注意:</strong> {algo.notes}
+        </p>
+      )}
+
       {algo.guarantee_evidence ? (
         <details class="evidence">
           <summary>保証の根拠（原論文の記述）</summary>
@@ -146,6 +159,14 @@ const PROBLEM_LABEL: Record<string, string> = {
     color: var(--fg-subtle);
     border-color: var(--border);
     border-style: dashed;
+  }
+  .caveat {
+    font-size: var(--text-sm);
+    border-left: 4px solid var(--warn);
+    background: var(--warn-subtle);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    margin-block: var(--space-3);
   }
   .evidence {
     border: var(--border-width) solid var(--border);

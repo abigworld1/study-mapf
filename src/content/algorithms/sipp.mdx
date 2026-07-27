@@ -3,15 +3,111 @@ title: "SIPP"
 algorithmId: sipp
 originalName: "Safe Interval Path Planning"
 order: 40
-summary: ""
-status: draft
+summary: "安全な時刻を区間へ圧縮し、既知の動的障害物を避ける最短路探索。"
+status: reviewed
 primarySources:
   - paperId: sipp-icra-2011
+    pages: [2, 3, 4, 5]
 implementationReferences:
   - repositoryId: libmultirobotplanning
   - repositoryId: continuous-cbs
+lastReviewed: "2026-07-27"
+simulatorSolverId: sipp
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="sipp" />
+## 概要
+
+SIPP（Safe Interval Path Planning）は、軌道が既知の動的障害物を避ける単一ロボット探索です。時刻を 1 ステップずつ状態に持つ代わりに、ある configuration が安全であり続ける最大の連続時間を safe interval としてまとめます<SourceCitation paperId="sipp-icra-2011" page={2} />。
+
+## まず何がうれしいのか
+
+同じセルが `t=0..1000` の間ずっと空いているとき、Space-Time A\* は多くの `(cell,t)` を区別できます。SIPP はその範囲を 1 個の `[0,1000]` として扱い、状態を `(cell, interval)` へ圧縮します。動的障害物が少ない問題では、時間 horizon が長くても状態数を抑えられます。
+
+## 前提となる知識
+
+- A\* と consistent heuristic
+- 既知の動的障害物または reservation table
+- wait-and-move: 出発セルで待ってから隣へ進む遷移
+
+## 対象問題
+
+原論文は一般の configuration と動作時間を扱い、動的障害物の将来軌道が分かっている状況を対象にします<SourceCitation paperId="sipp-icra-2011" page={2} />。サイト版は 4 近傍 grid、離散時間、単位時間 move / wait に限定します。
+
+## 中心となるアイデア
+
+SIPP の状態は `(configuration, safe interval)` です。到着時刻は状態の識別子ではなく、その状態へ最も早く到達できた値として保持します。論文の Figure 4 は A\* の状態をこの組へ置き換え、Figure 5 は隣接 configuration の各 safe interval へ最早到着する後継を作ります<SourceCitation paperId="sipp-icra-2011" label="Figure 4" page={3} /><SourceCitation paperId="sipp-icra-2011" label="Figure 5" page={4} />。
+
+## アルゴリズムの手順
+
+1. 各セルの予約時刻から、互いに素な最大 safe intervals を作ります。
+2. `start` を含む interval と到着時刻 0 を OPEN へ入れます。
+3. 最小 `f` の状態を取り出します。
+4. 各隣接セルの各 interval に対し、現在 interval 内で待てる範囲から最早の出発時刻を探します。
+5. move 中と到着時の衝突が無ければ、その interval の後継を緩和します。
+6. ゴール状態を展開したら経路を復元します。
+
+## 小さな例
+
+セル `B` が `t=1..5` に危険なら、`B` の safe intervals は `[0,0]` と `[6,∞)` です。`A` から `B` へ行くエージェントは、`A` の interval 内で `t=5` まで待ち、`t=6` に `B` へ到着する 1 個の後継を作ります。危険な 5 時刻を個別状態として展開しません。
+
+## データ構造
+
+- cell ごとの sorted safe intervals
+- `(cell, intervalIndex)` をキーにした最早到着時刻
+- OPEN、parent、wait-and-move の出発時刻
+- vertex / edge reservation table
+
+原論文は safe interval 数が configuration の衝突区間数に対して線形に抑えられることも示します<SourceCitation paperId="sipp-icra-2011" label="Theorem 3" page={5} />。
+
+## 疑似コード
+
+```text
+OPEN ← {state(start, intervalContaining(0), arrival=0)}
+while OPEN is not empty:
+  current ← pop minimum f
+  if current is an acceptable goal interval:
+    return reconstruct waits and moves
+  for neighbor in fourNeighbors(current.cell):
+    for interval in safeIntervals(neighbor):
+      arrival ← earliest collision-free wait-and-move into interval
+      if arrival exists and improves state(neighbor, interval):
+        update arrival and parent; push state
+return failure
+```
+
+これは Figure 4 と Figure 5<SourceCitation paperId="sipp-icra-2011" label="Figure 4" page={3} /><SourceCitation paperId="sipp-icra-2011" label="Figure 5" page={4} />の構造を、離散 grid 用に短く再構成したものです。原文の行や変数名は転載していません。
+
+## 実装上の注意
+
+本実装は consistent な静的 true-distance heuristic を使います。同じ `(cell,interval)` には最早到着だけを残します。タイブレークは `f`、到着時刻、cell の `y,x`、interval 開始時刻です。
+
+`goalBehavior: stay` では、ゴールの safe interval が有限 horizon の末尾まで続く場合だけ受理します。`discover-safe-interval` は区間の発見、`reject-reserved-state` は予約による棄却を可視化します。
+
+## よくある誤解
+
+- safe interval は「予約の無い任意区間」ではなく、これ以上広げられない最大区間です。
+- 到着時刻を状態から捨てるのではなく、各 interval の最良値として保持します。
+- SIPP の単一ロボット保証から、固定優先順位 MAPF wrapper の完全性は導けません。
+
+## 他手法との比較
+
+Space-Time A* は `(cell,time)` を直接探索します。SIPP は同じ時間依存探索を interval に圧縮します。CA* は低レベルに Space-Time A\* を使い、本サイトの SIPP Solver はその低レベルを SIPP に置き換えた固定順 wrapper です。
+
+## サイト上の実装との差異
+
+<Caution title="実行用 wrapper は SIPP 原論文の範囲外です">
+  原論文は既知の動的障害物を避ける単一ロボット手法です。本サイトは複数エージェントで試せるよう、入力順に計画し、先行経路を動的障害物として
+  SIPP へ渡します。この wrapper の成否は優先順位に依存します。
+</Caution>
+
+原論文の連続的な configuration、任意の motion duration、PR2 motion primitives は未対応です。有限 `maxHorizon` で無限の最終 interval を近似し、サイト規則の edge-swap / following を追加しています。公開 `libmultirobotplanning` の同じ状態表現を確認しましたが、コードは転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="sipp" />
+
+詳細 trace で `discover-safe-interval` を選び、CA\* の `(cell,time)` 展開と比べてください。長く予約されるセルほど interval 圧縮の違いが見えます。

@@ -3,14 +3,109 @@ title: "Cooperative A*"
 algorithmId: cooperative-astar
 originalName: "Cooperative A* (CA*)"
 order: 60
-summary: ""
-status: draft
+summary: "Space-Time A* と予約表で、エージェントを固定順に協調させる基本手法。"
+status: reviewed
 primarySources:
   - paperId: cooperative-pathfinding-2005
+    pages: [2]
 implementationReferences:
   - repositoryId: pibt2
+lastReviewed: "2026-07-27"
+simulatorSolverId: cooperative-astar
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="cooperative-astar" />
+## 概要
+
+Cooperative A*（CA*）は、複数エージェント問題を一連の単一エージェント探索へ分解します。各 agent は space-time で経路を求め、得た経路を reservation table へ書き込みます。後続 agent はその予約を通行不能として避けます<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## まず何がうれしいのか
+
+個々の探索は通常の A\* に近く、全 agent の直積状態を持ちません。予約表が「すでに合意された未来」を共有するため、実行時に初めて衝突して局所修復する方式より、事前に衝突の無い経路を作れます。
+
+## 前提となる知識
+
+- Space-Time A\*
+- admissible heuristic と Manhattan distance
+- reservation table
+- 固定 priority order の限界
+
+## 対象問題
+
+完全な経路情報を共有できる Cooperative Pathfinding / one-shot MAPF が対象です。サイト版は 4 近傍、離散時間、move / wait、単位セル agent に限定します。
+
+## 中心となるアイデア
+
+CA\* の構成要素は 2 つだけです。
+
+1. `(cell,time)` を探索する Space-Time A\*
+2. 計画済み経路を疎に保持する reservation table
+
+Silver は基本 heuristic として Manhattan distance を挙げ、より強い抽象 heuristic は HCA\* へ分けます<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## アルゴリズムの手順
+
+1. agent の順序を固定します。
+2. 先頭 agent を Manhattan heuristic の Space-Time A\* で計画します。
+3. 経路上の `(cell,time)` を予約します。
+4. 次の agent を既存予約を避けて計画し、経路を追加予約します。
+5. 全員が成功するまで繰り返します。
+
+## 小さな例
+
+2 体が交差点を同時に通ろうとするとします。先行 agent の交差点占有が `t=2` に予約されると、後続 agent は `t=1` に手前で wait し、`t=3` に交差点へ入る経路を選べます。
+
+## データ構造
+
+reservation table は空間 2 次元と時間 1 次元の疎な表です。論文は `(x,y,t)` の hash table として実装できると説明します<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。サイト版は vertex 予約に加え、edge-swap を防ぐ時刻付き有向 edge も保持します。
+
+## 疑似コード
+
+```text
+table ← empty reservation table
+for agent in input order:
+  path ← SpaceTimeAStar(agent, table, heuristic=Manhattan)
+  if path does not exist:
+    return failure for this ordering
+  table.reserve(path)
+return all paths
+```
+
+Silver の「Cooperative A\*」節<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />を教材用に再構成しています。同節に番号付き Algorithm はありません。
+
+## 実装上の注意
+
+入力配列順を priority order とし、暗黙の並べ替えはしません。低レベルのタイブレークは `f`、`-g`、生成順です。到着後 stay の agent は horizon 末尾まで goal を予約します。探索上限や abort は全 agent で共有し、agent ごとに上限をリセットしません。
+
+## よくある誤解
+
+- reservation table は Solver そのものではなく、経路間の約束を保持するデータ構造です。
+- wait を許しても、あらゆる順序依存の行き止まりを回避できるわけではありません。
+- CA\* の個別探索が最短でも、MAPF 全体の SOC 最適性は確認できません。
+
+<Caution title="CA* は解ける問題でも失敗します">
+  Silver は、先行 agent の貪欲な最短路が後続 agent の全経路を塞ぐ問題クラスを説明し、Figure 1 に CA*
+  が解けない例を示します
+  <SourceCitation paperId="cooperative-pathfinding-2005" label="Figure 1" page={2} />。
+</Caution>
+
+## 他手法との比較
+
+- Prioritized Planning は同じ固定順骨格を一般化した呼び方です。
+- HCA* は CA* の Manhattan heuristic を on-demand RRA\* 距離へ強化します。
+- WHCA\* は完全経路を一度に固定せず、有限 window だけ予約して再計画します。
+
+## サイト上の実装との差異
+
+論文は大きさや速度の異なる agent の占有領域も予約表で表せるとします。本実装は単位 grid agent に限定します。論文で個別に定義されない edge-swap / following を `SimulationRules` に従って検査し、無限予約の代わりに有限 `maxHorizon` を使います。
+
+マニフェストの公開参照 `pibt2` には HCA 実装を確認しましたが CA\* 専用実装は確認できず、サブモジュール未取得のためビルド比較もできませんでした。本実装は論文から独立して書いています。
+
+## 実験してみる
+
+<SimulatorLink solverId="cooperative-astar" />
+
+`swap-conflict` で `reserve` と `reject-reserved-state` を表示し、先行経路が後続探索の障害物へ変わる様子を確認してください。agent の配列順を変えると、固定順の影響も観察できます。

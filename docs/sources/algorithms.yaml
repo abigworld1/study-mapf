@@ -134,7 +134,7 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [cooperative-pathfinding-2005]
   implementation_repository_ids: [libmultirobotplanning, cbsh2-rtc, eecbs]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: unknown
@@ -164,13 +164,13 @@
   problem_types: [single-agent, classical-mapf, continuous-time-mapf]
   primary_paper_ids: [sipp-icra-2011]
   implementation_repository_ids: [libmultirobotplanning, continuous-cbs]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: true
+    optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "アブストラクトに「既存手法は最適性どころか完全性も犠牲にしている。本論文では…なプランナを開発する」という対比の記述があるが、SIPP 自身の保証の主張部分を PDF 1 ページ目から確定できなかったため unknown。時刻を離散ステップではなく安全区間で表すため、状態数が動的障害物数に比例する点が要点。"
+  guarantee_evidence: "sipp-icra-2011 PDF p.5 Theorem 1 は最早到着状態が最大の後継集合を保持するため completeness が保たれると示し、Theorem 2 は goal configuration の状態を展開したとき time-minimal collision-free path を得ると示す。"
+  notes: "状態を (configuration, safe interval) とし、到着時刻は従属値として最早値だけを保持する。保証は既知の動的障害物、wait 可能、consistent heuristic など同論文の仮定下。サイトの固定優先順位 MAPF wrapper にはこの完全性・最適性は及ばない。"
 
 - id: sipps
   display_name: "SIPPS (SIPP with Soft constraints)"
@@ -213,13 +213,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [pbs-aaai-2019, cooperative-pathfinding-2005]
   implementation_repository_ids: [libmultirobotplanning, push-and-rotate-cbs-pp, mapf-lns-unified]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: false
     optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: "pbs-aaai-2019 アブストラクト: 「優先順位付き計画の完全性および最適性に関する限界を初めて示す（limitations of prioritized planning, in terms of completeness and optimality, for the first time）」。具体的な反例と定理番号は PDF 取得後に追記すること。"
-  notes: "固定した優先順位でエージェントを 1 体ずつ計画する。高速だが、優先順位の選び方によっては解ける問題でも失敗する。"
+  guarantee_evidence: "pbs-aaai-2019 PDF p.2 Theorem 1 は任意の priority ordering による prioritized planning が一般 MAPF で incomplete と示す。同 p.3 Theorem 4 と Corollary 5 は flowtime と makespan について一般に suboptimal と示す。"
+  notes: "固定した優先順位でエージェントを 1 体ずつ計画する。PDF p.3 Theorem 3 の well-formed instances では条件付き完全だが、一般 MAPF の metadata は complete: false。PDF p.7 の 4% は実験観測であり bounded-suboptimal 保証ではない。"
 
 - id: cooperative-astar
   display_name: "Cooperative A* (CA*)"
@@ -228,13 +228,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [cooperative-pathfinding-2005]
   implementation_repository_ids: [pibt2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
+    complete: false
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "予約テーブルを共有しながら順番に時空間 A* を実行する最も素朴な形。"
+  guarantee_evidence: "cooperative-pathfinding-2005 PDF p.2 は、個別最短路を貪欲に先決めする decoupled algorithm が解けない問題クラスを明記し、Figure 1 に CA* が解けない例を示す。"
+  notes: "予約テーブルを共有しながら順番に時空間 A* を実行する最も素朴な形。MAPF 全体の最適性は原論文で定理として確認できないため unknown。"
 
 - id: hca-star
   display_name: "HCA* (Hierarchical Cooperative A*)"
@@ -243,13 +243,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [cooperative-pathfinding-2005]
   implementation_repository_ids: [pibt2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
+    complete: false
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "CA* に、他エージェントを無視した抽象距離（true distance heuristic）を導入した版。"
+  guarantee_evidence: "cooperative-pathfinding-2005 PDF p.2 は decoupled greedy approach の不完全例を示し、同 p.3 は HCA* を CA* の heuristic だけを RRA* の抽象距離へ置き換えた方式と定義するため、その順序依存は残る。"
+  notes: "CA* に、他エージェントを無視した抽象距離（true distance heuristic）を導入した版。MAPF 全体の最適性は原論文で定理として確認できないため unknown。"
 
 - id: whca-star
   display_name: "WHCA* (Windowed Hierarchical Cooperative A*)"
@@ -258,13 +258,13 @@
   problem_types: [classical-mapf, lifelong-mapf]
   primary_paper_ids: [cooperative-pathfinding-2005]
   implementation_repository_ids: [pibt2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
   guarantee_evidence: null
-  notes: "協調を先読み窓 w ステップ以内に限定する。RHCR の windowed MAPF の発想の源流として位置づける。"
+  notes: "協調を先読み窓 w ステップ以内に限定する。cooperative-pathfinding-2005 PDF p.6 は小さい window で成功率が下がり bottleneck が解消されない場合を実験的に報告するが、これは一般的な不完全性定理ではないため complete は unknown のまま。RHCR の windowed MAPF と問題設定を混同しない。"
 
 - id: pbs
   display_name: "PBS (Priority-Based Search)"

@@ -3,14 +3,124 @@ title: "WHCA*"
 algorithmId: whca-star
 originalName: "Windowed Hierarchical Cooperative A*"
 order: 70
-summary: ""
-status: draft
+summary: "HCA* の協調探索を有限 window に切り、経路を実行しながら繰り返し再計画する。"
+status: reviewed
 primarySources:
   - paperId: cooperative-pathfinding-2005
+    pages: [3, 4, 6]
 implementationReferences:
   - repositoryId: pibt2
+lastReviewed: "2026-07-27"
+simulatorSolverId: whca-star
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="whca-star" />
+## 概要
+
+Windowed Hierarchical Cooperative A*（WHCA*）は、HCA* の協調探索を先の `w` ステップだけに限定します。各 agent は部分経路を少し実行し、window を前へずらして再計画します。遠い未来では他 agent を無視した RRA* 距離を使い、近い未来だけ reservation table で厳密に協調します<SourceCitation paperId="cooperative-pathfinding-2005" page={3} />。
+
+## まず何がうれしいのか
+
+CA* / HCA* はゴールまでの長い 3 次元経路を一度に計画し、先行経路を固定します。WHCA\* は必要な近未来だけ計算するため、計算を実行期間へ分散できます。また window ごとに優先度を動かすことで、1 個の固定順に永久に縛られません。
+
+## 前提となる知識
+
+- HCA* と RRA*
+- receding horizon / rolling window
+- terminal edge と heuristic cost
+- stay at goal と、一時的に goal を離れる挙動の違い
+
+## 対象問題
+
+論文は cooperative pathfinding の実時間環境を対象にし、固定深さ window 内だけ他 agent を考慮します。本サイトの Solver は one-shot MAPF を完了まで反復します。`extra.windowSize` と `extra.replanInterval` で window 幅と実行幅を指定できます。
+
+## 中心となるアイデア
+
+window 末端の状態 `N` から goal へ、cost が `abstractDistance(N, goal)` の仮想 terminal edge を置きます。すると OPEN で最良の末端状態は、window 内の協調 cost と window 後の静的距離を合わせて最良な部分経路になります<SourceCitation paperId="cooperative-pathfinding-2005" page={3} />。
+
+論文は window の中間で再計画する例を挙げ、各 agent の RRA\* OPEN / Closed を次の window に再利用します<SourceCitation paperId="cooperative-pathfinding-2005" page={4} />。
+
+## アルゴリズムの手順
+
+1. 各 agent の RRA\* を元の start と goal で初期化します。
+2. 現在時刻から `windowSize` 先まで、priority order に従って部分経路を計画・予約します。
+3. window 末端では RRA\* の抽象距離を terminal cost にします。
+4. `replanInterval` ステップだけ全 agent の部分経路を同期実行します。
+5. active agent の優先度を回転し、window を前へずらします。
+6. 全 agent が goal へ到達するか、horizon / resource limit へ達するまで繰り返します。
+
+## 小さな例
+
+goal まで 12 歩、`windowSize=4`、`replanInterval=2` とします。最初の探索は 4 歩先までの衝突だけを見て、末端から goal への静的距離を加えます。最初の 2 歩を実行したら現在時刻を 2 に進め、次の `[2,6]` window を計画します。
+
+## データ構造
+
+- agent ごとに永続化する RRA\* OPEN / Closed
+- window ごとに作る reservation table
+- 実行済み prefix と、現在 window の partial path
+- active agent の回転 priority order
+
+## 疑似コード
+
+```text
+initialize one reusable RRA* per agent
+time ← 0
+while some agent has not reached its goal:
+  windowEnd ← min(time + windowSize, horizon)
+  reservations ← paths of agents already staying at goals
+  for agent in current priority order:
+    partial ← windowedSpaceTimeAStar(
+      start=position(agent,time),
+      end=windowEnd,
+      terminalCost=RRA.distance
+    )
+    if partial fails: try a bounded rotation or return failure
+    reservations.reserve(partial)
+  execute every partial path for replanInterval steps
+  rotate priorities; time ← time + replanInterval
+return executed paths
+```
+
+Silver の WHCA* 節<SourceCitation paperId="cooperative-pathfinding-2005" page={3} /><SourceCitation paperId="cooperative-pathfinding-2005" page={4} />をサイトの同期 simulator 用に再構成しています。原論文には WHCA* 全体の番号付き Algorithm はありません。
+
+## 実装上の注意
+
+既定 `windowSize` は論文の実験にも現れる 16、既定 `replanInterval` はその半分です。ただし、この数値は理論的に最良という保証ではありません。論文も window size が小さいと遠い bottleneck を解消できないと報告します<SourceCitation paperId="cooperative-pathfinding-2005" page={6} />。
+
+低レベルは terminal edge と同値な `g + abstractDistance` で末端を選びます。window 計画に失敗したときは active order の単純な rotation を高々 agent 数回試します。`replan`、`set-priority`、`reserve`、`move`、`backtrack` が反復を可視化します。
+
+## よくある誤解
+
+- window の外を「何も考えない」のではなく、他 agent を無視した抽象距離で方向を評価します。
+- window を広げれば一般 MAPF の完全性が得られる、とは原論文から確認できません。
+- 実験上の成功率は理論保証ではありません。
+
+<Caution title="goal 到達後の扱いが原論文とサイト既定で異なります">
+  原論文は協調のため goal 到達後も window を続け、一時的に goal を離れて他 agent
+  を通せる設計を説明します
+  <SourceCitation paperId="cooperative-pathfinding-2005" page={3} />
+  <SourceCitation paperId="cooperative-pathfinding-2005" page={4} />
+  。サイト既定は `goalBehavior: stay` なので、本実装は到達後に離れません。
+</Caution>
+
+## 他手法との比較
+
+- CA\*: Manhattan heuristic、完全経路、固定 priority。
+- HCA*: RRA* heuristic、完全経路、固定 priority。
+- WHCA*: RRA* heuristic、window 部分経路、反復再計画と動的 priority。
+- RHCR: 後年の lifelong MAPF 向け rolling-horizon framework。WHCA\* と問題設定・評価を同一視しません。
+
+## サイト上の実装との差異
+
+本実装は simulator の全 agent を同じ window 境界で同期再計画し、優先度を単純 rotation します。論文が述べる frame 間への計算分散や、agent ごとに stagger した window は未対応です。固定回数の rotation retry はブラウザ版の明示的な選択です。
+
+最も重要な差は、上の注意どおり `goalBehavior: stay` を優先する点です。さらに有限 `maxHorizon`、入力・展開・時間上限、edge-swap / following のサイト規則を加えています。公開参照に WHCA\* 本体を確認できず、`pibt2` はサブモジュール未取得でビルドできないため、実行結果との比較は未実施です。
+
+## 実験してみる
+
+<SimulatorLink solverId="whca-star" />
+
+`windowSize` を 4、8、16 と変え、`replans`、展開数、成功・失敗を比べてください。小さい window は 1 回の探索が軽くなる一方、遠い bottleneck を見通せず再計画が増えることがあります。

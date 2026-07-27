@@ -109,11 +109,37 @@ export class SimpleReservationTable implements ReservationTable {
 export function buildReservationTable(
   paths: readonly TimedPath[],
   horizon: Time,
-  _rules: SimulationRules,
+  rules: SimulationRules,
 ): SimpleReservationTable {
   const table = new SimpleReservationTable();
-  for (const path of paths) table.reservePath(path, horizon);
+  for (const path of paths) reservePathForRules(table, path, horizon, rules);
   return table;
+}
+
+/**
+ * goalBehavior を尊重して経路を予約する。
+ * ReservationTable.reservePath は後方互換のため stay を既定とするので、
+ * disappear を扱う Solver はこの helper を使う。
+ */
+export function reservePathForRules(
+  table: SimpleReservationTable,
+  path: TimedPath,
+  horizon: Time,
+  rules: SimulationRules,
+): void {
+  if (rules.goalBehavior === "stay") {
+    table.reservePath(path, horizon);
+    return;
+  }
+
+  for (let index = 0; index < path.positions.length; index += 1) {
+    const position = path.positions[index]!;
+    table.reserve(path.agentId, position.cell, position.time);
+    if (index > 0) {
+      const previous = path.positions[index - 1]!;
+      table.reserveEdge(path.agentId, previous.cell, position.cell, position.time);
+    }
+  }
 }
 
 /** デバッグ用。時刻 t にどのエージェントがどこを押さえているか。 */

@@ -788,3 +788,108 @@ build             61 pages
 
 `CODEX_PROMPT.md` — 実際の型に合わせて書き直した Codex 用プロンプト。
 初版からの変更点をファイル冒頭に列挙してある。
+
+---
+
+## 2026-07-27 — Batch 1 + HCA* の独立実装（担当: Codex）
+
+### 対象アルゴリズム
+
+`space-time-astar`、`sipp`、`prioritized-planning`、`cooperative-astar`、
+`hca-star`、`whca-star` の 6 件。前二者のうち Space-Time A* と Prioritized Planning は
+既存の educational 実装を差し替え、残り 4 件を registry へ追加した。
+
+### 原論文で確認した箇所
+
+- `cooperative-pathfinding-2005` PDF p.2: Space-Time search、CA*、reservation table、
+  greedy decoupled approach の限界と Figure 1
+- 同 pp.2-3: HCA* の abstraction と Algorithm 1 Reverse Resumable A*
+- 同 pp.3-4、p.6: WHCA* の terminal edge / cost、midpoint 再計画、RRA* 再利用、
+  window size と bottleneck の実験的関係
+- `sipp-icra-2011` PDF pp.2-5: safe interval、Figure 4 / 5、Theorem 1 / 2 / 3
+- `pbs-aaai-2019` PDF pp.2-3: Prioritized Planning、Theorem 1 / 3 / 4 / 6、
+  Corollary 5。p.7 の「4%」は実験観測であって保証ではないことも確認
+
+PDF と Marker の機械照合では cooperative-pathfinding と SIPP に番号付き要素の欠落なし。
+PBS は既知どおり語数比 78% で Figure 5-8 が欠落しているため、該当する実験記述は PDF を直接確認した。
+3 論文の `metadata.yaml` に読解箇所と差異を記録した。全文の行単位照合ではないため
+`verification.checked_against_pdf` は `false` のままにした。
+
+### 公開実装の扱い
+
+- `.references/libmultirobotplanning` commit `4c75fa2` を read-only で確認。
+  SIPP の `(location, safe interval)` 状態と固定順適用を比較した。example の edge-swap 判定には TODO がある
+- `.references/pibt2` commit `faab5b9` を read-only で確認。
+  HCA は distance-first priority と start / goal tie-break を採用するが、今回は論文との比較を明確にするため採用しなかった
+- `pibt2` はサブモジュール未取得のためビルド不可。確認した source tree に WHCA* 本体は無い
+
+第三者コードは転記していないため、`THIRD_PARTY_NOTICES.md` の変更は無い。
+
+### 実装
+
+- `src/solvers/low-level/`: `(cell,time)` Space-Time A*、safe interval SIPP、
+  Algorithm 1 の on-demand RRA*、WHCA* 用 window terminal search
+- `src/solvers/prioritized/`: 固定順 coordinator、CA*、HCA*、SIPP MAPF wrapper、
+  rolling-window WHCA*。全 Solver が `checkLimits()`、global expansion budget、timeout、
+  AbortSignal、deterministic tie-break、trace recorder、structured failure を使用
+- `src/lib/model/reservation.ts`: `goalBehavior` を尊重する予約 helper
+- `src/solvers/registry.ts`: 実装済み 6 Solver を登録
+- `src/content/algorithms/`: 6 件の日本語解説を `reviewed` として作成・更新。
+  HCA* ページを新設し、各ページに「サイト上の実装との差異」を記載
+- `docs/notes/implementation/`: 6 件の実装前調査ノートを作成
+
+### テスト
+
+`tests/unit/batch1-solvers.test.ts` と共有 `tests/helpers/check-paths.ts` を追加した。
+
+- 全 6 Solver の registry / metadata、決定性、timeout、abort、入力 guard
+- Space-Time A* の単一 agent 最短路、following、stay / disappear reservation
+- SIPP の safe interval 分割、wait-and-move、Space-Time A* との最早到着比較
+- RRA* と静的 BFS true distance の一致、Closed の再利用
+- CA* / HCA* / SIPP wrapper / WHCA* の経路不変条件と trace event
+- joint-state BFS が解を確認する中央退避所で、固定 Prioritized Planning が失敗する不完全例
+- WHCA* の複数 window、再計画、option validation
+- node / trace 上限
+
+既存 `tests/unit/solvers.test.ts` と `tests/unit/invariants.test.ts` は削除・skip・弱体化せず通過した。
+
+### 理論保証の書き戻し
+
+`docs/sources/algorithms.yaml` を次のように更新した。
+
+- SIPP: `complete: true`、`optimal: true`（time-minimal）、Theorem 1 / 2 を evidence に記録
+- Prioritized Planning: `complete: false`、`optimal: false`、Theorem 1 / 4 と Corollary 5 へ evidence を具体化
+- CA*: `complete: false`、Figure 1 と p.2 本文を evidence に記録。`optimal` は `unknown`
+- HCA*: `complete: false`。CA* の heuristic 置換である p.3 と p.2 の限界を evidence に記録。`optimal` は `unknown`
+- Space-Time A*: 独立手法の定理を確認できないため complete / optimal は `unknown`
+- WHCA*: p.6 は実験観測で定理ではないため complete / optimal は `unknown`
+
+保証に `unknown` が残る手法は 60 件から 59 件へ減った。
+
+### 論文とブラウザ実装の主な差異・簡略化
+
+- edge-swap / following と有限 horizon はサイト共通ルールへの拡張
+- SIPP は連続 configuration / motion duration を離散 4 近傍へ限定し、MAPF 実行時は固定順 wrapper を使用
+- HCA* の一般 graph 向け successor-order reversal は決定的な grid tie-break へ限定
+- WHCA* は全 agent の window を同期し、単純 rotation と bounded retry を使用。
+  原論文の staggered frame scheduling は未対応
+- WHCA* はサイト既定 `goalBehavior: stay` を優先するため、原論文の「goal 到達後に一時的に離れて協力する」挙動は未対応
+
+### 品質ゲート
+
+```text
+sources:validate  errors=0 warnings=5
+format:check      All matched files use Prettier code style!
+lint              0 problems
+typecheck         0 errors（76 files、既存 Astro deprecation hints 22）
+test              91 passed（8 files）
+build             62 pages
+e2e               26 passed（Chromium desktop + mobile）
+```
+
+`npm ci` は完了したが、npm audit の既存 high severity 6 件は今回のスコープ外なので変更していない。
+コミットは作成していない。
+
+### 次の推奨バッチ
+
+Batch 2: `cbs` / `bcbs` / `ecbs` / `icbs` / `eecbs`。

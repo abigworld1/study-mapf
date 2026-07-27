@@ -3,27 +3,120 @@ title: "時空間 A*"
 algorithmId: space-time-astar
 originalName: "Space-Time A*"
 order: 30
-summary: ""
-status: draft
+summary: "位置だけでなく時刻も状態に含め、既知の予約を避ける単一エージェント A*。"
+status: reviewed
 primarySources:
   - paperId: cooperative-pathfinding-2005
+    pages: [2]
 implementationReferences:
   - repositoryId: libmultirobotplanning
   - repositoryId: cbsh2-rtc
   - repositoryId: eecbs
+lastReviewed: "2026-07-27"
 simulatorSolverId: space-time-astar
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
 import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+時空間 A*（Space-Time A*）は、通常の A* の状態を `cell` から `(cell, time)` へ広げた探索です。同じセルでも、時刻が違えば別の状態として扱います。Silver の Cooperative A*（CA\*）では、各エージェントの個別探索を 3 次元の space-time 上で実行します<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+このページでは、その低レベル探索だけを独立して扱います。複数エージェントを順番に計画する仕組みは [Cooperative A\*](../cooperative-astar/) の役目です。
+
+## まず何がうれしいのか
+
+空間だけの A* は「そのセルをいつ通るか」を区別できません。時刻を状態へ加えると、動く障害物が通り過ぎるまで wait したり、予約済みセルを別時刻に通ったりできます。CA* は wait を行動集合へ加え、先に得た経路を reservation table に記録します<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## 前提となる知識
+
+- A\* の `g`、heuristic `h`、評価値 `f = g + h`
+- 離散時間の move / wait
+- vertex conflict と edge-swap conflict
+- 予約表（reservation table）
+
+## 対象問題
+
+入力は 4 近傍グリッド、開始セル、ゴールセル、時刻付き予約です。出力は予約と衝突しない単一エージェントの `TimedPath` です。サイトでは vertex conflict を禁止し、`rules.forbidEdgeSwap` と `rules.forbidFollowing` も検査します。
+
+<Caution title="Space-Time A* 単体は MAPF Solver ではありません">
+  このサイトの実行用 Solver は、意味を混同しないよう 1 エージェントの scenario
+  だけを受理します。複数エージェントには CA*、HCA*、Prioritized Planning などを使ってください。
+</Caution>
+
+## 中心となるアイデア
+
+予約表を「時刻ごとに形が変わる壁」とみなします。`(u,t)` からは、wait または隣接セルへの move によって `(v,t+1)` へ進みます。`v` が時刻 `t+1` に予約済みなら、その遷移を捨てます。edge-swap を禁止するときは、同時刻に別エージェントが `v → u` と進む予約も調べます。
+
+## アルゴリズムの手順
+
+1. 開始状態 `(start, 0)` を OPEN へ入れます。
+2. `f` が最小の状態を取り出します。
+3. ゴールなら、到着後の占有規則も満たすことを確認して終了します。
+4. wait と 4 方向の move を列挙します。
+5. 壁、予約、時刻上限に触れる遷移を捨てます。
+6. より小さい到着コストが得られた状態を OPEN へ入れ、2 に戻ります。
+
+## 小さな例
+
+直線 `S - X - G` で、`X` が `t=1` に予約されているとします。空間 A* は `S → X → G` だけを見ます。時空間 A* は `(S,0) → (S,1) → (X,2) → (G,3)` を作り、1 ステップ待って予約を避けます。
+
+## データ構造
+
+- OPEN: 未展開の `(cell,time)` 状態
+- best-g: 各状態へ既知の最小コスト
+- parent: 経路復元用の親状態
+- reservation table: `(cell,time)` と時刻付き edge の疎な集合
+
+予約表は Silver の論文でも `(x,y,t)` をキーにする疎な構造として説明されています<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## 疑似コード
+
+```text
+OPEN ← {(start, 0)}
+while OPEN is not empty:
+  current ← pop state with minimum (f, -g, generationOrder)
+  if current is an acceptable goal state:
+    return reconstruct(current)
+  for action in [wait, up, down, left, right]:
+    next ← apply(action, current)
+    if next is outside the horizon or conflicts with a reservation:
+      continue
+    relax next and record current as its parent
+return failure
+```
+
+Silver の CA* の文章による定義<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />を、サイト共通モデルへ合わせて短く再構成しています。論文には Space-Time A* 単体の番号付き疑似コードはありません。
+
+## 実装上の注意
+
+論文は同じ `f` のタイブレークを指定しません。本実装は `f` 昇順、`g` 降順、生成順を使い、近傍は wait、up、down、left、right の順です。`goalBehavior: stay` では、ゴール到着後も予約確認 horizon の末尾まで占有できる場合だけ成功にします。
+
+探索前に入力サイズを検査し、`maxHorizon`、`maxExpansions`、timeout、AbortSignal で停止します。`expand-node` と `reject-reserved-state` が探索過程を表します。
+
+## よくある誤解
+
+- `(cell,time)` を探索するだけでは、複数エージェントの優先順位は決まりません。
+- 単一エージェントの最短到着と、MAPF 全体の sum of costs 最小化は別です。
+- goal occupancy、stay at goal、disappear at goal は同じ意味ではありません。
+
+## 他手法との比較
+
+- SIPP は連続する安全な時刻を safe interval にまとめ、時刻状態の増加を抑えます。
+- CA\* はこの探索を固定順に繰り返して経路を予約します。
+- HCA* は Manhattan heuristic を RRA* の静的 true distance に置き換えます。
+- WHCA\* は協調探索を有限 window に切り、実行途中で再計画します。
+
+## サイト上の実装との差異
+
+論文の予約表は占有領域を一般的に扱います。本実装はサイト既定の単位セル・単位時間へ限定し、vertex に加えて edge-swap と任意の following を明示的に検査します。無限時間は扱わず、有限 `maxHorizon` を使います。これらはブラウザの停止性と `SimulationRules` を守るための差です。
+
+公開 `libmultirobotplanning` は汎用低レベル探索を CBS や prioritized planning に組み込みます。本実装はそのコードを転記せず、原論文から独立実装しました。
+
+## 実験してみる
 
 <SimulatorLink solverId="space-time-astar" />
 
-<PreparingNotice
-  algorithmId="space-time-astar"
-  needs={[
-    "原論文の該当節と Algorithm 番号の特定",
-    "疑似コードと PDF の目視照合",
-    "シミュレータの実装が原論文と一致するかの確認",
-  ]}
-/>
+1 エージェントの scenario で障害物を置き、通常の最短路がどう変わるか確認してください。予約表そのものは UI から直接編集できないため、`reject-reserved-state` は CA\* や SIPP の詳細 trace で観察できます。

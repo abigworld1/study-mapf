@@ -10,43 +10,45 @@ import type {
 } from "@/lib/model/types.js";
 import { cellEquals, lookupDistance, movesWithWait, trueDistanceFrom } from "@/lib/model/grid.js";
 
-/**
- * 時空間 A*（低レベル探索）。
- *
- * 状態は (セル, 時刻)。1 ステップで隣接セルへ移動するか、その場で待つ。
- * 予約表が与えられていれば、他エージェントが占有する (セル, 時刻) と
- * 入れ替わり（edge swap）を避ける。
- *
- * ★ これは教材用の素朴な実装である。原論文の完全な再現ではない。
- *   - open list は配列 + 線形探索の優先度付きキュー（規模が小さいため）
- *   - ゴール到達後にそこへ留まれるかの検査は maxTime まで
- *   ここを差し替えたい場合は ALGORITHM_IMPLEMENTATION_GUIDE.md を参照。
- */
+export type LowLevelStopReason = "max-expansions" | "timeout" | "aborted";
 
+/**
+ * 時空間 A* の入力。
+ *
+ * cooperative-pathfinding-2005, Cooperative A* 節の独立再実装。
+ * 状態は (cell, time) で、予約表に記録された占有を動的障害物として扱う。
+ */
 export interface SpaceTimeAStarInput {
   readonly map: GridMap;
   readonly start: Cell;
   readonly goal: Cell;
   readonly agentId: AgentId;
   readonly rules: SimulationRules;
-  /** 他エージェントの占有。無ければ単一エージェント A* と同じ。 */
   readonly reservations?: ReservationTable;
-  /** 予約表を見る上限時刻。これを超えたら他エージェントは居ないものとして扱う。 */
+  /** 予約表を確認する最後の絶対時刻。 */
   readonly reservationHorizon?: Time;
-  /** 探索する最大時刻。超えたら失敗。 */
+  /** 探索開始の絶対時刻。WHCA* の再計画では 0 以外になる。 */
+  readonly startTime?: Time;
+  /** 探索する最後の絶対時刻。 */
   readonly maxTime: Time;
-  /** 展開上限。超えたら失敗。 */
   readonly maxExpansions: number;
-  /** ノード展開を通知する。可視化に使う。 */
   readonly onExpand?: (cell: Cell, time: Time, f: number) => void;
-  /** 事前計算済みの真距離。無ければ内部で計算する。 */
-  readonly heuristic?: Float64Array;
+  readonly onReject?: (
+    cell: Cell,
+    time: Time,
+    reason: "vertex" | "edge-swap" | "following",
+  ) => void;
+  /** 複数探索で展開予算を共有するときに使う。ok のときだけ 1 展開を消費済み。 */
+  readonly consumeExpansion?: () => "ok" | LowLevelStopReason;
+  /** Float64Array は map index、関数は HCA* の on-demand RRA* 用。 */
+  readonly heuristic?: Float64Array | ((cell: Cell) => number);
 }
 
 export interface SpaceTimeAStarOutput {
   readonly path: TimedPath | null;
   readonly expanded: number;
-  readonly reason?: "no-path" | "max-time" | "max-expansions";
+  readonly generated: number;
+  readonly reason?: "no-path" | "max-time" | LowLevelStopReason;
 }
 
 interface Node {
@@ -54,6 +56,7 @@ interface Node {
   readonly time: Time;
   readonly g: number;
   readonly f: number;
+  readonly sequence: number;
   readonly parent: Node | null;
 }
 
@@ -61,81 +64,173 @@ function nodeKey(cell: Cell, time: Time): string {
   return `${cell.x},${cell.y}@${time}`;
 }
 
+/**
+ * 固定された予約表のもとで最短到着経路を探索する。
+ *
+ * タイブレークは f 昇順、g 降順、生成順。論文が同値順を指定しないため、
+ * ブラウザ版の決定性を保つ規則として明示している。
+ */
 export function spaceTimeAStar(input: SpaceTimeAStarInput): SpaceTimeAStarOutput {
-  const { map, start, goal, agentId, rules, reservations, maxTime, maxExpansions, onExpand } =
-    input;
+  const {
+    map,
+    start,
+    goal,
+    agentId,
+    rules,
+    reservations,
+    maxTime,
+    maxExpansions,
+    onExpand,
+    onReject,
+  } = input;
 
+  const startTime = input.startTime ?? 0;
   const horizon = input.reservationHorizon ?? maxTime;
-  const h = input.heuristic ?? trueDistanceFrom(map, goal);
-  const heuristicAt = (cell: Cell) => lookupDistance(map, h, cell);
+  const fallbackHeuristic = input.heuristic ?? trueDistanceFrom(map, goal);
+  const heuristicAt =
+    typeof fallbackHeuristic === "function"
+      ? fallbackHeuristic
+      : (cell: Cell) => lookupDistance(map, fallbackHeuristic, cell);
 
-  if (!Number.isFinite(heuristicAt(start))) {
-    return { path: null, expanded: 0, reason: "no-path" };
+  const startH = heuristicAt(start);
+  if (!Number.isFinite(startH)) {
+    return { path: null, expanded: 0, generated: 0, reason: "no-path" };
+  }
+  if (isVertexReserved(start, startTime)) {
+    onReject?.(start, startTime, "vertex");
+    return { path: null, expanded: 0, generated: 0, reason: "no-path" };
   }
 
-  const open: Node[] = [{ cell: start, time: 0, g: 0, f: heuristicAt(start), parent: null }];
-  const best = new Map<string, number>([[nodeKey(start, 0), 0]]);
+  let nextSequence = 1;
+  const open: Node[] = [
+    {
+      cell: start,
+      time: startTime,
+      g: 0,
+      f: startH,
+      sequence: 0,
+      parent: null,
+    },
+  ];
+  const best = new Map<string, number>([[nodeKey(start, startTime), 0]]);
   let expanded = 0;
+  let generated = 1;
+  let reachedTimeLimit = false;
 
   while (open.length > 0) {
-    // 最小 f を取り出す。同 f なら g が大きい方（ゴールに近い方）を優先。
-    let bestIndex = 0;
-    for (let i = 1; i < open.length; i += 1) {
-      const a = open[i]!;
-      const b = open[bestIndex]!;
-      if (a.f < b.f || (a.f === b.f && a.g > b.g)) bestIndex = i;
-    }
+    const bestIndex = findBestIndex(open);
     const current = open.splice(bestIndex, 1)[0]!;
+    if (best.get(nodeKey(current.cell, current.time)) !== current.g) continue;
 
-    expanded += 1;
-    if (expanded > maxExpansions) {
-      return { path: null, expanded, reason: "max-expansions" };
+    const stop = consumeExpansion();
+    if (stop !== "ok") {
+      return { path: null, expanded, generated, reason: stop };
     }
+    expanded += 1;
     onExpand?.(current.cell, current.time, current.f);
 
     if (cellEquals(current.cell, goal)) {
-      // ゴールに着いたあと、そこに留まり続けられるかを確認する。
-      // 留まれない場合（他エージェントが後で通る）は解として採用しない。
-      if (rules.goalBehavior === "disappear" || canStayForever(current.cell, current.time)) {
-        return { path: reconstruct(agentId, current), expanded };
+      if (rules.goalBehavior === "disappear" || canOccupyGoal(current.cell, current.time)) {
+        return { path: reconstruct(agentId, current), expanded, generated };
       }
     }
 
-    if (current.time >= maxTime) continue;
+    if (current.time >= maxTime) {
+      reachedTimeLimit = true;
+      continue;
+    }
 
     const nextTime = current.time + 1;
     for (const next of movesWithWait(map, current.cell, rules)) {
-      if (isBlockedByReservation(current.cell, next, nextTime)) continue;
+      const rejection = reservationRejection(current.cell, next, nextTime);
+      if (rejection) {
+        onReject?.(next, nextTime, rejection);
+        continue;
+      }
 
+      const h = heuristicAt(next);
+      if (!Number.isFinite(h)) continue;
       const g = current.g + 1;
       const key = nodeKey(next, nextTime);
       const known = best.get(key);
       if (known !== undefined && known <= g) continue;
 
-      const hv = heuristicAt(next);
-      if (!Number.isFinite(hv)) continue;
       best.set(key, g);
-      open.push({ cell: next, time: nextTime, g, f: g + hv, parent: current });
+      open.push({
+        cell: next,
+        time: nextTime,
+        g,
+        f: g + h,
+        sequence: nextSequence,
+        parent: current,
+      });
+      nextSequence += 1;
+      generated += 1;
     }
   }
 
-  return { path: null, expanded, reason: expanded > maxExpansions ? "max-expansions" : "no-path" };
+  return {
+    path: null,
+    expanded,
+    generated,
+    reason: reachedTimeLimit ? "max-time" : "no-path",
+  };
 
-  function isBlockedByReservation(from: Cell, to: Cell, time: Time): boolean {
-    if (!reservations) return false;
-    if (time > horizon) return false;
-    if (reservations.isReserved(to, time, agentId)) return true;
-    if (rules.forbidEdgeSwap && reservations.isEdgeReserved(from, to, time, agentId)) return true;
-    return false;
+  function consumeExpansion(): "ok" | LowLevelStopReason {
+    if (input.consumeExpansion) return input.consumeExpansion();
+    return expanded >= maxExpansions ? "max-expansions" : "ok";
   }
 
-  function canStayForever(cell: Cell, from: Time): boolean {
+  function isVertexReserved(cell: Cell, time: Time): boolean {
+    return Boolean(reservations && time <= horizon && reservations.isReserved(cell, time, agentId));
+  }
+
+  function reservationRejection(
+    from: Cell,
+    to: Cell,
+    time: Time,
+  ): "vertex" | "edge-swap" | "following" | null {
+    if (!reservations || time > horizon) return null;
+    if (reservations.isReserved(to, time, agentId)) return "vertex";
+    if (rules.forbidEdgeSwap && reservations.isEdgeReserved(from, to, time, agentId)) {
+      return "edge-swap";
+    }
+    if (
+      rules.forbidFollowing &&
+      !cellEquals(from, to) &&
+      reservations.isReserved(to, time - 1, agentId)
+    ) {
+      return "following";
+    }
+    return null;
+  }
+
+  function canOccupyGoal(cell: Cell, from: Time): boolean {
     if (!reservations) return true;
-    for (let t = from + 1; t <= horizon; t += 1) {
-      if (reservations.isReserved(cell, t, agentId)) return false;
+    for (let time = from + 1; time <= horizon; time += 1) {
+      if (reservations.isReserved(cell, time, agentId)) {
+        onReject?.(cell, time, "vertex");
+        return false;
+      }
     }
     return true;
   }
+}
+
+function findBestIndex(open: readonly Node[]): number {
+  let bestIndex = 0;
+  for (let index = 1; index < open.length; index += 1) {
+    const candidate = open[index]!;
+    const best = open[bestIndex]!;
+    if (
+      candidate.f < best.f ||
+      (candidate.f === best.f && candidate.g > best.g) ||
+      (candidate.f === best.f && candidate.g === best.g && candidate.sequence < best.sequence)
+    ) {
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
 }
 
 function reconstruct(agentId: AgentId, goalNode: Node): TimedPath {

@@ -3,28 +3,121 @@ title: "優先順位付き計画"
 algorithmId: prioritized-planning
 originalName: "Prioritized Planning"
 order: 50
-summary: ""
-status: draft
+summary: "固定した優先順位に従い、先行経路を避けてエージェントを 1 体ずつ計画する。"
+status: reviewed
 primarySources:
   - paperId: pbs-aaai-2019
+    pages: [2, 3, 7]
   - paperId: cooperative-pathfinding-2005
+    pages: [2]
 implementationReferences:
   - repositoryId: libmultirobotplanning
   - repositoryId: push-and-rotate-cbs-pp
   - repositoryId: mapf-lns-unified
+lastReviewed: "2026-07-27"
 simulatorSolverId: prioritized-planning
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
 import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+優先順位付き計画（Prioritized Planning）は、エージェントへ全順序を与え、高優先度から 1 体ずつ経路を決める MAPF 手法です。後続エージェントは、すでに決まった経路を動的障害物として避けます。計画済みの経路を後から変えないため高速で分かりやすい一方、順序の選択に強く依存します。
+
+## まず何がうれしいのか
+
+全エージェントの直積状態を同時探索せず、単一エージェント探索を `n` 回行えばよいのが利点です。Silver の CA\* も、この分離型（decoupled）構造を space-time search と reservation table で具体化しています<SourceCitation paperId="cooperative-pathfinding-2005" page={2} />。
+
+## 前提となる知識
+
+- Space-Time A\* と reservation table
+- total priority ordering（全エージェントを一列に並べた優先順位）
+- 「個別最短」と「MAPF 全体最適」の違い
+
+## 対象問題
+
+サイト版は one-shot MAPF を対象にします。既定の順序は `scenario.agents` の配列順で、`SolverOptions.extra.priorityOrder` に全 agent ID の順列を渡すと順序を固定できます。
+
+## 中心となるアイデア
+
+高優先度エージェントは他を無視して最短路を選べます。次のエージェントはその経路を予約として避け、以後も同様に続けます。高優先度の選択を覆さないことが、速さと不完全性の両方の原因です。
+
+<Caution title="失敗は『MAPF に解が無い』という証明ではありません">
+  固定順で後続エージェントが行き止まっても、別の順序や高優先度エージェントの別の同コスト経路なら解ける場合があります。PBS
+  論文は一般 MAPF での反例を示します
+  <SourceCitation paperId="pbs-aaai-2019" label="Theorem 1" page={2} />。
+</Caution>
+
+## アルゴリズムの手順
+
+1. 全エージェントの priority order を決めます。
+2. reservation table を空にします。
+3. 順番の先頭から、現在の予約を避ける個別最短路を求めます。
+4. 成功した経路の vertex と edge を予約します。
+5. 全員が成功すれば経路集合を返します。1 体でも失敗すれば、その priority order は失敗です。
+
+## 小さな例
+
+1 本の通路を左右から交換する 2 体と、中央付近に 1 個の退避セルを考えます。先に計画した agent が直進して退避セルを使わないと、後続 agent は避けられないことがあります。しかし先行 agent の別経路や逆順なら解ける場合があります。これは探索バグではなく、固定済み経路を戻さない設計の限界です。
+
+## データ構造
+
+- priority order
+- 計画済み `TimedPath[]`
+- vertex / edge reservation table
+- 各 agent 用の Space-Time A\* 状態
+
+## 疑似コード
+
+```text
+reservations ← empty
+paths ← empty
+for agent in priorityOrder:
+  path ← shortestPathAvoiding(agent, reservations)
+  if path does not exist:
+    return failure for this priority order
+  paths.add(path)
+  reservations.reserve(path)
+return paths
+```
+
+固定順方式の構造をサイト記法にしたものです。PBS は priority order 自体を探索する別アルゴリズムなので、この疑似コードには含めません。
+
+## 実装上の注意
+
+本実装の低レベルは静的障害物を考慮した true-distance heuristic を使う Space-Time A\* です。同値状態は `f` 昇順、`g` 降順、生成順で選びます。PBS 論文は、順序だけでなく個別最短路のタイブレークにも成功が左右される例を示します<SourceCitation paperId="pbs-aaai-2019" page={3} />。そのため、この規則を決定的に固定しています。
+
+失敗時は `failureReason: priority-order` を返し、例外や一般的な「解なし」証明へ置き換えません。`set-priority`、`reserve`、`reject-reserved-state` で判断過程を追跡できます。
+
+## よくある誤解
+
+- 高優先度 agent の個別経路が最短でも、sum of costs 全体が最適とは限りません。
+- 良い成功率という実験結果は完全性保証ではありません。
+- Prioritized Planning と、部分順序を探索する PBS は同じ手法ではありません。
+
+<Caution title="4% は理論保証ではありません">
+  PBS 論文 p.7 の「4% より悪くなかった」という記述は、掲載された実験での観測です
+  <SourceCitation paperId="pbs-aaai-2019" page={7} />
+  。任意の入力に対する bounded-suboptimal 係数ではありません。
+</Caution>
+
+## 他手法との比較
+
+- CA\* は Manhattan heuristic と予約表を用いる Silver の具体的な固定順方式です。
+- HCA* は抽象 true distance で CA* を高速化します。
+- WHCA\* は固定された完全経路ではなく、window ごとの部分経路を再計画します。
+- PBS は衝突から priority constraints を分岐し、順序を探索します。
+
+## サイト上の実装との差異
+
+論文で定義される一般的な方式に対し、本実装は配列順を既定にし、任意順序は `extra.priorityOrder` で明示します。PBS の順序探索、random restart、局所優先順位は行いません。有限 `maxHorizon` とブラウザ上限を加え、サイト既定の edge-swap / following / goal behavior を守ります。
+
+公開 `libmultirobotplanning` の固定順 SIPP 例や `pibt2` の HCA 優先規則は比較のために読みましたが、コードは転記していません。本サイトは順序依存を再現しやすくするため、距離順を暗黙に採用していません。
+
+## 実験してみる
 
 <SimulatorLink solverId="prioritized-planning" />
 
-<PreparingNotice
-  algorithmId="prioritized-planning"
-  needs={[
-    "原論文の該当節と Algorithm 番号の特定",
-    "疑似コードと PDF の目視照合",
-    "シミュレータの実装が原論文と一致するかの確認",
-  ]}
-/>
+同じ scenario の JSON で `agents` の順番だけを逆転し、成功・失敗、cost、trace を比べてください。中央退避所の例では、参照 joint-state BFS が解を見つけても固定順が失敗することを単体テストで確認しています。
