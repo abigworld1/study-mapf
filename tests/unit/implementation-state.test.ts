@@ -24,10 +24,12 @@ describe("実装状態の判定", () => {
     expect(isRunnable("cbs")).toBe(true);
   });
 
-  it("registry に無いなら、宣言が runnable でも planned へ引き下げる", () => {
-    expect(RUNNABLE_ALGORITHM_IDS).not.toContain("lacam");
-    expect(implementationStateOf("lacam")).toBe("planned");
-    expect(isRunnable("lacam")).toBe(false);
+  it("Batch 5 の registry 登録と manifest 宣言が一致する", () => {
+    expect(RUNNABLE_ALGORITHM_IDS).toContain("lacam");
+    expect(RUNNABLE_ALGORITHM_IDS).toContain("lacam-star");
+    expect(implementationStateOf("lacam")).toBe("runnable");
+    expect(implementationStateOf("lacam-star")).toBe("runnable");
+    expect(isRunnable("lacam")).toBe(true);
   });
 
   it("マニフェストに無い id は planned", () => {

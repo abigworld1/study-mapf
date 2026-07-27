@@ -529,6 +529,14 @@ export type SolverEvent =
       readonly configId: string;
       readonly positions: Readonly<Record<AgentId, Cell>>;
     }
+  /** LaCAM*: 既知 configuration graph の shortest-path tree を張り替えた。 */
+  | {
+      readonly type: "rewire-configuration";
+      readonly configId: string;
+      readonly parentConfigId: string;
+      readonly previousCost: number;
+      readonly newCost: number;
+    }
   // ------------------------------------------------------------ LNS
   /** 近傍を選んだ（破壊する前）。 */
   | {

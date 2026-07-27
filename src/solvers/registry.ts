@@ -14,6 +14,7 @@ import { winPibtSolver } from "./pibt/winpibt.js";
 import { ictsSolver } from "./joint/icts.js";
 import { mstarSolver } from "./joint/mstar.js";
 import { pushAndRotateSolver, pushAndSwapSolver } from "./push/solvers.js";
+import { lacamSolver, lacamStarSolver } from "./lacam/solvers.js";
 
 /**
  * Solver の登録所。
@@ -52,6 +53,8 @@ const SOLVERS: readonly MapfSolver[] = [
   mstarSolver,
   pushAndSwapSolver,
   pushAndRotateSolver,
+  lacamSolver,
+  lacamStarSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

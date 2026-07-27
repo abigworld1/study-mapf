@@ -3,14 +3,141 @@ title: "LaCAM"
 algorithmId: lacam
 originalName: "Lazy Constraints Addition search for MAPF"
 order: 320
-summary: ""
-status: draft
+summary: "全 agent の次位置を一度に列挙せず、部分制約を BFS で 1 個ずつ足しながら configuration を遅延生成する完全探索。"
+status: reviewed
 primarySources:
   - paperId: lacam-aaai-2023
+    sections: ["2", "3.1", "3.2", "3.3"]
+    pages: [1, 2, 3, 4]
 implementationReferences:
   - repositoryId: lacam0
+lastReviewed: "2026-07-27"
+simulatorSolverId: lacam
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="lacam" />
+## 概要
+
+LaCAM（Lazy Constraints Addition search for MAPF）は、全 agent の位置 tuple である configuration を探索します。ただし、各 configuration の全 successor を最初から直積列挙しません。「次に agent `i` は cell `v` にいる」という制約を少しずつ足し、制約に従う successor を 1 個ずつ生成します<SourceCitation paperId="lacam-aaai-2023" section="3.1" page={2} />。
+
+## まず何がうれしいのか
+
+4 近傍 grid で agent が `n` 体いると、単純な joint search の 1 node は最大 `5^n` 通りの move / wait を持ちます。LaCAM は goal へ進みそうな configuration を generator から早く受け取り、必要になったときだけ制約を深くします。探索を急ぐ部分と、取りこぼしを防ぐ全列挙部分を分けられます。
+
+## 前提となる知識
+
+- configuration: ある timestep の全 agent の位置 tuple
+- 2 configuration が connected である条件
+- DFS の stack と BFS の queue
+- partial assignment と constraint tree
+- PIBT の priority inheritance / backtracking
+
+## 対象問題
+
+原論文は graph 上の one-shot MAPF を扱います。各 agent は move または wait を選び、vertex conflict と 2-agent edge swap を避けます。start / goal はそれぞれ重複しない configuration です<SourceCitation paperId="lacam-aaai-2023" section="2" page={2} />。サイト版はこれを 4 近傍 unit-cost grid、following conflict 許可、stay-at-goal へ特殊化します。
+
+## 中心となるアイデア
+
+LaCAM は 2 level の探索です。
+
+- high level: configuration node を stack で DFS する
+- low level: 各 high-level node が持つ constraint tree を queue で BFS する
+
+low-level root は制約なしです。深さ 1 は 1 agent、深さ 2 は 2 agent の次位置を固定します。深さが agent 数に達すると、次 configuration が完全に指定されます。そのため、浅い制約では heuristic generator の提案を使いつつ、最後には全 joint action を漏れなく検査できます。
+
+## アルゴリズムの手順
+
+1. start configuration の high-level node を `Open` stack と `Explored` table に入れます。
+2. stack top が goal configuration なら parent を backtrack して返します。
+3. top node の low-level queue から constraint node を 1 個取ります。
+4. 次に制約する agent の move / wait ごとに child constraint を queue へ足します。
+5. 現在の部分制約を満たす connected configuration を generator で 1 個作ります。
+6. 生成に失敗、または既知 configuration なら次の low-level node へ進みます。
+7. 未知 configuration なら high-level node を作り、stack top へ積みます。
+8. low-level queue を使い切った high-level node を stack から外します。
+9. `Open` が空なら no-solution です。
+
+この高レベル DFS と低レベル BFS の組合せが Algorithm 1 です<SourceCitation paperId="lacam-aaai-2023" label="Algorithm 1" page={3} />。
+
+## 小さな例
+
+2 agent の次位置を決めるとします。root constraint では generator が `(right, wait)` を提案できます。既知 configuration だった場合、次の low-level nodeは「`a1` は up」と固定します。それでも新規 successor が出なければ、「`a1` は right」、さらに深い node では「`a1` は right かつ `a2` は down」のように具体化します。最後の深さでは 2 agent の action が完全に決まるため、generator の好みだけで successor を永久に見落としません。
+
+## データ構造
+
+- high-level node: configuration、parent、agent order、low-level FIFO
+- low-level node: agent ごとの部分 next-position assignment
+- `Open`: high-level DFS stack
+- `Explored`: configuration key から node への table
+- goal ごとの true-distance table
+- `occupiedNow` / `occupiedNext`: generator の collision 検査
+
+## 疑似コード
+
+```text
+Open ← stack(startNode)
+Explored[start] ← startNode
+
+while Open is not empty:
+  N ← Open.top
+  if N.config = goal: return backtrack(N)
+  if N.constraintQueue is empty:
+    Open.pop
+    continue
+
+  C ← N.constraintQueue.popFront
+  if C does not constrain every agent:
+    i ← N.order[C.depth]
+    enqueue C + (i → each move-or-wait)
+
+  Q ← generateConnectedConfig(N.config, C)
+  if Q is invalid or Q is in Explored: continue
+  child ← node(Q, parent=N, rootConstraint)
+  Open.push(child)
+  Explored[Q] ← child
+
+return no-solution
+```
+
+原論文 Algorithm 1 の構造を、サイトの cell index と `SolverEvent` に合わせて短く再構成しました。論文の `get_init_order` / `get_order` と configuration generator の内部は下の実装上の注意へ分けています。
+
+## 実装上の注意
+
+generator は速いだけでは不十分です。与えられた部分制約を必ず守り、full constraint では指定された configuration が connected かを正確に判定する必要があります。サイト版は PIBT 型の 1-step assignment を使い、goal true distance 順に候補を試し、現在の占有者へ priority を継承します。再帰失敗時は provisional assignment を rollback します。原論文も実験では PIBT を generator に使います<SourceCitation paperId="lacam-aaai-2023" section="3.3" page={4} />。
+
+初期 agent order は start-goal distance 降順、後続 node は goal 外に長くいる agent を優先します。論文が random とする low-level child orderは、サイトでは `context.random()` から作った固定 rank で再現可能にしています。
+
+## よくある誤解
+
+- low-level は individual shortest-path search ではありません。次 configuration の部分制約を探索します。
+- lazy generation は successor を捨てる近似ではありません。constraint tree を完了すれば全 successor を列挙します。
+- complete だから最適、ではありません。LaCAM は最初の goal configuration で止まります。
+- generator と solver 全体は別です。PIBT generator 単独の不完全性が、そのまま LaCAM の取りこぼしになるわけではありません。
+
+<Caution title="ブラウザの安全弁は完全性の前提外です">
+  Algorithm 1 の完全性は有限な high / low-level 空間を最後まで調べることに依存します
+  <SourceCitation paperId="lacam-aaai-2023" label="Theorem 1" page={3} />。 timeout、max
+  expansions、`maxPathLength` で止まった結果は no-solution 証明ではありません。
+</Caution>
+
+## 他手法との比較
+
+- joint A\* は connected configuration を直積生成して `f` 順に探索します。
+- PIBT は 1 configuration を高速生成しますが、configuration graph を記憶して全列挙しません。
+- LaCAM は PIBT を generator に使いながら constraint tree で completeness を補います。
+- LaCAM\* は goal 発見後も探索を続け、既知 configuration 間の辺で parent tree を張り替えます。
+
+## サイト上の実装との差異
+
+サイト版は Algorithm 1 の素の `Explored` 処理を採用し、§3.3 の「既知 node を `Open` へ再挿入する」改善は混ぜていません。`lacam0` commit `3153c980...` は後年の LaCAM\* rewiring、random restart、PIBT swap、hindrance も統合しています。ここでは LaCAM と LaCAM\* の説明を分けるため除外しました。MIT code は転記していません。
+
+4 近傍 grid、following conflict 許可、stay-at-goal のみを受理します。一般 graph import、diagonal、disappear-at-goal、大規模 benchmark 用 engineering は未対応です。C++ 公開実装は `argparse` submodule 未取得のため build 比較できませんでした。
+
+## 実験してみる
+
+<SimulatorLink solverId="lacam" />
+
+2 agent の `swap-conflict` を実行し、detailed trace の `configuration-expand`、`create-low-level-node`、`add-lazy-constraint`、`configuration-generate` を順に見てください。次に幅 1 の 2-cell swap を作ると、全 constraint を消費して no-solution になる違いを観察できます。

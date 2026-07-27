@@ -65,9 +65,14 @@ test.describe("サイト全体", () => {
     await expect(page.locator(".sim-link")).toContainText("biconnected subproblem merge");
   });
 
-  test("解説準備中のページは推測で埋めていない", async ({ page }) => {
+  test("Batch 5 のページは実装状態と目的関数の注意を表示する", async ({ page }) => {
     await page.goto("./algorithms/lacam/");
-    await expect(page.getByRole("heading", { name: "解説準備中" })).toBeVisible();
+    await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "サイト上の実装との差異" })).toBeVisible();
+
+    await page.goto("./algorithms/lacam-star/");
+    await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+    await expect(page.getByText(/サイト表示 SOC は内部 sum-of-loss/)).toBeVisible();
   });
 
   test("比較表を絞り込める", async ({ page }) => {
@@ -131,7 +136,9 @@ test.describe("シミュレータ", () => {
     await expect(solverSelect).toContainText("M*");
     await expect(solverSelect).toContainText("Push and Swap");
     await expect(solverSelect).toContainText("Push and Rotate");
-    await expect(solverSelect).not.toContainText("LaCAM");
+    await expect(solverSelect).toContainText("LaCAM");
+    await expect(solverSelect).toContainText("LaCAM*");
+    await expect(solverSelect).not.toContainText("MAPF-LNS");
   });
 
   /*

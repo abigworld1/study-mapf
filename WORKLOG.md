@@ -1334,3 +1334,94 @@ Batch 4 で Codex が直した「registry にある partial が実行可と表�
 `tests/unit/implementation-state.test.ts` で規則そのものを固定した。
 特に「registry に無い手法が runnable / partial と表示されることは無い」を
 全 77 手法に対して検査しており、過大主張の一般形を封じている。
+
+---
+
+## 2026-07-27 — Batch 5: LaCAM / LaCAM*（担当: Codex）
+
+### 1. 対象アルゴリズム
+
+- LaCAM（Lazy Constraints Addition search for MAPF）: `runnable / paper-faithful`
+- LaCAM*: `runnable / reference-validated`
+
+### 2. 参照した論文と節
+
+- `lacam-aaai-2023`: PDF pp.1–4、§2、§3.1–3.3、Algorithm 1、Theorem 1
+- `lacam-star-ijcai-2023`: PDF pp.1–5、§2.1–2.3、§3–4、Algorithms 1–4、Theorem 1
+
+両論文とも marker fidelity check は「要確認 0」。疑似コード、目的関数、保証は PDF image / text を
+人手で確認した。全文の行単位照合ではないため metadata の `checked_against_pdf` は false のまま。
+
+### 3. 参照した公開実装
+
+- `lacam0` `3153c980`: MIT。`argparse` submodule 未取得で CMake configure 不能。LaCAM* rewiring、random restart、PIBT swap、hindrance を含む後年の統合版として参照のみ
+- `lacam2` `61a4c40c`: MIT。`argparse` / `googletest` submodule 未取得で CMake configure 不能
+- `pylacam` `864a158f`: MIT。main branch は PIBT を random action selection に置換した最小 LaCAM*。環境に無い `loguru` だけを実行時の無作用 stub にし、公式 3×2 fixture を変更なしで実行
+
+第三者コードは転記しておらず、`THIRD_PARTY_NOTICES.md` の変更は無い。
+
+### 4. 実装したファイル
+
+- `src/solvers/lacam/solvers.ts`: LaCAM Algorithm 1 と LaCAM* Algorithm 3、共通 PIBT 型 generator、制約 BFS、graph rewiring、安全弁、構造化 result
+- `src/lib/model/types.ts`: `rewire-configuration` event
+- `src/solvers/limits.ts`: LaCAM event の detailed trace 分類
+- `src/solvers/registry.ts`: 2 Solver を登録
+- `src/content/algorithms/lacam.mdx`, `lacam-star.mdx`: reviewed 解説、教材用疑似コード、差異、実験
+- `docs/papers/*lacam*/metadata.yaml`: PDF 目視確認記録
+
+### 5. 追加・更新したテスト
+
+`tests/unit/batch5-solvers.test.ts` を追加し、implementation-state と E2E を更新した。
+
+- 3×2 detour swap の `checkPaths()`、SOC / makespan、5 seed の決定性
+- 2×1 edge swap の OPEN exhaustion と no-solution
+- configuration / low-level / lazy constraint / rewiring / incumbent events
+- LaCAM* と `jointStateOptimalSumOfCosts()` の比較（goal 離脱の無い fixture のみ）
+- timeout、node limit、AbortSignal、max path length、input / rule / option / trace guard
+- simulator 選択肢、runnable badge、sum-of-loss と表示 SOC の注意を desktop / mobile E2E で確認
+
+既存テストは削除・skip・弱体化していない。
+
+### 6–7. テスト・ビルド結果
+
+```text
+sources:validate  errors=0 warnings=6（開始時と同じ既知 warning）
+marker fidelity   2 papers / 要確認 0
+format:check      All matched files use Prettier code style!
+lint              0 problems
+typecheck         0 errors（96 files、既存 Astro deprecation hints 22）
+test              200 passed（13 files）
+build             62 pages
+e2e               30 passed（Chromium desktop + mobile）
+```
+
+### 8. 理論保証と manifest への書き戻し
+
+- LaCAM: `complete: true`, `optimal: false`, `bounded_suboptimal: false`。AAAI 2023 p.3 Theorem 1 と p.1 の sub-optimal の記述へ evidence を更新
+- LaCAM*: `complete: true`, `optimal: conditional`, `bounded_suboptimal: false`。IJCAI 2023 p.4 Algorithm 3 lines 27–30 / Theorem 1 に基づき、OPEN exhaustion 時だけ optimal、中断時は sub-optimal と明記
+- LaCAM* の保証対象は非負の累積 transition cost。ブラウザ内部は論文の sum-of-loss であり、サイト共通 `metrics.sumOfCosts` の最適性ではない
+
+unknown を含む algorithm 数は 58 / 77 のまま。2 手法とも保証値は既に確定済みだったため、今回 PDF で evidence と条件を精密化した。
+
+### 9. 論文と公開実装との差異
+
+- LaCAM Algorithm 1 は既知 configuration を捨てるが、論文 §3.3 と `lacam0` は再挿入を改善として使う。ブラウザ LaCAM は基本構造を保つため再挿入しない
+- `lacam0` は LaCAM* / LaCAM3 由来の改善を統合するが、ブラウザは LaCAM と LaCAM* の境界を分離
+- `pylacam` main は random action generator、ブラウザは原論文 §3.3 / Algorithm 2 に沿う PIBT 型 priority inheritance generator
+- 公開実装の random tie / restart に対し、ブラウザは `context.random()` から作る固定 rank で同一 seed を再現
+
+### 10. ブラウザ版で簡略化した部分
+
+- 4 近傍 unit-cost grid、following conflict 許可、stay-at-goal の one-shot MAPF に限定
+- LaCAM* Algorithm 4 の PIBT swap、random restart、LaCAM3 engineering / post-processing は未対応
+- Dijkstra の等 cost parent は既存を保持し、strict improvement だけ rewiring
+- max path length、timeout、max expansions を追加。cutoff 結果は完全性・最適性の対象外
+
+### 11. 未対応部分
+
+一般 graph file、diagonal / following 禁止 / disappear-at-goal、複数 optimization metric の UI、
+Moving AI benchmark 全件、submodule 取得後の C++ 公式実装との固定比較。
+
+### 12. 次の推奨バッチ
+
+Batch 6 の `mapf-lns` / `mapf-lns2` / `rhcr`。

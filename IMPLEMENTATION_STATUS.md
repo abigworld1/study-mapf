@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-07-27（Codex / Batch 4 完了）
+最終更新: 2026-07-27（Codex / Batch 5 完了）
 
 ---
 
@@ -52,17 +52,18 @@
 | `mstar`                | M*               | runnable | paper-faithful      | basic M*、limited neighbors、collision-set backpropagation。[ノート](docs/notes/implementation/mstar.md)                            |
 | `push-and-swap`        | Push and Swap    | runnable | paper-faithful      | push / clear / multipush / exchange / reverse。後続論文の反例を反映。[ノート](docs/notes/implementation/push-and-swap.md)           |
 | `push-and-rotate`      | Push and Rotate  | runnable | paper-faithful      | subproblem 分解・priority と push / swap / rotate / resolve。[ノート](docs/notes/implementation/push-and-rotate.md)                 |
+| `lacam`                | LaCAM            | runnable | paper-faithful      | Algorithm 1 の configuration DFS / constraint BFS と PIBT 型 generator。[ノート](docs/notes/implementation/lacam.md)                |
+| `lacam-star`           | LaCAM*           | runnable | reference-validated | Algorithm 3 の rewiring。3×2 fixture を pylacam と照合。[ノート](docs/notes/implementation/lacam-star.md)                           |
 
 ---
 
 ## 未実装（解説ページのみ存在）
 
-以下 19 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
+以下 17 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
 実装状況は `docs/sources/algorithms.yaml` の `implementation_status` を参照。
 
 | バッチ  | 対象                                                                     |
 | ------- | ------------------------------------------------------------------------ |
-| Batch 5 | `lacam`, `lacam-star`                                                    |
 | Batch 6 | `mapf-lns`, `mapf-lns2`, `rhcr`                                          |
 | Batch 7 | `hungarian-method`, `min-cost-max-flow`, `gale-shapley`, `cbm`, `cbs-ta` |
 | Batch 8 | `token-passing`, `tpts`, `central`, `mla-star`                           |
@@ -94,7 +95,8 @@
 | `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」              |
 | `pbs`                  | 不明     | なし               | pbs-aaai-2019 Algorithm 2 / p.7 の 4% は実験観測で保証ではない          |
 | `winpibt`              | 条件付き | 不明               | winpibt-2019 p.7 Theorem 4.3。dodgeable + finite window の reachability |
-| `lacam-star`           | あり     | 条件付き           | 本文は「complete and optimal」だがタイトルは Eventually Optimal         |
+| `lacam`                | あり     | なし               | lacam-aaai-2023 p.3 Theorem 1 / p.1 sub-optimal                         |
+| `lacam-star`           | あり     | 条件付き           | p.4 OPEN 完了時 optimal / 中断時 sub-optimal。対象は sum-of-loss        |
 | `push-and-rotate`      | 条件付き | なし               | 空き頂点が 2 つ以上（k ≤ \|V\| − 2）                                    |
 | `push-and-swap`        | なし     | なし               | 後続 Push and Rotate 論文が原論文 Theorem 3.1 の同一条件内反例を提示    |
 | `icts`                 | 不明     | 最適               | icts-ijcai-2011 p.1 Abstract / p.2 §4。有限 no-solution 証明は未確認    |

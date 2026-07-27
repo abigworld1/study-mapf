@@ -3,15 +3,156 @@ title: "LaCAM*"
 algorithmId: lacam-star
 originalName: "LaCAM star"
 order: 330
-summary: ""
-status: draft
+summary: "LaCAM の遅延探索を続行し、発見済み configuration graph の parent と cost を張り替えて sum-of-loss optimum へ収束する anytime 手法。"
+status: reviewed
 primarySources:
   - paperId: lacam-star-ijcai-2023
+    sections: ["2.1", "2.2", "2.3", "3", "4"]
+    pages: [1, 2, 3, 4, 5]
 implementationReferences:
   - repositoryId: lacam2
   - repositoryId: pylacam
+lastReviewed: "2026-07-27"
+simulatorSolverId: lacam-star
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="lacam-star" />
+## 概要
+
+LaCAM\* は LaCAM が最初の goal configuration で止まる処理を、anytime optimization へ拡張します。初解を保持したまま lazy successor generation を続け、すでに見つけた configuration へ別の辺がつながるたびに cost-to-come と parent を張り替えます。探索を完了すれば累積 transition cost の最適解へ到達します<SourceCitation paperId="lacam-star-ijcai-2023" section="3" label="Algorithm 3" page={4} />。
+
+## まず何がうれしいのか
+
+初解を得る速さと、解品質の改善を同じ探索で扱えます。configuration generator が promising な successor を先に出せば早く動く解を得られます。その後は新しく判明した shortcut を graph へ足し、時間が許すほど incumbent を改善します。
+
+## 前提となる知識
+
+- LaCAM の high-level DFS / low-level constraint BFS
+- configuration graph と directed edge
+- nonnegative edge cost、admissible heuristic
+- Dijkstra relaxation と shortest-path tree
+- anytime algorithm の incumbent と lower bound
+
+## 対象問題
+
+原論文は one-shot MAPF を configuration graph 上の pathfinding として定義します。2 configuration が connected なのは、全 agent が move / wait でき、vertex collision と edge collision がない場合です<SourceCitation paperId="lacam-star-ijcai-2023" section="2.1" page={2} />。サイト版は 4 近傍 unit-cost grid、following conflict 許可、stay-at-goal を扱います。
+
+## 中心となるアイデア
+
+LaCAM\* の high-level node は LaCAM の情報に次を加えます。
+
+- `neighbors`: その node から接続を発見した既知 node
+- `g`: start からの現在最良の累積 transition cost
+- `h`: goal までの admissible lower bound
+
+未知 configuration を生成したら通常の tree edge を追加します。既知 configuration を生成したら「無駄な重複」と捨てず、新しい directed edge として保存します。その edge で `g` が下がる node があれば Dijkstra relaxation を子孫へ伝え、`parent` を新しい shortest-path tree に張り替えます。
+
+## アルゴリズムの手順
+
+1. LaCAM と同じ start node、constraint tree、`Explored` table を作ります。
+2. goal configuration を見つけても返さず、`N_goal` として保持します。
+3. `g(N_goal) <= g(N)+h(N)` なら、`N` は incumbent を改善できないので捨てます。
+4. lazy constraints から connected configuration `Q` を生成します。
+5. `Q` が未知なら node と edge を作り、`g(parent)+costEdge` で初期化します。
+6. `Q` が既知なら edge を追加し、source から Dijkstra relaxation します。
+7. `g` が下がった node の `parent` を更新し、改善可能なら `Open` へ戻します。
+8. `Open` が空になるまで続けます。中断時は incumbent があれば sub-optimal solution として保持します。
+
+Algorithm 3 の gray 部分が LaCAM、追加部分が goal 保持と rewiring です<SourceCitation paperId="lacam-star-ijcai-2023" label="Algorithm 3" page={4} />。
+
+## 小さな例
+
+start から configuration `C` へ、最初は cost 8 の親鎖が見つかったとします。後で別 node `B` から `C` への edge が生成され、`g(B)+cost(B,C)=5` なら、`C.g` を 5 に下げて parent を `B` にします。`C` から既知の `D`、goal へ辺があれば、その改善も順に伝播します。configuration を作り直さず、発見済み graph の shortest-path tree だけを更新できます。
+
+## データ構造
+
+- LaCAM の high-level node / low-level FIFO / `Explored`
+- node ごとの directed `neighbors`
+- `g`、`h`、`parent`
+- Dijkstra 用 binary min-heap
+- `N_goal`: 現 incumbent の goal node
+- goal ごとの true-distance table
+
+## 疑似コード
+
+```text
+goalNode ← none
+
+while Open is not empty and not interrupted:
+  N ← Open.top
+  if N.config = goal: goalNode ← N
+  if goalNode exists and g(goalNode) ≤ g(N) + h(N):
+    Open.pop
+    continue
+
+  C ← next lazy constraint of N
+  Q ← generateConnectedConfig(N.config, C)
+  if Q is new:
+    child.g ← N.g + edgeCost(N, child)
+    child.parent ← N
+    add edge N → child
+    Open.push(child)
+  else:
+    add edge N → known(Q)
+    dijkstraRelaxFrom(N)
+
+if Open is empty and goalNode exists: return optimal incumbent
+if interrupted and goalNode exists: return sub-optimal incumbent
+if Open is empty: return no-solution
+return failure
+```
+
+原論文 Algorithm 3 の graph update をサイトの node / event 名に合わせています。low-level expansion と generator は Algorithm 1 / 2 と共有します<SourceCitation paperId="lacam-star-ijcai-2023" label="Algorithm 1" page={3} /><SourceCitation paperId="lacam-star-ijcai-2023" label="Algorithm 2" page={3} />。
+
+## 実装上の注意
+
+内部目的は原論文の **sum-of-loss** です。configuration `X→Y` の edge cost は、agent `i` が `X` と `Y` の両方で goal に stay するときだけ 0、そうでなければ 1 とします。heuristic は各 agent の goal distance の和で admissible です<SourceCitation paperId="lacam-star-ijcai-2023" section="2.1" page={2} />。
+
+rewiring は strict improvement のみ採用します。同 cost の parent を何度も交換すると、説明に不要な非決定性や parent cycle の原因になります。サイト版は heap の同点を configuration ID で固定します。
+
+## よくある誤解
+
+- 星印は「最初から optimal solution だけを返す」という意味ではありません。
+- 初解発見は探索終了ではありません。OPEN exhaustion が optimal 判定です。
+- rewiring は agent path 1 本だけの局所修復ではなく、configuration graph の shortest-path tree 更新です。
+- sum-of-loss、flowtime / sum-of-costs、sum-of-fuels は別の目的関数です。
+
+<Caution title="eventually optimal を有限時間の optimal と省略しない">
+  Algorithm 3 は OPEN が空なら optimal、user interruption なら sub-optimal と分岐します
+  <SourceCitation paperId="lacam-star-ijcai-2023" label="Algorithm 3" page={4} />。 Theorem 1 の
+  complete and optimal は、全 lazy successor を処理し終える条件での累積 transition cost
+  に対する主張です
+  <SourceCitation paperId="lacam-star-ijcai-2023" label="Theorem 1" page={4} />。
+</Caution>
+
+<Caution title="サイト表示 SOC は内部 sum-of-loss と一致しない場合があります">
+  goal で何 step か待った後にそこを離れる agent がいると、sum-of-loss は goal で静止した edge を 0
+  と数えますが、サイトの `metrics.sumOfCosts` は最後に goal へ戻る時刻を数えます。したがって LaCAM\*
+  の最適性を表示 SOC の最適性と読み替えないでください。論文も flowtime は configuration だけの累積
+  cost ではそのまま表せないと区別します
+  <SourceCitation paperId="lacam-star-ijcai-2023" section="2.1" page={2} />。
+</Caution>
+
+## 他手法との比較
+
+- LaCAM は最初の解で止まり、既知 configuration への新しい edge を品質改善に使いません。
+- A\* は successor を明示生成して best-first に探索します。LaCAM\* は lazy constraint と DFS を使いながら graph を育てます。
+- anytime CBS 系は conflict tree 上で incumbent を改善します。LaCAM\* は configuration graph の親を張り替えます。
+- LaCAM3 は generator、node extraction、refinement をさらに engineering した後続手法です。
+
+## サイト上の実装との差異
+
+サイト版は Algorithm 3 の goal 保持、directed neighbor、Dijkstra rewiring、`f` 枝刈りを実装します。Algorithm 4 の PIBT swap detector、0.1% random restart、LaCAM3 の non-deterministic extraction / post-processing は含みません。これらは初解・収束速度の改善で、Theorem 1 の全列挙構造には必須ではありません。
+
+`lacam2` commit `61a4c40c...` は `argparse` / `googletest` submodule 未取得で build できませんでした。`pylacam` commit `864a158f...` の main branch は PIBT を random action selection に置換しています。依存 `loguru` が環境に無いため logger だけ無作用 stub にして公式 3×2 fixture を実行し、success、sum-of-loss 6、makespan 4、path validity を確認しました。サイト版も同 fixture で同じ 2 metric と validity を得ています。コードは転記していません。
+
+timeout / node limit / `maxPathLength` に達した場合、incumbent path があっても outcome は中断理由を保ち、最適とは表示しません。4 近傍、following conflict 許可、stay-at-goal 以外は未対応です。
+
+## 実験してみる
+
+<SimulatorLink solverId="lacam-star" />
+
+`swap-conflict` を detailed trace で実行し、最初の `update-incumbent` の後も `configuration-expand` が続くことを確認してください。`rewire-configuration` は既知 configuration への shortcut で `g` と parent が更新された瞬間です。`maxExpansions` を小さくすると incumbent を持ったまま中断し、完全 exhaust との差を比較できます。

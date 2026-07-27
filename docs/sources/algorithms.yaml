@@ -781,13 +781,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [lacam-aaai-2023]
   implementation_repository_ids: [lacam0]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: "lacam-aaai-2023 p.1「From the theoretical side, LaCAM is complete. It returns a solution for solvable instances, otherwise reports the nonexistence.」/ lacam-star-ijcai-2023 p.1「LaCAM is a sub-optimal search-based algorithm」（LaCAM 単体は最適性を主張していない）"
-  notes: "構成（全エージェントの位置の組）を遅延生成しながら探索する。LaCAM 単体は最適性を主張していない。最適性は lacam-star（eventually optimal）で導入される。"
+  guarantee_evidence: "lacam-aaai-2023 p.3 Theorem 1 は Algorithm 1 が solvable instance で solution、そうでなければ NO_SOLUTION を返すと証明。p.1 は本文の対象を sub-optimal LaCAM と明記し、Algorithm 1 は最初の goal configuration で終了するため optimal / bounded-suboptimal の保証は無い。"
+  notes: "構成（全エージェントの位置の組）を遅延生成しながら探索する。ブラウザ版は Algorithm 1 の high-level DFS / low-level BFS と PIBT 型 generator を実装。LaCAM 単体は最適性を主張しない。"
 
 - id: lacam-star
   display_name: "LaCAM*"
@@ -796,13 +796,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [lacam-star-ijcai-2023]
   implementation_repository_ids: [lacam2, pylacam]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: conditional
     bounded_suboptimal: false
-  guarantee_evidence: "★ 表記に注意。lacam-star-ijcai-2023 p.4「LaCAM∗ (Alg. 3) is complete and optimal.」と書かれているが、同論文のタイトルは「Eventually Optimal」であり、lacam3-aamas-2024 のアブストラクトも「guarantees the eventual finding of optimal solutions for cumulative transition costs」と述べている。すなわち有限時間での最適性ではなく anytime な収束を指すため conditional とした。"
-  notes: "★重要★ eventually optimal（時間を掛ければ最適へ収束する）であって、有限時間で最適解を返す optimal ではない。サイト上でも必ず「最終的に最適」と書き、「最適」と省略しないこと（SOURCE_POLICY.md 第 8 条）。対象は累積遷移コストである点にも注意。"
+  guarantee_evidence: "lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 は OPEN 完了時を optimal、user interruption 時を sub-optimal と区別し、Theorem 1 は complete and optimal と証明。p.2 は保証対象を非負の累積 transition cost とし、実験目的は sum-of-loss。したがって optimal は OPEN exhaustion まで中断しない条件付き（eventually optimal）で、有限 cutoff やサイト表示 SOC の保証ではない。"
+  notes: "★重要★ eventually optimal（OPEN を完了すれば累積 transition cost の最適解へ到達）であって、任意の有限 cutoff で最適ではない。ブラウザ版の内部目的は原論文の sum-of-loss。サイト共通 metrics.sumOfCosts とは goal 離脱を含む path で異なり得る。"
 
 - id: lacam3
   display_name: "LaCAM3 (Engineering LaCAM*)"
