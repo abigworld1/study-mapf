@@ -15,12 +15,24 @@ interface Props {
   algorithmId: string;
   /** 対象問題。ページ側で補足したい場合に渡す。 */
   problemLabel?: string;
-  /** 集中型 / 分散型。原論文で確認できた場合のみ渡す。 */
-  architecture?: "集中型" | "分散型" | "decentralized-capable" | "不明";
 }
 
-const { algorithmId, problemLabel, architecture = "不明" } = Astro.props;
+const { algorithmId, problemLabel } = Astro.props;
 const algo = getAlgorithm(algorithmId);
+
+/*
+  ★ 「方式」は原論文が自ら述べている場合だけ出す。
+    以前はページ側から渡す prop にしていたが、渡し忘れると全ページが
+    「方式: 不明」という無意味な行を表示していた。値の出どころを
+    algorithms.yaml に一本化し、未確認なら行ごと省く。
+    書くなら architecture_evidence が必須（validate-sources.mjs が検査する）。
+*/
+const ARCHITECTURE_LABEL: Record<string, string> = {
+  centralized: "集中型",
+  decentralized: "分散型",
+  "decentralized-capable": "分散実装に向く（論文の主張は適性であって分散型そのものではない）",
+};
+const architectureLabel = algo?.architecture ? ARCHITECTURE_LABEL[algo.architecture] : undefined;
 
 const COMPLETE_LABEL: Record<string, string> = {
   true: "あり",
@@ -91,10 +103,12 @@ const PROBLEM_LABEL: Record<string, string> = {
                     : "不明")}
               </td>
             </tr>
-            <tr>
-              <th scope="row">方式</th>
-              <td>{architecture}</td>
-            </tr>
+            {architectureLabel && (
+              <tr>
+                <th scope="row">方式</th>
+                <td>{architectureLabel}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -116,6 +130,7 @@ const PROBLEM_LABEL: Record<string, string> = {
         <details class="evidence">
           <summary>保証の根拠（原論文の記述）</summary>
           <p>{algo.guarantee_evidence}</p>
+          {algo.architecture_evidence && <p>{algo.architecture_evidence}</p>}
         </details>
       ) : (
         <p class="no-evidence">

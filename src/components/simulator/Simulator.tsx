@@ -5,6 +5,7 @@ import type {
   Scenario,
   SolverEvent,
   SolverResult,
+  SolverWarning,
   TimedPath,
 } from "@/lib/model/types";
 import { withBlocked, isWalkable, resizeMap } from "@/lib/model/grid";
@@ -678,6 +679,23 @@ export default function Simulator({ initialSolverId }: Props) {
           ) : (
             <p className="hint">まだ実行していません。</p>
           )}
+          {/*
+            ★ warnings は必ず出す。
+              手法の多くは不完全（PIBT / winPIBT / PBS / 優先順位付き計画）なので、
+              「解が見つかりませんでした」だけを見せると「解が存在しない」と読まれる。
+              その区別を書いているのが warnings なので、隠すと過大主張になる
+              （SOURCE_POLICY.md 第 8 条）。
+          */}
+          {result && result.warnings && result.warnings.length > 0 && (
+            <ul className="solver-warnings">
+              {result.warnings.map((warning, index) => (
+                <li key={`${warning.code}-${index}`}>
+                  <span className="warning-code">{warningLabel(warning.code)}</span>
+                  {warning.message}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section>
@@ -766,6 +784,23 @@ function outcomeLabel(outcome: SolverResult["outcome"]): string {
       return "中断しました";
     default:
       return "エラー";
+  }
+}
+
+function warningLabel(code: SolverWarning["code"]): string {
+  switch (code) {
+    case "input-too-large":
+      return "入力が大きすぎます";
+    case "trace-truncated":
+      return "トレース打切り";
+    case "option-ignored":
+      return "無視した設定";
+    case "simplified-behavior":
+      return "簡略化";
+    case "nondeterminism-risk":
+      return "非決定性の恐れ";
+    default:
+      return "注意";
   }
 }
 

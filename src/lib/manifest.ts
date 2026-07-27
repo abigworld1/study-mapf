@@ -111,6 +111,12 @@ export interface AlgorithmEntry {
     bounded_suboptimal: GuaranteeValue;
   };
   guarantee_evidence?: string | null;
+  /**
+   * 集中型 / 分散型。原論文が自ら述べている場合だけ書く。
+   * 「アルゴリズムの見た目から明らかに集中型」といった推測では埋めない。
+   */
+  architecture?: "centralized" | "decentralized" | "decentralized-capable" | null;
+  architecture_evidence?: string | null;
   notes: string | null;
 }
 

@@ -23,7 +23,18 @@
 #   bounded_suboptimal  最適コストの w 倍以内を保証する
 #   eventually optimal  時間を掛ければ最適へ収束する（optimal とは別物。conditional + notes で表す）
 #
-# 検証日: 2026-07-26
+# architecture の記入規則（guarantees と同じ扱い）:
+#
+#   centralized           原論文が集中型として提示している
+#   decentralized         原論文が分散型として提示している
+#   decentralized-capable 原論文が「分散実装に向く」と述べている（分散型そのものとは別）
+#   未記入                原論文で確認できていない。★推測で埋めてはならない★
+#
+#   「アルゴリズムの構造から見て明らかに集中型」といった推論では埋めない。
+#   書く場合は architecture_evidence に原文とページ番号が必須
+#   （validate-sources.mjs がエラーにする）。保証表では未記入なら行ごと出さない。
+#
+# 検証日: 2026-07-26 / architecture は 2026-07-27 に 3 件を確定
 
 # =============================================================================
 # foundations — 問題設定そのもの
@@ -299,6 +310,8 @@
     optimal: true
     bounded_suboptimal: false
   guarantee_evidence: "cbs-aij-2015 p.12 Theorem 1「CBS returns an optimal solution.」/ p.12 Theorem 3「CBS will return a solution if one exists.」/ p.13 §5.2.2 は unsolvable problem の有限時間での識別（claim b）は CBS では常に成立せず、独立した solvability test が必要と明記するため、完全性を conditional とした。"
+  architecture: centralized
+  architecture_evidence: "cbs-aij-2015 p.3 §2.6「The scope of this paper is limited to centralized approaches」。同節は centralized を「単一の計算主体が全 agent の解を求める設定。agent ごとに CPU があっても完全な知識共有と中央の問題解決器がある場合を含む」と定義している。"
   notes: "高レベル（制約木 CT）と低レベル（単一エージェント時空間探索）の二層構造。本サイトは standard split、SOC/conflict/FIFO tie-break、CAT low-level tie-break を実装。following / disappear / diagonal と有限 maxHorizon 外は未対応。"
 
 - id: ma-cbs
@@ -727,6 +740,8 @@
     optimal: false
     bounded_suboptimal: false
   guarantee_evidence: "★ pibt-aij-2022 p.3「The proposed method, PIBT, is neither complete nor optimal for MAPF.」/ 同 p.12「Alternatively, with the graph condition of Theorem 1, PIBT is complete for the MAPF variant where agents need not necessarily stay at their goals.」つまり古典的 MAPF では完全でも最適でもなく、ゴール滞在を要求しない変種でのみ、Theorem 1 のグラフ条件下で完全。"
+  architecture: decentralized-capable
+  architecture_evidence: "pibt-aij-2022 p.2「Because this mechanism only requires local interactions between agents, PIBT has a high potential for decentralized implementations.」論文が主張しているのは分散実装への適性であって、提示されているアルゴリズム自体が分散型だとは述べていない。"
   notes: "★重要★ この保証は古典的 MAPF の意味での完全性ではなく、反復設定での到達性である。両者を混同しないこと（SOURCE_POLICY.md 第 8 条）。解の質の保証は無い。"
 
 - id: winpibt
@@ -742,6 +757,8 @@
     optimal: unknown
     bounded_suboptimal: false
   guarantee_evidence: "winpibt-2019 p.7 Theorem 4.3 は、graph が dodgeable で全 agent の window が常に有限なら、全 agent が有限 timestep で各 destination に到達すると保証する。ただしこれは individual reachability であり、stay-at-goal の classical MAPF における simultaneous goal configuration の完全性保証ではない。最適性の一般的な肯定・否定を明記した定理は確認できないため optimal は unknown。cost bound は示されていない。"
+  architecture: centralized
+  architecture_evidence: "winpibt-2019 p.4「We explain winPIBT in centralized fashion. PIBT itself is a relatively realistic approach for decentralized implementation, however, winPIBT with decentralized fashion faces some difficulties as discussed later.」★ PIBT が decentralized-capable なのに対し、winPIBT は論文自身が集中型として提示しており、分散化には困難があると述べている。両者を同じ扱いにしないこと。"
   notes: "PIBT の 1 ステップ先読みを任意窓へ拡張。★ complete: conditional は iterative setting の reachability に対する値であり、古典的 MAPF の完全性と混同しない。"
 
 - id: lacam

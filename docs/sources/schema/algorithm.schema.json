@@ -83,6 +83,15 @@
       "type": ["string", "null"],
       "description": "保証の根拠となる論文・節・定理番号。conditional / true の場合は記載すること。"
     },
+    "architecture": {
+      "type": ["string", "null"],
+      "enum": ["centralized", "decentralized", "decentralized-capable", null],
+      "description": "集中型 / 分散型。原論文が自ら述べている場合だけ書く。推測で埋めない。"
+    },
+    "architecture_evidence": {
+      "type": ["string", "null"],
+      "description": "architecture の根拠となる論文・ページ・原文。architecture を書くなら必須。"
+    },
     "notes": { "type": ["string", "null"] }
   }
 }

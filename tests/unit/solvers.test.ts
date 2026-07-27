@@ -32,6 +32,77 @@ describe("registry", () => {
     expect(result.outcome).toBe("error");
     expect(result.error?.code).toBe("not-implemented");
   });
+
+  /*
+    RunSolverInput が options を宣言しているのに runInline がそれを読まず、
+    `runInline({ solverId, scenario, options })` が黙ってデフォルトで走っていた。
+    テストが無かったので誰も気付かなかった。
+  */
+  it("runInline が input.options を反映する", async () => {
+    const scenario = buildPreset("warehouse", 1);
+    const result = await runInline({
+      solverId: "prioritized-planning",
+      scenario,
+      options: { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 1 },
+    });
+    expect(result.outcome, "maxExpansions: 1 が無視されている").toBe("node-limit");
+  });
+});
+
+describe("解けなかった理由の説明責任", () => {
+  /*
+    ★ 不完全な手法が「解が見つからなかった」を返すとき、
+      それが解の非存在の証明でないことを warnings で言わねばならない。
+      表示側（Simulator）も warnings を必ず描画する。
+  */
+  it("PBS は優先度木を枯渇させたとき、非存在の証明ではないと明示する", async () => {
+    // 幅 5 の通路に待避ポケットが 1 つ。CBS は sum of costs 11 で解けるが、
+    // どちらの全順序でも高優先度側が最短経路を占有するため PBS は枯渇する。
+    let map = createEmptyMap(5, 2);
+    for (const cell of [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 3, y: 1 },
+      { x: 4, y: 1 },
+    ]) {
+      map = withBlocked(map, cell, true);
+    }
+    const scenario: Scenario = {
+      id: "pocket",
+      name: "pocket",
+      kind: "one-shot-mapf",
+      map,
+      agents: [
+        { id: "a1", start: { x: 0, y: 0 }, goal: { x: 4, y: 0 } },
+        { id: "a2", start: { x: 4, y: 0 }, goal: { x: 0, y: 0 } },
+      ],
+      rules: DEFAULT_RULES,
+      seed: 1,
+    };
+
+    const cbs = await solve("cbs", scenario);
+    expect(cbs.result.outcome, "前提が崩れている。この問題は解ける必要がある").toBe("solved");
+
+    const { result } = await solve("pbs", scenario);
+    expect(result.outcome).toBe("no-solution");
+    expect(result.warnings ?? [], "PBS が但し書き無しで no-solution を返している").not.toHaveLength(
+      0,
+    );
+  });
+
+  it("PIBT / winPIBT も打切り時に但し書きを返す", async () => {
+    for (const solverId of ["pibt", "winpibt"]) {
+      const solver = getSolver(solverId)!;
+      const { context } = createRecordingContext(1);
+      const result = await solver.solve(
+        buildPreset("narrow-corridor", 1),
+        { ...DEFAULT_SOLVER_OPTIONS, extra: { maxTimesteps: 4 } },
+        context,
+      );
+      if (result.outcome === "solved") continue;
+      expect(result.warnings ?? [], `${solverId} が但し書き無しで打ち切った`).not.toHaveLength(0);
+    }
+  });
 });
 
 describe("A*（各エージェント独立）", () => {

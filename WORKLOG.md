@@ -1124,3 +1124,57 @@ dodgeable graph condition の自動判定、PIBT+、adaptive winPIBT、公開 wi
 ### 12. 次の推奨バッチ
 
 Batch 4: `icts` / `mstar` / `push-and-swap` / `push-and-rotate`。
+
+---
+
+## 2026-07-27 Batch 3 レビュー後の横断修正（Claude Code）
+
+Batch 3 のレビューで見つかった、バッチ単体ではなくサイト横断の欠陥 4 件を直した。
+
+### 1. Solver の警告が画面に一切出ていなかった
+
+`Simulator.tsx` が `result.warnings` をどこからも読んでいなかった。
+Batch 1〜3 で書いてきた但し書きが全部死んでいた。
+
+これが問題なのは、不完全な手法（PIBT / winPIBT / PBS / 優先順位付き計画）が
+「解が見つかりませんでした」だけを表示すると、読者が「解が存在しない」と受け取るため。
+その区別は warnings にしか書かれていない。指標表の直下に警告リストを出すようにした。
+
+e2e に回帰テストを追加（Narrow Corridor × PIBT で警告文言を検査）。
+
+### 2. PBS が優先度木を枯渇させたとき、但し書き無しで no-solution を返していた
+
+反例: 幅 5 の通路に待避ポケットが 1 つだけある入れ替え問題。
+CBS は sum of costs 11 で解くが、PBS はどちらの全順序でも高優先度側が
+最短経路を占有するため枯渇する。PIBT / winPIBT は同種の状況で警告を出していたので、
+PBS だけ不揃いだった。
+
+あわせて `sawHorizonCutoff` がルート計画の分岐で設定直後に return され、
+警告に到達しない死にコードになっていたのを直した。
+
+### 3. `runInline` が `input.options` を無視していた
+
+`RunSolverInput` は `options` を宣言しているのに `runInline` は第 2 引数しか読まず、
+`runInline({ solverId, scenario, options })` が黙ってデフォルトで走っていた。
+`runSolver` 側は正しくマージしていたのでサイトの挙動は正常。
+影響は `tests/unit/invariants.test.ts` で、`windowSize` / `maxExpansions` の
+指定が効かないままテストが通っていた（誤った pass ではなく、意図より弱いテスト）。
+
+### 4. 保証表の「方式」が全ページで「不明」
+
+`AlgorithmLayout` が `architecture` prop を渡しておらず、37 ページすべてで
+無意味な行が出ていた。値の出どころを `algorithms.yaml` に一本化し、
+未確認なら行ごと省くようにした。書く場合は `architecture_evidence` を必須にし、
+`validate-sources.mjs` がエラーで止める（guarantees と同じ扱い）。
+
+原論文で確認できた 3 件だけ記入した。
+
+| id      | 値                    | 根拠                                                                                                                         |
+| ------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| cbs     | centralized           | cbs-aij-2015 p.3 §2.6「The scope of this paper is limited to centralized approaches」                                        |
+| pibt    | decentralized-capable | pibt-aij-2022 p.2「PIBT has a high potential for decentralized implementations」                                             |
+| winpibt | centralized           | winpibt-2019 p.4「We explain winPIBT in centralized fashion ... winPIBT with decentralized fashion faces some difficulties」 |
+
+★ PIBT と winPIBT で値が違う点に注意。PIBT は分散実装への適性を主張しているが、
+winPIBT は論文自身が集中型として提示し、分散化には困難があると述べている。
+PBS は原論文に自らの方式を述べた記述が無いため未記入のまま。

@@ -102,12 +102,24 @@ export async function runSolver(input: RunSolverInput): Promise<SolverResult> {
   });
 }
 
-/** Worker が使えない場合。テストからも直接使う。 */
+/**
+ * Worker が使えない場合。テストからも直接使う。
+ *
+ * ★ input.options と第 2 引数の両方を受け付ける。
+ *   RunSolverInput が options を宣言しているのに runInline がそれを読まないと、
+ *   `runInline({ solverId, scenario, options })` が黙ってデフォルトで走る。
+ *   実際 tests/unit/invariants.test.ts がこれを踏んでいて、
+ *   windowSize や maxExpansions の指定が効いていなかった。
+ *   競合したときは呼び出し側に近い input.options を優先する。
+ *   runSolver は既に input.options をマージ済みの値を渡してくるので、
+ *   二重マージしても結果は変わらない。
+ */
 export async function runInline(
   input: RunSolverInput,
-  options: SolverOptions = DEFAULT_SOLVER_OPTIONS,
+  base: SolverOptions = DEFAULT_SOLVER_OPTIONS,
   seed = input.scenario.seed,
 ): Promise<SolverResult> {
+  const options: SolverOptions = { ...base, ...(input.options ?? {}) };
   const solver = getSolver(input.solverId);
   if (!solver) {
     return {

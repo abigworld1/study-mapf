@@ -148,10 +148,7 @@ async function solvePbs(
       if (stopped) return finish(stopped);
       if (output.reason === "max-time") sawHorizonCutoff = true;
       return finish(
-        failureResult(
-          "no-solution",
-          initialEdges.length > 0 ? "priority-order" : "search-exhausted",
-        ),
+        noSolutionResult(initialEdges.length > 0 ? "priority-order" : "search-exhausted"),
       );
     }
     rootPaths.set(agentId, output.path);
@@ -258,13 +255,33 @@ async function solvePbs(
     for (const child of children) stack.push(child);
   }
 
-  if (sawHorizonCutoff) {
+  return finish(noSolutionResult("search-exhausted"));
+
+  /**
+   * PBS が解を返せなかったときの但し書き。
+   *
+   * ★ PBS が探索するのは「ある全順序と整合する解」だけなので、
+   *   優先度木を枯渇させても、MAPF インスタンスに解が無いことの証明にはならない。
+   *   実例: 幅 5 の通路に待避ポケットが 1 つだけある入れ替え問題では、
+   *   CBS が sum of costs 11 で解く一方、PBS は両方の順序が破綻して枯渇する。
+   *   これを黙って "no-solution" とだけ返すと過大主張になる（SOURCE_POLICY.md 第 8 条）。
+   *
+   * ★ unreachable-goal だけは例外で、本当に解が無いことの証明なので呼ばない。
+   */
+  function noSolutionResult(failureReason: FailureReason): SolverResult {
     warnings.push({
       code: "simplified-behavior",
-      message: `有限 horizon ${maxTime} のため、STACK 枯渇は MAPF instance の非存在証明ではありません。`,
+      message:
+        "PBS は優先順位の全順序と整合する解だけを探索します。探索を尽くしても、この問題に解が存在しないことの証明にはなりません。",
     });
+    if (sawHorizonCutoff) {
+      warnings.push({
+        code: "input-too-large",
+        message: `低レベル探索を horizon ${maxTime} で打ち切りました。より長い経路が必要な解は探索できていません。`,
+      });
+    }
+    return failureResult("no-solution", failureReason);
   }
-  return finish(failureResult("no-solution", "search-exhausted"));
 
   function updatePlan(
     startAgentId: string,

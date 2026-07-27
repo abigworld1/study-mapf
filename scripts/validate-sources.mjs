@@ -357,6 +357,19 @@ for (const a of algorithms) {
   if (g.optimal === true && g.bounded_suboptimal === true) {
     err(where, "optimal と bounded_suboptimal を同時に true にはできない。用語を区別すること");
   }
+  // 方式（集中型 / 分散型）も保証と同じ扱いにする。書くなら原論文の根拠を添える。
+  const ARCHITECTURES = ["centralized", "decentralized", "decentralized-capable"];
+  if (a.architecture !== undefined && a.architecture !== null) {
+    if (!ARCHITECTURES.includes(a.architecture)) {
+      err(where, `architecture は ${ARCHITECTURES.join(" / ")} のいずれか: ${a.architecture}`);
+    }
+    if (!a.architecture_evidence) {
+      err(
+        where,
+        "architecture を書いているのに architecture_evidence が無い。原論文の根拠なしに方式を書いてはならない",
+      );
+    }
+  }
   if (
     a.implementation_status === "runnable" &&
     (a.implementation_repository_ids || []).length === 0

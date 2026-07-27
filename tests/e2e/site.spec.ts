@@ -120,6 +120,36 @@ test.describe("シミュレータ", () => {
     await expect(solverSelect).not.toContainText("LaCAM");
   });
 
+  /*
+    ★ Solver が返す但し書きは画面に出ること。
+      不完全な手法が「解が見つかりませんでした」だけを表示すると
+      「解が存在しない」と読まれる。この区別は warnings にしか書かれていない。
+      実際、この描画は 3 バッチ分のあいだ抜け落ちていた。
+  */
+  test("解けなかったとき、非存在の証明ではないと画面に出る", async ({ page }) => {
+    const solverSelect = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) })
+      .getByRole("combobox");
+    const labels = await solverSelect.locator("option").allInnerTexts();
+    const pibt = labels.find((label) => label.startsWith("PIBT"));
+    expect(pibt, "PIBT が選択肢に無い").toBeTruthy();
+    await solverSelect.selectOption({ label: pibt });
+
+    const presetSelect = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "シナリオ", exact: true }) })
+      .getByRole("combobox")
+      .first();
+    await presetSelect.selectOption({ label: "Narrow Corridor" });
+
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.getByText("解が見つかりませんでした").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.locator(".solver-warnings")).toContainText("解不存在の証明ではありません");
+  });
+
   test("JSON を書き出せる", async ({ page }) => {
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "JSON を書き出す" }).click();
