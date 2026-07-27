@@ -1,0 +1,30 @@
+---
+title: "優先順位付き計画"
+algorithmId: prioritized-planning
+originalName: "Prioritized Planning"
+order: 50
+summary: ""
+status: draft
+primarySources:
+  - paperId: pbs-aaai-2019
+  - paperId: cooperative-pathfinding-2005
+implementationReferences:
+  - repositoryId: libmultirobotplanning
+  - repositoryId: push-and-rotate-cbs-pp
+  - repositoryId: mapf-lns-unified
+simulatorSolverId: prioritized-planning
+---
+
+import PreparingNotice from "@/components/PreparingNotice.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+<SimulatorLink solverId="prioritized-planning" />
+
+<PreparingNotice
+  algorithmId="prioritized-planning"
+  needs={[
+    "原論文の該当節と Algorithm 番号の特定",
+    "疑似コードと PDF の目視照合",
+    "シミュレータの実装が原論文と一致するかの確認",
+  ]}
+/>

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abigworld1.github.io/study-mapf/schema/algorithm.schema.json",
+  "title": "study-mapf algorithm manifest entry",
+  "description": "docs/sources/algorithms.yaml の 1 要素。理論保証は原論文で確認できたものだけを記録し、不明なら unknown を使う。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "display_name",
+    "aliases",
+    "category",
+    "problem_types",
+    "primary_paper_ids",
+    "implementation_repository_ids",
+    "implementation_status",
+    "guarantees",
+    "notes"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "display_name": { "type": "string", "minLength": 1 },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "category": {
+      "enum": [
+        "foundations",
+        "single-agent-search",
+        "space-time-search",
+        "prioritized-planning",
+        "conflict-based-search",
+        "joint-state-and-subdimensional-search",
+        "rule-based-and-configuration-search",
+        "large-neighborhood-search",
+        "lifelong-mapf",
+        "mapd",
+        "tapf-and-task-assignment",
+        "learning-based",
+        "matching-and-assignment",
+        "benchmarks-and-tools"
+      ]
+    },
+    "problem_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "single-agent",
+          "classical-mapf",
+          "continuous-time-mapf",
+          "lifelong-mapf",
+          "mapd",
+          "tapf",
+          "assignment",
+          "flow",
+          "benchmark"
+        ]
+      }
+    },
+    "primary_paper_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "description": "papers.yaml の paper-id。原論文を先頭に置く。"
+    },
+    "implementation_repository_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "implementation_status": {
+      "enum": ["planned", "partial", "runnable", "explanation-only"],
+      "description": "本サイトでの実装計画。今フェーズでは全て planned または explanation-only。"
+    },
+    "guarantees": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "optimal", "bounded_suboptimal"],
+      "properties": {
+        "complete": { "enum": [true, false, "unknown", "conditional"] },
+        "optimal": { "enum": [true, false, "unknown", "conditional"] },
+        "bounded_suboptimal": { "enum": [true, false, "unknown", "conditional"] }
+      },
+      "description": "原論文で明示されている保証のみ記載する。conditional は条件付き（notes に条件を書くこと）。推測は禁止。"
+    },
+    "guarantee_evidence": {
+      "type": ["string", "null"],
+      "description": "保証の根拠となる論文・節・定理番号。conditional / true の場合は記載すること。"
+    },
+    "notes": { "type": ["string", "null"] }
+  }
+}

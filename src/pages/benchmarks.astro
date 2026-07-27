@@ -1,0 +1,111 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { PRESETS } from "@/lib/model/scenario";
+import { withBase } from "@/lib/paths";
+---
+
+<BaseLayout title="ベンチマーク" description="標準ベンチマークの扱いと、シナリオ形式。">
+  <h1>ベンチマーク</h1>
+
+  <p>
+    手法を比べるには、同じ問題で測る必要があります。MAPF の研究では Moving AI Lab
+    が配布するマップとシナリオが事実上の標準になっています。
+  </p>
+
+  <h2>大規模ベンチマークは同梱していません</h2>
+  <p>
+    配布条件とリポジトリのサイズを考え、Moving AI のマップ・シナリオはここに含めていません。
+    配布元から取得して、シミュレータへ読み込んでください。
+  </p>
+  <p>
+    <a href="https://movingai.com/benchmarks/mapf.html" rel="noopener noreferrer" target="_blank">
+      Moving AI Lab — MAPF Benchmarks
+    </a>
+  </p>
+
+  <h2>読み込める形式</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>形式</th><th>内容</th><th>状態</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>.map</code></td>
+          <td>Moving AI のマップ。<code>.</code> <code>G</code> <code>S</code> が通行可</td>
+          <td>パーサ実装済み</td>
+        </tr>
+        <tr>
+          <td><code>.scen</code></td>
+          <td>Moving AI のシナリオ。開始・目標の対と最適経路長</td>
+          <td>パーサ実装済み</td>
+        </tr>
+        <tr>
+          <td>独自 JSON</td>
+          <td>本サイトのシナリオ形式。マップ・エージェント・タスク・ルール・seed を含む</td>
+          <td>シミュレータで import / export 可</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">
+    <code>.map</code> / <code>.scen</code> のパーサは実装済みですが、 シミュレータ UI からのファイル読み込みは
+    JSON のみ対応です。 Moving AI ファイルの UI 読み込みは今後の課題です。
+  </p>
+
+  <h2>独自 JSON の形式</h2>
+  <pre><code>{`{
+  "formatVersion": 1,
+  "id": "example",
+  "name": "例",
+  "kind": "one-shot-mapf",
+  "width": 4, "height": 1,
+  "map": ["...."],
+  "agents": [
+    { "id": "a1", "start": [0, 0], "goal": [3, 0] },
+    { "id": "a2", "start": [3, 0], "goal": [0, 0] }
+  ],
+  "rules": {
+    "goalBehavior": "stay",
+    "forbidEdgeSwap": true,
+    "forbidFollowing": false,
+    "allowDiagonal": false
+  },
+  "seed": 1
+}`}</code></pre>
+  <p>
+    <code>map</code> は 1 行 1 文字列で、<code>.</code> が通行可、それ以外が壁です。 ルールを既定から変えた場合は
+    <code>rules</code> に保存されるため、 後から見ても前提が分かります。
+  </p>
+
+  <h2>組み込みのテストケース</h2>
+  <p>シミュレータには小さなプリセットを用意しています。挙動の確認と、説明用の最小例です。</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>名前</th><th>ねらい</th></tr>
+      </thead>
+      <tbody>
+        {
+          PRESETS.map((p) => (
+            <tr>
+              <td>
+                <strong>{p.name}</strong>
+              </td>
+              <td>{p.description}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p><a href={withBase("/simulator/")}>シミュレータで試す →</a></p>
+
+  <style>
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

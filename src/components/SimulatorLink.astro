@@ -1,0 +1,62 @@
+---
+import { withBase } from "@/lib/paths";
+import { listSolverMetadata } from "@/solvers/registry";
+
+/**
+ * シミュレータへの導線。registry に実装がある場合だけ出す。
+ * 実装が無いのにリンクを出すと「動く」と誤解されるため、無い場合は何も表示しない。
+ */
+interface Props {
+  solverId: string;
+}
+const { solverId } = Astro.props;
+const meta = listSolverMetadata().find((m) => m.id === solverId);
+---
+
+{
+  meta && (
+    <aside class="sim-link">
+      <p class="head">シミュレータで動かせます</p>
+      <p class="note">{meta.implementationNote}</p>
+      <p>
+        <a class="button" href={withBase(`/simulator/?solver=${encodeURIComponent(solverId)}`)}>
+          シミュレータを開く（{meta.displayName}）
+        </a>
+      </p>
+    </aside>
+  )
+}
+
+<style>
+  .sim-link {
+    border: var(--border-width) solid var(--accent);
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    background: var(--accent-subtle);
+    padding: var(--space-3) var(--space-4);
+    margin-block: var(--space-4);
+  }
+  .head {
+    font-weight: 700;
+    margin-bottom: var(--space-1);
+  }
+  .note {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .button {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-fg);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .button:visited {
+    color: var(--accent-fg);
+  }
+  p:last-child {
+    margin-bottom: 0;
+  }
+</style>

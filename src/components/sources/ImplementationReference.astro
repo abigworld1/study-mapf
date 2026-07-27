@@ -1,0 +1,130 @@
+---
+import { getRepository } from "@/lib/manifest";
+
+/**
+ * 公開実装の参照。
+ *
+ * ★ ライセンスを必ず併記する。copy_allowed が true 以外のものは
+ *   「コードを転記しない」ことを明示する（SOURCE_POLICY.md 第 9・10 条）。
+ *   USC 系のように GitHub の自動判定と実態が違う例があるため、
+ *   表示は repositories.yaml の実ファイル判定結果に従う。
+ */
+interface Props {
+  repositoryIds: readonly string[];
+  title?: string;
+}
+
+const { repositoryIds, title } = Astro.props;
+const entries = repositoryIds.map((id) => ({ id, repo: getRepository(id) }));
+
+const RELATION_LABEL: Record<string, string> = {
+  official: "公式実装",
+  "author-maintained": "著者が管理",
+  "research-reference": "研究グループの実装",
+  "third-party": "第三者の実装",
+};
+---
+
+{title && <h3>{title}</h3>}
+
+{
+  entries.length === 0 ? (
+    <p class="empty">対応する公開実装は、まだマニフェストへ登録されていません。</p>
+  ) : (
+    <ul class="repo-list">
+      {entries.map(({ id, repo }) =>
+        !repo ? (
+          <li class="missing">
+            <code>{id}</code> は repositories.yaml に登録されていません。
+          </li>
+        ) : (
+          <li>
+            <div class="name">
+              <a href={repo.url} rel="noopener noreferrer" target="_blank">
+                {repo.name}
+              </a>
+              <span class="relation">{RELATION_LABEL[repo.relation] ?? repo.relation}</span>
+            </div>
+            <div class="license">
+              ライセンス: <strong>{repo.license_spdx ?? "不明（ファイルなし）"}</strong>
+              {repo.copy_allowed === true ? (
+                <span class="copy ok">コード転記可（著作権表示の保持が必要）</span>
+              ) : (
+                <span class="copy no">コード転記不可。挙動確認のみに使う</span>
+              )}
+            </div>
+            {repo.pinned_commit && (
+              <div class="commit">
+                参照コミット: <code>{repo.pinned_commit.slice(0, 12)}</code>
+              </div>
+            )}
+          </li>
+        ),
+      )}
+    </ul>
+  )
+}
+
+<style>
+  .repo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .repo-list > li {
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+  }
+  .repo-list > li + li {
+    margin-top: var(--space-3);
+  }
+  .name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-weight: 700;
+  }
+  .relation {
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--fg-muted);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.05em 0.5em;
+  }
+  .license,
+  .commit {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    margin-top: var(--space-1);
+  }
+  .copy {
+    display: inline-block;
+    margin-left: var(--space-2);
+    font-size: var(--text-xs);
+    padding: 0.05em 0.5em;
+    border-radius: var(--radius-sm);
+    border: 1px solid;
+  }
+  .copy.ok {
+    color: var(--ok);
+    border-color: var(--ok);
+    background: var(--ok-subtle);
+  }
+  .copy.no {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: var(--danger-subtle);
+  }
+  .empty,
+  .missing {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .missing {
+    color: var(--danger);
+  }
+</style>

@@ -1,0 +1,332 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import HeroDemo from "@/components/HeroDemo.tsx";
+import { withBase } from "@/lib/paths";
+import { SITE_CATEGORIES, papers, algorithms, getAlgorithm, siteCategoryOf } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+const entries = await getCollection("algorithms");
+const runnable = entries.filter((e) => RUNNABLE_ALGORITHM_IDS.includes(e.data.algorithmId));
+const explanationOnly = entries.filter((e) => {
+  const a = getAlgorithm(e.data.algorithmId);
+  return (
+    !RUNNABLE_ALGORITHM_IDS.includes(e.data.algorithmId) &&
+    a?.implementation_status === "explanation-only"
+  );
+});
+const planned = entries.length - runnable.length - explanationOnly.length;
+
+const categoryCounts = SITE_CATEGORIES.map((c) => ({
+  ...c,
+  count: entries.filter((e) => {
+    const a = getAlgorithm(e.data.algorithmId);
+    return a ? siteCategoryOf(a) === c.id : false;
+  }).length,
+}));
+
+const ROADMAP = [
+  { id: "astar", label: "A*", why: "すべての土台。単一エージェントの最短経路" },
+  { id: "space-time-astar", label: "時空間 A*", why: "時刻を状態に入れる。待機という選択肢" },
+  {
+    id: "prioritized-planning",
+    label: "優先順位付き計画",
+    why: "最初の多エージェント手法。速いが完全ではない",
+  },
+  { id: "cbs", label: "CBS", why: "衝突を制約に変える二層構造。以降の多くの手法の基礎" },
+  { id: "ecbs", label: "ECBS", why: "最適性を緩めて実用規模へ" },
+  { id: "pibt", label: "PIBT", why: "1 ステップずつ決める別系統の考え方" },
+];
+---
+
+<BaseLayout wide>
+  <section class="hero">
+    <div class="hero-text">
+      <h1>複数のロボットが、ぶつからずに目的地へ着くには</h1>
+      <p class="lead">
+        Multi-Agent Path Finding（MAPF）は、<strong
+          >複数のエージェントに対して、互いに衝突しない経路を同時に決める問題</strong
+        >です。1 体ずつ最短経路を引くだけでは、必ずどこかでぶつかります。
+      </p>
+      <p>
+        このサイトは、MAPF とその拡張である Lifelong MAPF・ Multi-Agent Pickup and
+        Delivery（MAPD）を、
+        <strong>原論文に基づいて</strong>学ぶための教材です。
+        推測で書いた説明は載せません。出典は各ページに明記しています。
+      </p>
+      <p class="cta">
+        <a class="button primary" href={withBase("/roadmap/")}>学習ロードマップから始める</a>
+        <a class="button" href={withBase("/simulator/")}>シミュレータを触る</a>
+      </p>
+    </div>
+    <HeroDemo client:only="react" />
+  </section>
+
+  <section class="two-col">
+    <div class="card">
+      <h2>MAPF</h2>
+      <p>
+        各エージェントに<strong>固定の目的地</strong>が 1 つずつあります。
+        全員が目的地に着いたら終わり、という一度きりの問題です。
+      </p>
+      <p class="small">one-shot MAPF とも呼びます。</p>
+      <p><a href={withBase("/mapf/")}>MAPFとは →</a></p>
+    </div>
+    <div class="card">
+      <h2>MAPD</h2>
+      <p>
+        目的地が固定されず、<strong>運搬タスクが次々に発生し続けます</strong>。
+        各タスクには荷物を取る地点（pickup）と届ける地点（delivery）があり、
+        誰がどのタスクをやるかの<strong>割当も同時に決める</strong>必要があります。
+      </p>
+      <p class="small">倉庫のロボットがこの形です。</p>
+      <p><a href={withBase("/mapd/")}>MAPDとは →</a></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>推奨する学習順</h2>
+    <p>
+      MAPF は手法が多いですが、依存関係があります。この順に読むと後の手法が理解しやすくなります。
+    </p>
+    <ol class="roadmap">
+      {
+        ROADMAP.map((step, i) => (
+          <li>
+            <a href={withBase(`/algorithms/${step.id}/`)}>
+              <span class="num">{i + 1}</span>
+              <span class="name">{step.label}</span>
+              <span class="why">{step.why}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ol>
+    <p><a href={withBase("/roadmap/")}>詳しい学習ロードマップ →</a></p>
+  </section>
+
+  <section>
+    <h2>アルゴリズム分類</h2>
+    <div class="grid-auto">
+      {
+        categoryCounts.map((c) => (
+          <a class="cat-card" href={withBase(`/algorithms/category/${c.id}/`)}>
+            <strong>{c.label}</strong>
+            <span class="orig">{c.original}</span>
+            <span class="count">{c.count} 手法</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="status">
+    <h2>このサイトの現状</h2>
+    <p>
+      「解説がある」ことと「実装が動く」ことは別です。混同しないよう、
+      各ページにバッジを出しています。
+    </p>
+    <div class="grid-auto">
+      <div class="card">
+        <p class="big ok">{runnable.length}</p>
+        <p><strong>シミュレータで実行可</strong></p>
+        <p class="small">ブラウザ内で実際に動かせます。</p>
+      </div>
+      <div class="card">
+        <p class="big muted">{explanationOnly.length}</p>
+        <p><strong>解説のみ</strong></p>
+        <p class="small">実装はありません。出典と説明だけです。</p>
+      </div>
+      <div class="card">
+        <p class="big muted">{planned}</p>
+        <p><strong>準備中</strong></p>
+        <p class="small">骨格だけで、解説本文はまだありません。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="evidence">
+    <h2>論文準拠であること</h2>
+    <ul>
+      <li>
+        <strong>{papers.length} 本</strong>の原論文をマニフェストで管理し、
+        タイトル・著者・年・会議・DOI をすべて一次情報で照合しています。
+      </li>
+      <li>
+        <strong>{algorithms.length} 手法</strong
+        >の理論保証は、原論文で確認できたものだけを載せます。
+        確認できていないものは「不明」と表示します。<em>もっともらしい値で埋めません。</em>
+      </li>
+      <li>
+        「完全」「最適」「有界準最適」「eventually optimal」を区別します。 たとえば PIBT
+        は原論文が「neither complete nor optimal for MAPF」と明記しています。
+      </li>
+      <li>
+        論文 PDF は再配布が許諾されているものを除き同梱していません。配布元へのリンクを示します。
+      </li>
+    </ul>
+    <p><a href={withBase("/sources/")}>論文・実装一覧 →</a></p>
+  </section>
+
+  <style>
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: var(--space-6);
+      align-items: center;
+      margin-bottom: var(--space-8);
+    }
+    @media (max-width: 56rem) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+    }
+    .hero h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+    }
+    .lead {
+      font-size: var(--text-lg);
+    }
+    .cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
+    }
+    .button {
+      display: inline-block;
+      padding: var(--space-2) var(--space-5);
+      border-radius: var(--radius-sm);
+      border: var(--border-width) solid var(--border-strong);
+      text-decoration: none;
+      color: var(--fg);
+      font-weight: 700;
+    }
+    .button.primary {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-color: var(--accent);
+    }
+    .button:visited {
+      color: var(--fg);
+    }
+    .button.primary:visited {
+      color: var(--accent-fg);
+    }
+
+    :global(.hero-demo) {
+      margin: 0;
+    }
+    :global(.hero-demo canvas) {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: var(--canvas-bg);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    :global(.hero-demo figcaption) {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      margin-top: var(--space-2);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+      gap: var(--space-4);
+    }
+    .two-col h2 {
+      border: none;
+      margin-top: 0;
+      font-size: var(--text-xl);
+    }
+
+    .roadmap {
+      list-style: none;
+      padding: 0;
+      display: grid;
+      gap: var(--space-2);
+    }
+    .roadmap a {
+      display: grid;
+      grid-template-columns: 2rem 10rem 1fr;
+      gap: var(--space-3);
+      align-items: baseline;
+      padding: var(--space-2) var(--space-3);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      text-decoration: none;
+      color: var(--fg);
+    }
+    .roadmap a:hover {
+      border-color: var(--accent);
+    }
+    .roadmap .num {
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .roadmap .name {
+      font-weight: 700;
+    }
+    .roadmap .why {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    @media (max-width: 40rem) {
+      .roadmap a {
+        grid-template-columns: 2rem 1fr;
+      }
+      .roadmap .why {
+        grid-column: 2;
+      }
+    }
+
+    .cat-card {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      padding: var(--space-3);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      text-decoration: none;
+      color: var(--fg);
+    }
+    .cat-card:hover {
+      border-color: var(--accent);
+    }
+    .cat-card .orig {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--fg-muted);
+    }
+    .cat-card .count {
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+    }
+
+    .big {
+      font-size: var(--text-3xl);
+      font-weight: 700;
+      margin: 0;
+      line-height: 1;
+    }
+    .big.ok {
+      color: var(--ok);
+    }
+    .big.muted {
+      color: var(--fg-muted);
+    }
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    .status .card p {
+      margin-bottom: var(--space-1);
+    }
+    .evidence li {
+      margin-bottom: var(--space-2);
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,119 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import AlgorithmStatus from "@/components/sources/AlgorithmStatus.astro";
+import GuaranteeTable from "@/components/sources/GuaranteeTable.astro";
+import SourceList from "@/components/sources/SourceList.astro";
+import ImplementationReference from "@/components/sources/ImplementationReference.astro";
+import { withBase } from "@/lib/paths";
+import { getAlgorithm, siteCategoryOf, siteCategoryLabel } from "@/lib/manifest";
+import type { CollectionEntry } from "astro:content";
+
+interface Props {
+  entry: CollectionEntry<"algorithms">;
+}
+
+const { entry } = Astro.props;
+const fm = entry.data;
+const algo = getAlgorithm(fm.algorithmId);
+const category = algo ? siteCategoryOf(algo) : null;
+
+const paperIds = fm.primarySources.map((s) => s.paperId);
+const repoIds =
+  fm.implementationReferences.length > 0
+    ? fm.implementationReferences.map((r) => r.repositoryId)
+    : (algo?.implementation_repository_ids ?? []);
+const effectivePaperIds = paperIds.length > 0 ? paperIds : (algo?.primary_paper_ids ?? []);
+---
+
+<BaseLayout title={fm.title} description={fm.summary || `${fm.title}（${fm.originalName}）の解説`}>
+  <nav aria-label="パンくず" class="crumbs">
+    <a href={withBase("/algorithms/")}>アルゴリズム一覧</a>
+    {
+      category && (
+        <>
+          <span aria-hidden="true">/</span>
+          <a href={withBase(`/algorithms/category/${category}/`)}>{siteCategoryLabel(category)}</a>
+        </>
+      )
+    }
+  </nav>
+
+  <h1>
+    {fm.title}
+    <span class="original">{fm.originalName}</span>
+  </h1>
+
+  <AlgorithmStatus algorithmId={fm.algorithmId} contentStatus={fm.status} />
+
+  {fm.summary && <p class="lead">{fm.summary}</p>}
+
+  <slot />
+
+  <h2 id="guarantees">完全性・最適性などの保証</h2>
+  <GuaranteeTable algorithmId={fm.algorithmId} />
+
+  <h2 id="sources">原論文</h2>
+  <SourceList paperIds={effectivePaperIds} />
+  {
+    fm.primarySources.some((s) => (s.sections?.length ?? 0) > 0 || (s.pages?.length ?? 0) > 0) && (
+      <div class="located">
+        <h3>確認済みの箇所</h3>
+        <ul>
+          {fm.primarySources.map((s) => (
+            <li>
+              <code>{s.paperId}</code>
+              {s.sections && s.sections.length > 0 && <> — §{s.sections.join(", §")}</>}
+              {s.pages && s.pages.length > 0 && <> — p.{s.pages.join(", p.")}</>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  <h2 id="implementations">公開実装</h2>
+  <ImplementationReference repositoryIds={repoIds} />
+
+  {
+    fm.lastReviewed && (
+      <p class="reviewed">
+        最終照合日: <time datetime={fm.lastReviewed}>{fm.lastReviewed}</time>
+      </p>
+    )
+  }
+
+  <style>
+    .crumbs {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      display: flex;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+    h1 {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+    .original {
+      font-size: var(--text-base);
+      font-weight: 400;
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+    }
+    .lead {
+      font-size: var(--text-lg);
+      color: var(--fg-muted);
+    }
+    .located ul {
+      font-size: var(--text-sm);
+    }
+    .reviewed {
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+      border-top: var(--border-width) solid var(--border);
+      padding-top: var(--space-3);
+      margin-top: var(--space-6);
+    }
+  </style>
+</BaseLayout>

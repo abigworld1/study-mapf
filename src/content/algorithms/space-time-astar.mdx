@@ -1,0 +1,29 @@
+---
+title: "時空間 A*"
+algorithmId: space-time-astar
+originalName: "Space-Time A*"
+order: 30
+summary: ""
+status: draft
+primarySources:
+  - paperId: cooperative-pathfinding-2005
+implementationReferences:
+  - repositoryId: libmultirobotplanning
+  - repositoryId: cbsh2-rtc
+  - repositoryId: eecbs
+simulatorSolverId: space-time-astar
+---
+
+import PreparingNotice from "@/components/PreparingNotice.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+<SimulatorLink solverId="space-time-astar" />
+
+<PreparingNotice
+  algorithmId="space-time-astar"
+  needs={[
+    "原論文の該当節と Algorithm 番号の特定",
+    "疑似コードと PDF の目視照合",
+    "シミュレータの実装が原論文と一致するかの確認",
+  ]}
+/>

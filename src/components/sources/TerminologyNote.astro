@@ -1,0 +1,49 @@
+---
+/**
+ * 用語の注記。日本語訳と原語の対応、紛らわしい用語の区別に使う。
+ * 「最適」と「eventually optimal」のような区別は、本文に埋めず必ずこれで目立たせる。
+ */
+interface Props {
+  term: string;
+  /** 原語表記。 */
+  original?: string;
+}
+const { term, original } = Astro.props;
+---
+
+<aside class="term" aria-label={`用語: ${term}`}>
+  <p class="head">
+    <strong>{term}</strong>
+    {original && <span class="orig">{original}</span>}
+  </p>
+  <div class="body"><slot /></div>
+</aside>
+
+<style>
+  .term {
+    border: var(--border-width) solid var(--border);
+    border-left: 4px solid var(--info);
+    border-radius: var(--radius-md);
+    background: var(--info-subtle);
+    padding: var(--space-3) var(--space-4);
+    margin-block: var(--space-4);
+  }
+  .head {
+    margin: 0 0 var(--space-1);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+  .orig {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  .body {
+    font-size: var(--text-sm);
+  }
+</style>

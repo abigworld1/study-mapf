@@ -1,0 +1,66 @@
+---
+/**
+ * ライト / ダークの切り替え。
+ * JS 無効時は非表示になるだけで、prefers-color-scheme による自動切替は効く。
+ */
+---
+
+<button type="button" class="theme-toggle" data-theme-toggle aria-live="polite">
+  <span class="visually-hidden">配色を切り替える</span>
+  <span aria-hidden="true" data-theme-icon>◐</span>
+</button>
+
+<script>
+  const STORAGE_KEY = "study-mapf-theme";
+
+  function current(): "light" | "dark" {
+    const attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "light" || attr === "dark") return attr;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function apply(theme: "light" | "dark") {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      /* 保存できなくても表示は切り替わる */
+    }
+    for (const button of document.querySelectorAll<HTMLElement>("[data-theme-toggle]")) {
+      button.setAttribute(
+        "aria-label",
+        theme === "dark" ? "ライトテーマにする" : "ダークテーマにする",
+      );
+      const icon = button.querySelector("[data-theme-icon]");
+      if (icon) icon.textContent = theme === "dark" ? "☾" : "☀";
+    }
+  }
+
+  for (const button of document.querySelectorAll<HTMLElement>("[data-theme-toggle]")) {
+    button.hidden = false;
+    button.addEventListener("click", () => {
+      apply(current() === "dark" ? "light" : "dark");
+    });
+  }
+  apply(current());
+</script>
+
+<style>
+  .theme-toggle {
+    flex: 0 0 auto;
+    background: var(--bg-sunken);
+    color: var(--fg);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-sm);
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: var(--text-base);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    border-color: var(--border-strong);
+  }
+</style>

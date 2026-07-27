@@ -1,0 +1,25 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "src/**/*", "tests/**/*", "*.config.mjs", "*.config.ts"],
+  // ★ .astro は exclude しない。
+  //   Astro が生成する .astro/content.d.ts に content collection の型が入っており、
+  //   exclude すると getCollection() の戻り値が any に落ちる。
+  "exclude": ["dist", "node_modules", "docs", ".references", "scripts"],
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": false,
+    "allowJs": true,
+    "checkJs": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vitest/globals", "node"]
+  }
+}

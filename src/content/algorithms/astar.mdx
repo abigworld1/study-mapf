@@ -1,0 +1,28 @@
+---
+title: "A*"
+algorithmId: astar
+originalName: "A*"
+order: 20
+summary: ""
+status: draft
+primarySources:
+  - paperId: astar-1968
+implementationReferences:
+  - repositoryId: libmultirobotplanning
+  - repositoryId: hog2
+simulatorSolverId: astar
+---
+
+import PreparingNotice from "@/components/PreparingNotice.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+<SimulatorLink solverId="astar" />
+
+<PreparingNotice
+  algorithmId="astar"
+  needs={[
+    "原論文の該当節と Algorithm 番号の特定",
+    "疑似コードと PDF の目視照合",
+    "シミュレータの実装が原論文と一致するかの確認",
+  ]}
+/>

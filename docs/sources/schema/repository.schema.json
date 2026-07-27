@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abigworld1.github.io/study-mapf/schema/repository.schema.json",
+  "title": "study-mapf repository manifest entry",
+  "description": "docs/sources/repositories.yaml の 1 要素。参照するだけの第三者実装であり、コード自体は本リポジトリへコミットしない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "url",
+    "algorithms",
+    "paper_ids",
+    "relation",
+    "local_path",
+    "default_branch",
+    "pinned_commit",
+    "license_spdx",
+    "license_file",
+    "copy_allowed",
+    "notes"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "kebab-case の一意 ID。.references/<id> のディレクトリ名になる。"
+    },
+    "name": { "type": "string", "minLength": 1, "description": "owner/repo 形式。" },
+    "url": { "type": "string", "format": "uri", "description": "clone 元 URL。" },
+    "algorithms": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "paper_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    },
+    "relation": {
+      "enum": ["official", "author-maintained", "research-reference", "third-party"],
+      "description": "official は README・論文・著者ページのいずれかで公式実装と確認できた場合のみ。検索で見つけただけなら third-party または research-reference。"
+    },
+    "local_path": {
+      "type": ["string", "null"],
+      "pattern": "^\\.references/[a-z0-9-]+$",
+      "description": "clone 先。.gitignore 済み。"
+    },
+    "default_branch": { "type": ["string", "null"] },
+    "pinned_commit": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "参照時点の完全 SHA。sync-reference-repos.sh はこれを checkout する。"
+    },
+    "license_spdx": {
+      "type": ["string", "null"],
+      "description": "SPDX 識別子。判定できない場合は NOASSERTION、ファイルが無い場合は null。"
+    },
+    "license_file": {
+      "type": ["string", "null"],
+      "description": "リポジトリ内のライセンスファイル相対パス。"
+    },
+    "copy_allowed": {
+      "enum": [true, false, null],
+      "description": "本サイトのコードへ引用・転記してよいか。null は未判定＝転記禁止として扱う。"
+    },
+    "notes": { "type": ["string", "null"] },
+    "clone_status": {
+      "enum": ["cloned", "failed", "not-attempted"],
+      "description": "sync-reference-repos.sh の最終結果を人手で反映する記録欄。"
+    }
+  }
+}

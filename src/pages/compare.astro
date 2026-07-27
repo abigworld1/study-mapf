@@ -1,0 +1,247 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { withBase } from "@/lib/paths";
+import { getAlgorithm, siteCategoryOf, siteCategoryLabel, SITE_CATEGORIES } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+/**
+ * 比較表。
+ * ★ すべてマニフェストから生成する。同じ情報を手書きしない。
+ * ★ 原論文で確認できていない欄は「不明」。空欄で誤魔化さない。
+ */
+const entries = (await getCollection("algorithms")).sort((a, b) => a.data.order - b.data.order);
+
+const PROBLEM_LABEL: Record<string, string> = {
+  "single-agent": "単一エージェント",
+  "classical-mapf": "one-shot MAPF",
+  "continuous-time-mapf": "連続時間 MAPF",
+  "lifelong-mapf": "lifelong MAPF",
+  mapd: "MAPD",
+  tapf: "TAPF",
+  assignment: "割当",
+  flow: "フロー",
+  benchmark: "ベンチマーク",
+};
+
+const G_LABEL: Record<string, string> = {
+  true: "あり",
+  false: "なし",
+  conditional: "条件付き",
+  unknown: "不明",
+};
+
+const rows = entries.map((entry) => {
+  const a = getAlgorithm(entry.data.algorithmId);
+  const runnable = RUNNABLE_ALGORITHM_IDS.includes(entry.data.algorithmId);
+  const declared = a?.implementation_status ?? "planned";
+  const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+  const g = a?.guarantees;
+  const problems = a?.problem_types ?? [];
+  const online =
+    problems.includes("lifelong-mapf") || problems.includes("mapd") ? "オンライン" : "一括";
+  const category = a ? siteCategoryOf(a) : null;
+  return {
+    id: entry.id,
+    title: entry.data.title,
+    original: entry.data.originalName,
+    category,
+    categoryLabel: category ? siteCategoryLabel(category) : "—",
+    problems: problems.map((p) => PROBLEM_LABEL[p] ?? p).join(" / ") || "不明",
+    complete: G_LABEL[String(g?.complete ?? "unknown")] ?? "不明",
+    optimal:
+      g?.optimal === true
+        ? "最適"
+        : g?.optimal === "conditional"
+          ? "条件付き"
+          : g?.optimal === false
+            ? "なし"
+            : "不明",
+    bounded: G_LABEL[String(g?.bounded_suboptimal ?? "unknown")] ?? "不明",
+    online,
+    impl: effective,
+    simulator: runnable,
+  };
+});
+
+const IMPL_LABEL: Record<string, string> = {
+  runnable: "実行可",
+  partial: "一部実装",
+  "explanation-only": "解説のみ",
+  planned: "準備中",
+};
+---
+
+<BaseLayout
+  title="手法比較"
+  wide
+  description="MAPF / MAPD の手法を、対象問題と理論保証で比較します。"
+>
+  <h1>手法比較</h1>
+
+  <p>
+    <code>docs/sources/algorithms.yaml</code> から生成しています。 同じ情報を複数箇所へ手書きしていないので、マニフェストを直せばここも変わります。
+  </p>
+
+  <div class="notice card">
+    <p>
+      <strong>「不明」は「保証が無い」ではありません。</strong>
+      原論文の該当箇所をまだ確認できていない、という意味です。 確認できたものだけを「あり」「なし」と書いています。
+    </p>
+    <p class="small">
+      「最適」と「条件付き（eventually optimal
+      など）」は別物です。各手法のページで根拠を確認してください。
+    </p>
+  </div>
+
+  <div class="filters card">
+    <label>
+      絞り込み
+      <input type="search" id="filter-text" placeholder="手法名・原語で検索" />
+    </label>
+    <label>
+      分類
+      <select id="filter-category">
+        <option value="">すべて</option>
+        {SITE_CATEGORIES.map((c) => <option value={c.id}>{c.label}</option>)}
+      </select>
+    </label>
+    <label class="check">
+      <input type="checkbox" id="filter-runnable" />
+      シミュレータ対応のみ
+    </label>
+    <p class="count" id="filter-count" aria-live="polite"></p>
+  </div>
+
+  <div class="table-scroll">
+    <table id="compare-table">
+      <thead>
+        <tr>
+          <th scope="col">手法</th>
+          <th scope="col">対象問題</th>
+          <th scope="col">完全性</th>
+          <th scope="col">最適性</th>
+          <th scope="col">準最適保証</th>
+          <th scope="col">一括/オンライン</th>
+          <th scope="col">分類</th>
+          <th scope="col">実装状態</th>
+          <th scope="col">シミュレータ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          rows.map((r) => (
+            <tr
+              data-name={`${r.title} ${r.original}`.toLowerCase()}
+              data-category={r.category ?? ""}
+              data-runnable={r.simulator ? "1" : "0"}
+            >
+              <th scope="row">
+                <a href={withBase(`/algorithms/${r.id}/`)}>{r.title}</a>
+                <span class="orig">{r.original}</span>
+              </th>
+              <td>{r.problems}</td>
+              <td>{r.complete}</td>
+              <td>{r.optimal}</td>
+              <td>{r.bounded}</td>
+              <td>{r.online}</td>
+              <td>{r.categoryLabel}</td>
+              <td>{IMPL_LABEL[r.impl]}</td>
+              <td>{r.simulator ? "対応" : "—"}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p class="small">
+    「低レベル探索」「主な目的関数」の列は、原論文での確認が済んだ手法が増えた段階で追加します。
+    現時点で埋めると推測になるため、列ごと出していません。
+  </p>
+
+  <script>
+    const text = document.querySelector<HTMLInputElement>("#filter-text");
+    const category = document.querySelector<HTMLSelectElement>("#filter-category");
+    const runnable = document.querySelector<HTMLInputElement>("#filter-runnable");
+    const count = document.querySelector<HTMLElement>("#filter-count");
+    const rows = Array.from(
+      document.querySelectorAll<HTMLTableRowElement>("#compare-table tbody tr"),
+    );
+
+    function apply() {
+      const q = (text?.value ?? "").trim().toLowerCase();
+      const cat = category?.value ?? "";
+      const onlyRunnable = runnable?.checked ?? false;
+      let shown = 0;
+      for (const row of rows) {
+        const matchText = q === "" || (row.dataset.name ?? "").includes(q);
+        const matchCat = cat === "" || row.dataset.category === cat;
+        const matchRun = !onlyRunnable || row.dataset.runnable === "1";
+        const visible = matchText && matchCat && matchRun;
+        row.hidden = !visible;
+        if (visible) shown += 1;
+      }
+      if (count) count.textContent = `${shown} / ${rows.length} 手法を表示中`;
+    }
+
+    text?.addEventListener("input", apply);
+    category?.addEventListener("change", apply);
+    runnable?.addEventListener("change", apply);
+    apply();
+  </script>
+
+  <style>
+    .notice p {
+      margin-bottom: var(--space-2);
+    }
+    .notice p:last-child {
+      margin-bottom: 0;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+      align-items: end;
+      margin-block: var(--space-4);
+    }
+    .filters label {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    .filters label.check {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .filters input[type="search"],
+    .filters select {
+      padding: var(--space-1) var(--space-2);
+      border: var(--border-width) solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--fg);
+      font: inherit;
+      min-width: 12rem;
+    }
+    .count {
+      margin: 0;
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+    }
+    th .orig {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 400;
+      color: var(--fg-muted);
+    }
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

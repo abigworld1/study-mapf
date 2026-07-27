@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 公式の Pages Actions を使う。gh-pages ブランチは作らない。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時デプロイを 1 本に制限する。進行中のものはキャンセルしない
+# （公開途中で止めると中途半端な状態が残るため）。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ビルド
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # 公開前に資料の整合性を確認する。errors があれば公開しない。
+      - name: マニフェスト検証
+        run: npm run sources:validate
+
+      - name: 型検査
+        run: npm run typecheck
+
+      - name: ユニットテスト
+        run: npm test
+
+      # base path は astro.config.mjs（= src/config/site.mjs）で固定している。
+      # Pages 側の設定に依存しないよう、ここでは何も上書きしない。
+      - name: ビルド
+        run: npm run build:only
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: 公開
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,82 @@
+---
+import { getAlgorithm } from "@/lib/manifest";
+import { withBase } from "@/lib/paths";
+
+/**
+ * 資料が足りず解説を書けないページで表示する。
+ *
+ * ★ ここでもっともらしい説明を生成してはならない（CONTENT_GUIDE.md）。
+ *   何が足りないかだけを正直に出し、原論文へのリンクを示す。
+ */
+interface Props {
+  algorithmId: string;
+  /** 解説を書くために足りていないもの。 */
+  needs?: readonly string[];
+}
+
+const { algorithmId, needs } = Astro.props;
+const algo = getAlgorithm(algorithmId);
+
+const defaultNeeds = [
+  "原論文の該当節と Algorithm 番号の特定",
+  "疑似コードと PDF の目視照合",
+  "理論保証の原文確認（現在このページの保証は「不明」を含みます）",
+];
+const items = needs && needs.length > 0 ? needs : defaultNeeds;
+---
+
+<section class="preparing" aria-labelledby="preparing-heading">
+  <h2 id="preparing-heading">解説準備中</h2>
+  <p>
+    このページはまだ骨格だけです。原論文との照合が済んでいないため、 解説本文は掲載していません。<strong
+      >推測で書いた説明を載せない方針</strong
+    >のためです。
+  </p>
+
+  <h3>解説を書くために必要なもの</h3>
+  <ul>
+    {items.map((need) => <li>{need}</li>)}
+  </ul>
+
+  {
+    algo && algo.notes && (
+      <details>
+        <summary>マニフェストに記録されている補足</summary>
+        <p>{algo.notes}</p>
+      </details>
+    )
+  }
+
+  <p class="links">
+    下の「原論文」節に、確認済みの出典と入手先を載せています。 書き方の規約は <a
+      href={withBase("/about/")}>このサイトについて</a
+    > を参照してください。
+  </p>
+</section>
+
+<style>
+  .preparing {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    background: var(--bg-sunken);
+    margin-block: var(--space-5);
+  }
+  .preparing h2 {
+    margin-top: 0;
+    border: none;
+    font-size: var(--text-xl);
+  }
+  .preparing h3 {
+    font-size: var(--text-base);
+  }
+  .preparing details {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .links {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    margin-bottom: 0;
+  }
+</style>

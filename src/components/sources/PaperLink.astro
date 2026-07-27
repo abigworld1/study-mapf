@@ -1,0 +1,64 @@
+---
+import { getPaper, bestPaperLink, citationOf, mayBundlePdf } from "@/lib/manifest";
+
+interface Props {
+  /** papers.yaml の paper-id */
+  paperId: string;
+  /** 短縮表示（本文中に挟む用） */
+  compact?: boolean;
+}
+
+const { paperId, compact = false } = Astro.props;
+const paper = getPaper(paperId);
+const href = paper ? bestPaperLink(paper) : null;
+---
+
+{
+  !paper ? (
+    <span class="paper-missing" title={`papers.yaml に ${paperId} がありません`}>
+      [出典未登録: {paperId}]
+    </span>
+  ) : compact ? (
+    <a href={href ?? undefined} class="paper-compact" rel="noopener noreferrer" target="_blank">
+      {paper.short_title} ({paper.year})
+    </a>
+  ) : (
+    <span class="paper-link">
+      {href ? (
+        <a href={href} rel="noopener noreferrer" target="_blank">
+          {paper.title}
+        </a>
+      ) : (
+        <span>{paper.title}</span>
+      )}
+      <span class="paper-meta">{citationOf(paper)}</span>
+      {!mayBundlePdf(paper) && (
+        <span class="paper-note">
+          PDF は再配布不可のためサイトに同梱していません。上のリンクは配布元です。
+        </span>
+      )}
+    </span>
+  )
+}
+
+<style>
+  .paper-link {
+    display: block;
+  }
+  .paper-meta,
+  .paper-note {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .paper-note {
+    color: var(--fg-subtle);
+  }
+  .paper-missing {
+    color: var(--danger);
+    font-size: var(--text-sm);
+  }
+  .paper-compact {
+    white-space: nowrap;
+  }
+</style>

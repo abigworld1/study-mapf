@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#16171a"/>
+  <g stroke="#2f3238" stroke-width="2">
+    <path d="M0 150h1200M0 320h1200M0 490h1200M300 0v630M600 0v630M900 0v630"/>
+  </g>
+  <circle cx="150" cy="75" r="26" fill="#7cc0e8"/>
+  <circle cx="1050" cy="555" r="26" fill="#e0a458"/>
+  <rect x="570" y="290" width="60" height="60" fill="#6a6e78"/>
+  <text x="80" y="300" fill="#e8e8e4" font-family="sans-serif" font-size="72" font-weight="700">study-mapf</text>
+  <text x="80" y="370" fill="#a8a89f" font-family="sans-serif" font-size="34">MAPF / Lifelong MAPF / MAPD を原論文から学ぶ</text>
+</svg>

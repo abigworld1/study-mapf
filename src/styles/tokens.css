@@ -1,0 +1,218 @@
+/*
+ * デザイントークン。
+ *
+ * 方針:
+ *   - 巨大な UI フレームワークは使わない。CSS Variables と小さなコンポーネントで作る。
+ *   - 倉庫を想起させる色味（鉄・コンクリート・安全色）を土台にするが、
+ *     論文を読むための教材なので彩度は抑える。
+ *   - ライト / ダークの両方で WCAG AA（本文 4.5:1、大きい文字 3:1）を満たすことを狙う。
+ *   - エージェントの識別は色だけに依存させない。形・記号・番号を併用する
+ *     （--agent-shape-* は Canvas 側で参照する）。
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- タイポグラフィ --- */
+  --font-sans:
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK JP", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --leading-tight: 1.35;
+  --leading-normal: 1.75;
+
+  /* --- 余白・寸法 --- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+  --space-10: 4rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --content-width: 46rem;
+  --wide-width: 76rem;
+
+  --border-width: 1px;
+
+  /* --- モーション --- */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+
+  /* --- ライトテーマ --- */
+  --bg: #f7f7f5;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #eeeeea;
+  --bg-code: #f2f2ee;
+
+  --fg: #1c1c1a;
+  --fg-muted: #5c5c56;
+  --fg-subtle: #7a7a72;
+
+  --border: #d6d6d0;
+  --border-strong: #b4b4ac;
+
+  --accent: #b45309; /* 倉庫の安全色に寄せた琥珀。ライトで 4.5:1 以上 */
+  --accent-fg: #ffffff;
+  --accent-subtle: #fdf3e7;
+
+  --link: #0f5c8c;
+  --link-visited: #6b3fa0;
+
+  --ok: #1c6b3c;
+  --ok-subtle: #e7f4ec;
+  --warn: #8a5a00;
+  --warn-subtle: #fdf4e0;
+  --danger: #a32020;
+  --danger-subtle: #fceceb;
+  --info: #0f5c8c;
+  --info-subtle: #e8f1f8;
+
+  --focus-ring: #0f5c8c;
+
+  /* --- Canvas 用（JS から getComputedStyle で読む） --- */
+  --canvas-bg: #ffffff;
+  --canvas-grid-line: #dcdcd6;
+  --canvas-obstacle: #4a4a44;
+  --canvas-goal-ring: #6b6b62;
+  --canvas-path: #8a8a80;
+  --canvas-reservation: rgba(15, 92, 140, 0.16);
+  --canvas-conflict: #a32020;
+  --canvas-label: #1c1c1a;
+
+  /*
+   * エージェント色。色覚特性に配慮した並び。
+   * ただし色だけで区別させないこと。Canvas 側では形と番号も描く。
+   */
+  --agent-1: #0f5c8c;
+  --agent-2: #b45309;
+  --agent-3: #1c6b3c;
+  --agent-4: #8a2f8a;
+  --agent-5: #0d6b6b;
+  --agent-6: #9a3412;
+  --agent-7: #3f4a9a;
+  --agent-8: #7a6a00;
+}
+
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  /* 既定はライト。dark は data-theme か prefers-color-scheme で切り替える */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16171a;
+    --bg-elevated: #1e2024;
+    --bg-sunken: #101113;
+    --bg-code: #1a1c20;
+
+    --fg: #e8e8e4;
+    --fg-muted: #a8a89f;
+    --fg-subtle: #85857c;
+
+    --border: #33353a;
+    --border-strong: #4b4e55;
+
+    --accent: #e0a458;
+    --accent-fg: #16171a;
+    --accent-subtle: #2a2318;
+
+    --link: #7cc0e8;
+    --link-visited: #c0a0e0;
+
+    --ok: #6fcf97;
+    --ok-subtle: #16281d;
+    --warn: #e0b062;
+    --warn-subtle: #2a2317;
+    --danger: #f08a80;
+    --danger-subtle: #2c1918;
+    --info: #7cc0e8;
+    --info-subtle: #15222b;
+
+    --focus-ring: #7cc0e8;
+
+    --canvas-bg: #1a1c20;
+    --canvas-grid-line: #2f3238;
+    --canvas-obstacle: #6a6e78;
+    --canvas-goal-ring: #9a9ea8;
+    --canvas-path: #6a6e78;
+    --canvas-reservation: rgba(124, 192, 232, 0.2);
+    --canvas-conflict: #f08a80;
+    --canvas-label: #e8e8e4;
+
+    --agent-1: #7cc0e8;
+    --agent-2: #e0a458;
+    --agent-3: #6fcf97;
+    --agent-4: #d69fd6;
+    --agent-5: #5fc8c8;
+    --agent-6: #f0a080;
+    --agent-7: #a0abf0;
+    --agent-8: #d8cc70;
+  }
+}
+
+/* 明示的なダーク指定（テーマ切替ボタン） */
+:root[data-theme="dark"] {
+  --bg: #16171a;
+  --bg-elevated: #1e2024;
+  --bg-sunken: #101113;
+  --bg-code: #1a1c20;
+
+  --fg: #e8e8e4;
+  --fg-muted: #a8a89f;
+  --fg-subtle: #85857c;
+
+  --border: #33353a;
+  --border-strong: #4b4e55;
+
+  --accent: #e0a458;
+  --accent-fg: #16171a;
+  --accent-subtle: #2a2318;
+
+  --link: #7cc0e8;
+  --link-visited: #c0a0e0;
+
+  --ok: #6fcf97;
+  --ok-subtle: #16281d;
+  --warn: #e0b062;
+  --warn-subtle: #2a2317;
+  --danger: #f08a80;
+  --danger-subtle: #2c1918;
+  --info: #7cc0e8;
+  --info-subtle: #15222b;
+
+  --focus-ring: #7cc0e8;
+
+  --canvas-bg: #1a1c20;
+  --canvas-grid-line: #2f3238;
+  --canvas-obstacle: #6a6e78;
+  --canvas-goal-ring: #9a9ea8;
+  --canvas-path: #6a6e78;
+  --canvas-reservation: rgba(124, 192, 232, 0.2);
+  --canvas-conflict: #f08a80;
+  --canvas-label: #e8e8e4;
+
+  --agent-1: #7cc0e8;
+  --agent-2: #e0a458;
+  --agent-3: #6fcf97;
+  --agent-4: #d69fd6;
+  --agent-5: #5fc8c8;
+  --agent-6: #f0a080;
+  --agent-7: #a0abf0;
+  --agent-8: #d8cc70;
+}

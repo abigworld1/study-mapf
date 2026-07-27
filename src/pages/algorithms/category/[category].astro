@@ -1,0 +1,60 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import AlgorithmCard from "@/components/AlgorithmCard.astro";
+import { withBase } from "@/lib/paths";
+import { SITE_CATEGORIES, getAlgorithm, siteCategoryOf } from "@/lib/manifest";
+
+export async function getStaticPaths() {
+  const entries = (await getCollection("algorithms")).sort((a, b) => a.data.order - b.data.order);
+  return SITE_CATEGORIES.map((cat) => ({
+    params: { category: cat.id },
+    props: {
+      cat,
+      entries: entries.filter((e) => {
+        const algo = getAlgorithm(e.data.algorithmId);
+        return algo ? siteCategoryOf(algo) === cat.id : false;
+      }),
+    },
+  }));
+}
+
+const { cat, entries } = Astro.props;
+---
+
+<BaseLayout title={cat.label} wide description={`${cat.label}（${cat.original}）の手法一覧`}>
+  <nav aria-label="パンくず" class="crumbs">
+    <a href={withBase("/algorithms/")}>アルゴリズム一覧</a>
+  </nav>
+
+  <h1>
+    {cat.label}
+    <span class="orig">{cat.original}</span>
+  </h1>
+
+  {
+    entries.length === 0 ? (
+      <p>この分類のページはまだありません。</p>
+    ) : (
+      <div class="grid-auto">
+        {entries.map((entry) => (
+          <AlgorithmCard entry={entry} />
+        ))}
+      </div>
+    )
+  }
+
+  <style>
+    .crumbs {
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-3);
+    }
+    h1 .orig {
+      display: block;
+      font-size: var(--text-base);
+      font-weight: 400;
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+    }
+  </style>
+</BaseLayout>

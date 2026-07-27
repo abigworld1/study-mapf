@@ -1,0 +1,107 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Caution from "@/components/sources/Caution.astro";
+
+const TERMS = [
+  [
+    "MAPF",
+    "Multi-Agent Path Finding",
+    "複数エージェントの衝突しない経路を同時に決める問題。各エージェントに固定の目標が 1 つ。",
+  ],
+  ["Lifelong MAPF", "Lifelong MAPF", "ゴール到達後に次々と新しいゴールが与えられ続ける設定。"],
+  [
+    "MAPD",
+    "Multi-Agent Pickup and Delivery",
+    "タスクが (pickup, delivery) の対で与えられ続ける設定。割当も同時に決める。",
+  ],
+  [
+    "TAPF",
+    "Combined Target-Assignment and Path-Finding",
+    "エージェントがチームに分かれ、チーム内でどの目標へ行くかは自由な設定。",
+  ],
+  ["頂点衝突", "vertex conflict", "同時刻に 2 体が同じ頂点を占有すること。"],
+  [
+    "辺の入れ替わり衝突",
+    "edge / swapping conflict",
+    "隣接 2 体が同一ステップで位置を入れ替えること。",
+  ],
+  [
+    "追従衝突",
+    "following conflict",
+    "直前に他が居た頂点へ同ステップで入ること。許すかは論文による。",
+  ],
+  ["sum of costs", "sum of costs / flowtime", "各エージェントがゴールへ到達した時刻の総和。"],
+  ["makespan", "makespan", "全エージェントが完了する時刻（最大値）。"],
+  ["完全", "complete", "解が存在すれば必ず見つける。無ければ無いと報告する。"],
+  ["最適", "optimal", "最適コストの解を返す。どの目的関数に対してかを必ず確認すること。"],
+  ["有界準最適", "bounded suboptimal", "最適コストの w 倍以内であることを保証する。"],
+  [
+    "最終的に最適",
+    "eventually optimal",
+    "時間を掛ければ最適へ収束する。有限時間での最適性は保証しない。",
+  ],
+  ["予約表", "reservation table", "計画済みエージェントが占有する (頂点, 時刻) を記録する表。"],
+  ["安全区間", "safe interval", "ある頂点が衝突なく占有できる連続した時間区間。SIPP の基本概念。"],
+  ["制約木", "constraint tree (CT)", "CBS の高レベル探索木。各ノードが制約の集合を持つ。"],
+  ["cardinal conflict", "cardinal conflict", "どちらの解消方法を選んでもコスト下界が上がる衝突。"],
+  [
+    "優先度継承",
+    "priority inheritance",
+    "PIBT で、動けないエージェントが自分の優先度を相手へ渡す仕組み。",
+  ],
+  ["destroy / repair", "destroy and repair", "LNS で、解の一部を壊してから作り直す操作。"],
+  [
+    "well-formed",
+    "well-formed instance",
+    "MAPD で保証が成り立つための環境条件。待機地点の配置に関する前提。",
+  ],
+] as const;
+---
+
+<BaseLayout title="用語集" wide description="MAPF / MAPD の用語と原語の対応。">
+  <h1>用語集</h1>
+
+  <p>日本語訳と原語の対応です。論文を読むときは原語で覚えたほうが確実です。</p>
+
+  <Caution title="訳語の揺れに注意">
+    <p>
+      日本語の「最適」は、英語では <code>optimal</code> のことも
+      <code>eventually optimal</code> のことも指してしまいます。 このサイトでは<strong
+        >必ず区別</strong
+      >し、後者は「最終的に最適」と書きます。
+    </p>
+  </Caution>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th scope="col">日本語</th><th scope="col">原語</th><th scope="col">意味</th></tr>
+      </thead>
+      <tbody>
+        {
+          TERMS.map(([ja, en, desc]) => (
+            <tr>
+              <th scope="row">{ja}</th>
+              <td>
+                <code>{en}</code>
+              </td>
+              <td>{desc}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p class="small">
+    用語の定義は原論文に基づいていますが、節番号・ページ番号までの照合は未了です。
+    確認が済み次第、出典を付けます。
+  </p>
+
+  <style>
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

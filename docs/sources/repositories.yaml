@@ -1,0 +1,397 @@
+# study-mapf 参照実装マニフェスト
+#
+# ここに載るのは「読んで挙動を確かめるためだけ」の第三者リポジトリである。
+# clone 先 .references/ は .gitignore 済みで、コード自体は本リポジトリへ絶対にコミットしない。
+#
+#   * relation: official は README・論文・著者ページ・LICENSE の著作権者名のいずれかで
+#     公式実装だと確認できた場合のみ。検索で見つけただけのものは third-party、
+#     研究グループが出しているが対応論文を特定しきれないものは research-reference とする。
+#   * license_spdx は clone 後に実ファイルを読んで判定した値。標準ライセンスに一致しない
+#     独自ライセンスは NOASSERTION、ライセンスファイルが無い場合は null。
+#   * copy_allowed が true 以外のものからコードを転記してはならない（SOURCE_POLICY.md 第 9・10 条）。
+#     true であっても著作権表示の保持義務は残る。
+#   * pinned_commit は sync-reference-repos.sh が checkout する固定 SHA。
+#     下記の値は 2026-07-26 に取得した時点の HEAD。
+#
+# 重要な調査結果（GitHub API のライセンス自動判定と実ファイルが食い違う例）:
+#   * USC 系（pbs / eecbs / rhcr / mapf-lns / mapf-lns2 / cbsh2 / cbsh2-rtc）は MIT ではなく
+#     南カリフォルニア大学の独自ライセンス。教育・研究・非営利目的に限定され、商用利用は
+#     USC Stevens Center への個別連絡が必要。
+#   * primal / primal2 の LICENSE.md は MIT 本文だが著作権者が ".NET Foundation and Contributors"
+#     になっており、当該プロジェクトの著作権者と一致しない。定型文の混入と見られるため
+#     copy_allowed は false のままにする。
+#
+# サブモジュールについて:
+#   要件どおり sync スクリプトはサブモジュールを取得していない。以下は未取得のため
+#   そのままではビルドできない: lacam0 / lacam2 / lacam3 / pibt2 / mapf-visualizer / mapf-lns-unified。
+#   特に mapf-lns-unified は git@github.com: 形式の SSH サブモジュールを含み、SSH 鍵なしでは取得できない。
+
+- id: libmultirobotplanning
+  name: whoenig/libMultiRobotPlanning
+  url: "https://github.com/whoenig/libMultiRobotPlanning"
+  algorithms: [astar, space-time-astar, sipp, cbs, ecbs, cbs-ta, prioritized-planning, mstar]
+  paper_ids: [cbs-aij-2015, bcbs-ecbs-socs-2014, sipp-icra-2011, cbs-ta-aamas-2018, mstar-aij-2015]
+  relation: author-maintained
+  local_path: .references/libmultirobotplanning
+  default_branch: main
+  pinned_commit: "4c75fa20c435c440d8b6bd6dc81668ddc7296ba0"
+  license_spdx: MIT
+  license_file: LICENSE
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT License, Copyright (c) 2017 whoenig。CBS-TA 論文（cbs-ta-aamas-2018）第一著者 Wolfgang Honig が管理。単一リポジトリで A*/SIPP/CBS/ECBS/CBS-TA を横断的に読める点が教材として有用。個別アルゴリズムの公式実装かどうかは論文ごとの確認が必要なため official とはしない。転記する場合は MIT の著作権表示を必ず残すこと。"
+
+- id: pbs
+  name: Jiaoyang-Li/PBS
+  url: "https://github.com/Jiaoyang-Li/PBS"
+  algorithms: [pbs, prioritized-planning]
+  paper_ids: [pbs-aaai-2019]
+  relation: author-maintained
+  local_path: .references/pbs
+  default_branch: master
+  pinned_commit: "d7b91fa5abdbb1376e8fc2cffa995a84eac811df"
+  license_spdx: NOASSERTION
+  license_file: license.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "USC 独自ライセンス（Copyright 2021 The University of Southern California, All Rights Reserved）。教育・研究・非営利目的での利用・複製・改変・配布は著作権表示の保持を条件に許諾されるが、標準的な OSS ライセンスではないため本プロジェクトでは転記せず独立再実装する（SOURCE_POLICY.md 第 10 条）。"
+
+- id: eecbs
+  name: Jiaoyang-Li/EECBS
+  url: "https://github.com/Jiaoyang-Li/EECBS"
+  algorithms: [eecbs, cbsh2, focal-search]
+  paper_ids: [eecbs-aaai-2021]
+  relation: author-maintained
+  local_path: .references/eecbs
+  default_branch: main
+  pinned_commit: "06ec70585dc4ad73177580a4ef91138335fd4d24"
+  license_spdx: NOASSERTION
+  license_file: license.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "USC 独自ライセンス（Copyright 2021）。eecbs-aaai-2021 第一著者のリポジトリ。挙動確認とテストケース生成にのみ使う。"
+
+- id: rhcr
+  name: Jiaoyang-Li/RHCR
+  url: "https://github.com/Jiaoyang-Li/RHCR"
+  algorithms: [rhcr, lifelong-mapf-problem, pbs, ecbs]
+  paper_ids: [rhcr-aaai-2021]
+  relation: author-maintained
+  local_path: .references/rhcr
+  default_branch: master
+  pinned_commit: "d009a3bd716419b0d6c04aead9dbca1720c012da"
+  license_spdx: NOASSERTION
+  license_file: license.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "USC 独自ライセンス（Copyright 2021）。Lifelong MAPF の windowed 再計画を読む際の基準実装。"
+
+- id: mapf-lns
+  name: Jiaoyang-Li/MAPF-LNS
+  url: "https://github.com/Jiaoyang-Li/MAPF-LNS"
+  algorithms: [mapf-lns]
+  paper_ids: [mapf-lns-ijcai-2021]
+  relation: author-maintained
+  local_path: .references/mapf-lns
+  default_branch: master
+  pinned_commit: "95785de66f8fbdb91fed871e1a56c8c563f39b1f"
+  license_spdx: NOASSERTION
+  license_file: license.txt
+  copy_allowed: false
+  clone_status: cloned
+  notes: "USC 独自ライセンス（Copyright 2021）。destroy heuristic の実装詳細を読む用途。"
+
+- id: mapf-lns2
+  name: Jiaoyang-Li/MAPF-LNS2
+  url: "https://github.com/Jiaoyang-Li/MAPF-LNS2"
+  algorithms: [mapf-lns2, sipps]
+  paper_ids: [mapf-lns2-aaai-2022]
+  relation: author-maintained
+  local_path: .references/mapf-lns2
+  default_branch: init-LNS
+  pinned_commit: "1369823985a15944f9a339226d521f61605a6d17"
+  license_spdx: NOASSERTION
+  license_file: license.txt
+  copy_allowed: false
+  clone_status: cloned
+  notes: "USC 独自ライセンス（Copyright 2021）。default_branch が master ではなく init-LNS である点に注意（GitHub API で確認）。SIPPS の実装を読む際の参照先。"
+
+- id: cbsh2
+  name: Jiaoyang-Li/CBSH2
+  url: "https://github.com/Jiaoyang-Li/CBSH2"
+  algorithms: [cbsh2, cbsh]
+  paper_ids: [cbsh2-ijcai-2019, cbsh-icaps-2018]
+  relation: author-maintained
+  local_path: .references/cbsh2
+  default_branch: master
+  pinned_commit: "ec6b094e1eeafca360e2a0ce2d2564e67859bdf1"
+  license_spdx: NOASSERTION
+  license_file: license.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "初期候補リストには無かったが cbsh2-ijcai-2019 の実装として追加。USC 独自ライセンス（Copyright 2019）。DG / WDG ヒューリスティクスの計算を読むために必要。"
+
+- id: cbsh2-rtc
+  name: Jiaoyang-Li/CBSH2-RTC
+  url: "https://github.com/Jiaoyang-Li/CBSH2-RTC"
+  algorithms:
+    [
+      cbsh2-rtc,
+      rectangle-reasoning,
+      corridor-reasoning,
+      target-reasoning,
+      cbs-bypass,
+      prioritizing-conflicts,
+      disjoint-splitting,
+    ]
+  paper_ids: [cbsh2-rtc-aij-2021, disjoint-splitting-icaps-2019, icbs-ijcai-2015]
+  relation: author-maintained
+  local_path: .references/cbsh2-rtc
+  default_branch: main
+  pinned_commit: "a834df1e16c1668a677b68fef6699371c4233d33"
+  license_spdx: NOASSERTION
+  license_file: license.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "初期候補リストには無かったが追加。USC 独自ライセンス（Copyright 2021）。README が CBS + prioritizing conflicts + bypassing + high-level heuristics + symmetry reasoning を明記しており、対称性推論 3 種の挙動確認に使う。"
+
+- id: pibt2
+  name: Kei18/pibt2
+  url: "https://github.com/Kei18/pibt2"
+  algorithms: [pibt, winpibt, push-and-swap, hca-star, whca-star]
+  paper_ids: [pibt-aij-2022, winpibt-2019]
+  relation: official
+  local_path: .references/pibt2
+  default_branch: public
+  pinned_commit: "faab5b916649549f1cd563df8dbf6e4f6382f631"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright 2021 Keisuke Okumura（pibt-aij-2022 第一著者本人）。リポジトリ説明が (AIJ-22) を明記。README ファイルは存在しないため official の根拠は著作権者名とリポジトリ説明。default_branch が public である点に注意。サブモジュール（googletest / openFrameworks / grid-pathfinding）は未取得。"
+
+- id: pypibt
+  name: Kei18/pypibt
+  url: "https://github.com/Kei18/pypibt"
+  algorithms: [pibt]
+  paper_ids: [pibt-aij-2022]
+  relation: official
+  local_path: .references/pypibt
+  default_branch: main
+  pinned_commit: "a3c97f60413c6619a29a5022969896bc54877edc"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright 2023 Keisuke Okumura。README が Okumura を明記。著者本人による PIBT の最小 Python 実装で、擬似コードとの対応が読みやすいため教材の第一参照にする。"
+
+- id: lacam0
+  name: Kei18/lacam0
+  url: "https://github.com/Kei18/lacam0"
+  algorithms: [lacam]
+  paper_ids: [lacam-aaai-2023]
+  relation: official
+  local_path: .references/lacam0
+  default_branch: main
+  pinned_commit: "3153c980cc62b2ceb004cd45cd7feec218b4dd8f"
+  license_spdx: MIT
+  license_file: LICENSE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright (c) 2025 Keisuke Okumura。README が AAAI-23 / IJCAI-23 の論文ページへリンク。サブモジュール（argparse）は未取得。"
+
+- id: lacam2
+  name: Kei18/lacam2
+  url: "https://github.com/Kei18/lacam2"
+  algorithms: [lacam-star]
+  paper_ids: [lacam-star-ijcai-2023]
+  relation: official
+  local_path: .references/lacam2
+  default_branch: dev
+  pinned_commit: "61a4c40ce91ce18c06eb2fe070aa9f1951eecb8d"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright 2023 Keisuke Okumura。リポジトリ説明が (IJCAI-23) を明記。default_branch が dev である点に注意。サブモジュール（googletest / argparse / mapf-lib-exp）は未取得。"
+
+- id: lacam3
+  name: Kei18/lacam3
+  url: "https://github.com/Kei18/lacam3"
+  algorithms: [lacam3]
+  paper_ids: [lacam3-aamas-2024]
+  relation: official
+  local_path: .references/lacam3
+  default_branch: main
+  pinned_commit: "1a269b7addc1edc4f1f56b194d307190f5491943"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文だが著作権者は個人ではなく産業技術総合研究所（AIST, Copyright (c) 2024）。リポジトリ説明が Engineering LaCAM* (AAMAS-24) を明記。サブモジュール（argparse）は未取得。"
+
+- id: pylacam
+  name: Kei18/pylacam
+  url: "https://github.com/Kei18/pylacam"
+  algorithms: [lacam-star]
+  paper_ids: [lacam-star-ijcai-2023]
+  relation: official
+  local_path: .references/pylacam
+  default_branch: main
+  pinned_commit: "864a158ffa03c554f76ed2e45110667ee8fc97c2"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright 2023 Keisuke Okumura。README が AAAI / IJCAI と Okumura を明記。LaCAM* の最小 Python 実装で、教材の第一参照にする。"
+
+- id: push-and-rotate-cbs-pp
+  name: PathPlanning/Push-and-Rotate--CBS--PrioritizedPlanning
+  url: "https://github.com/PathPlanning/Push-and-Rotate--CBS--PrioritizedPlanning"
+  algorithms: [push-and-rotate, cbs, prioritized-planning]
+  paper_ids: [push-and-rotate-aamas-2013, cbs-aij-2015]
+  relation: research-reference
+  local_path: .references/push-and-rotate-cbs-pp
+  default_branch: master
+  pinned_commit: "bba48f173c5d6da9b56e582a8d5022ea3dc27736"
+  license_spdx: null
+  license_file: null
+  copy_allowed: false
+  clone_status: cloned
+  notes: "LICENSE / COPYING / NOTICE のいずれも存在しない。ライセンス不明のためコードは一切転記しない（SOURCE_POLICY.md 第 9 条）。README-RU が AAAI / SoCS / IJCAI の複数論文を引用する再実装であり、Push and Rotate 原論文著者（Delft）とは別組織のため official にはしない。"
+
+- id: continuous-cbs
+  name: PathPlanning/Continuous-CBS
+  url: "https://github.com/PathPlanning/Continuous-CBS"
+  algorithms: [ccbs, sipp]
+  paper_ids: [ccbs-ijcai-2019]
+  relation: official
+  local_path: .references/continuous-cbs
+  default_branch: master
+  pinned_commit: "b8f45e166cf39ee7e8e06f0bfe4fbab0dee68932"
+  license_spdx: MIT
+  license_file: LICENSE.md
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT License, Copyright (c) 2022 Anton Andreychuk（ccbs-ijcai-2019 第一著者本人）。README が ijcai.org/Proceedings/2019/0006.pdf を直接引用しており official と判定。"
+
+- id: public-cppmomapf
+  name: rap-lab-org/public_cppmomapf
+  url: "https://github.com/rap-lab-org/public_cppmomapf"
+  algorithms: [mstar, cbs]
+  paper_ids: []
+  relation: research-reference
+  local_path: .references/public-cppmomapf
+  default_branch: master
+  pinned_commit: "80bc741d4b9d2284df7cdc4ad4404de1ce4ac3c6"
+  license_spdx: null
+  license_file: null
+  copy_allowed: false
+  clone_status: cloned
+  notes: "LICENSE ファイルは無く、README に The code is distributed for academic and non-commercial use と記載されるのみ。中身は多目的 MAPF（MOM* / MO-CBS）であり本サイトの初期スコープ外。対応論文も papers.yaml へ未登録のため paper_ids は空。多目的 MAPF を扱う段階になったら原論文を調査して登録すること。"
+
+- id: mapf-icbs
+  name: gloriyo/MAPF-ICBS
+  url: "https://github.com/gloriyo/MAPF-ICBS"
+  algorithms: [icbs, cbs, cbs-bypass, prioritizing-conflicts]
+  paper_ids: [icbs-ijcai-2015, cbs-aij-2015]
+  relation: third-party
+  local_path: .references/mapf-icbs
+  default_branch: master
+  pinned_commit: "a1357b985063eb8ed00a488ead32edc7bbcdfe5d"
+  license_spdx: null
+  license_file: null
+  copy_allowed: false
+  clone_status: cloned
+  notes: "LICENSE ファイルなし。README は IJCAI-15（ICBS 論文）を参照しているが、著者側からのリンクは確認できないため third-party。Python 実装で読みやすいものの、ライセンス不明のためコードは転記しない。挙動比較にのみ使う。"
+
+- id: primal
+  name: gsartoretti/PRIMAL
+  url: "https://github.com/gsartoretti/PRIMAL"
+  algorithms: [primal]
+  paper_ids: [primal-ral-2019]
+  relation: official
+  local_path: .references/primal
+  default_branch: master
+  pinned_commit: "b2c9709f49094c652e95d8b37bd5c3ef01c017e8"
+  license_spdx: MIT
+  license_file: LICENSE.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "primal-ral-2019 第一著者 Guillaume Sartoretti 本人のアカウントで README も Sartoretti を明記しているため official。ただし LICENSE.md は MIT 本文でありながら著作権者が .NET Foundation and Contributors となっており、本プロジェクトの権利者と一致しない。定型文の混入と見られるため copy_allowed は false のままとし、転記が必要になったら著者へ確認すること。"
+
+- id: primal2
+  name: marmotlab/PRIMAL2
+  url: "https://github.com/marmotlab/PRIMAL2"
+  algorithms: [primal2]
+  paper_ids: [primal2-ral-2021]
+  relation: official
+  local_path: .references/primal2
+  default_branch: main
+  pinned_commit: "49f75876502fce413d396d82f8da920cc8e84798"
+  license_spdx: MIT
+  license_file: LICENSE.md
+  copy_allowed: false
+  clone_status: cloned
+  notes: "MARMot Lab（Sartoretti 研究室、NUS）の公式リポジトリで README が Damani / Sartoretti を明記。LICENSE.md の著作権者が .NET Foundation and Contributors になっている問題は primal と同じ。copy_allowed は false のまま。"
+
+- id: mapf-lns-unified
+  name: ChristinaTan0704/mapf-lns-unified
+  url: "https://github.com/ChristinaTan0704/mapf-lns-unified"
+  algorithms: [mapf-lns, mapf-lns2, mapf-ml-lns, pbs, prioritized-planning]
+  paper_ids:
+    [lns-reevaluation-socs-2025, mapf-lns-ijcai-2021, mapf-lns2-aaai-2022, ml-lns-aaai-2022]
+  relation: official
+  local_path: .references/mapf-lns-unified
+  default_branch: mapf-lns-main
+  pinned_commit: "d8fab81b25b564fe23c278298ac989f092bbb7d7"
+  license_spdx: null
+  license_file: null
+  copy_allowed: false
+  clone_status: cloned
+  notes: "ユーザ提示の ChristinaTan0704/mapf-lns-benchmark は mapf-lns-unified へリネームされていた（GitHub API の 301 で確認）。README が SoCS 2025 論文 Reevaluation of Large Neighborhood Search for MAPF（arXiv 2407.09451）の公式実装であることを明記しており、第一著者 Jiaqi Tan のアカウントのため official と判定。LICENSE ファイルは無いため copy_allowed は false。サブモジュールに git@github.com: 形式の SSH URL を含み、SSH 鍵なしでは取得できない。"
+
+- id: mapf-visualizer
+  name: Kei18/mapf-visualizer
+  url: "https://github.com/Kei18/mapf-visualizer"
+  algorithms: [mapf-visualizer-tool]
+  paper_ids: []
+  relation: author-maintained
+  local_path: .references/mapf-visualizer
+  default_branch: master
+  pinned_commit: "22f25eb559c3ae392eb97c18e6fc3129cf30d056"
+  license_spdx: MIT
+  license_file: LICENCE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "MIT ライセンス本文、Copyright 2023 Keisuke Okumura。MAPF 解の可視化ツールで特定論文の実装ではないため paper_ids は空。サイトのアニメーション仕様（時刻ステップの見せ方、衝突の描画）を決める際の参考にする。サブモジュール（openFrameworks）は未取得。"
+
+- id: awesome-mapf
+  name: joonyeol-sim/awesome-mapf
+  url: "https://github.com/joonyeol-sim/awesome-mapf"
+  algorithms: []
+  paper_ids: []
+  relation: third-party
+  local_path: .references/awesome-mapf
+  default_branch: master
+  pinned_commit: "5af22d1c535eb6ba420eb136ec6db3614a84a769"
+  license_spdx: null
+  license_file: null
+  copy_allowed: false
+  clone_status: cloned
+  notes: "論文・実装のリンク集。LICENSE ファイルなし。一次情報ではないため、ここに載っている情報は必ず原論文・公式リポジトリで裏取りしてから papers.yaml / repositories.yaml へ反映する。リストの丸写しもしない。"
+
+- id: hog2
+  name: MovingAILab/hog2
+  url: "https://github.com/MovingAILab/hog2"
+  algorithms: [astar, cbs, icts, movingai-benchmarks]
+  paper_ids: [mapf-benchmarks-2019]
+  relation: research-reference
+  local_path: .references/hog2
+  default_branch: PDB-refactor
+  pinned_commit: "af9d42d06827e5bd96d093c17e4d98b5e4f99e79"
+  license_spdx: MIT
+  license_file: LICENSE.txt
+  copy_allowed: true
+  clone_status: cloned
+  notes: "初期候補リストには無かったが追加。The MIT License (MIT), Copyright (c) 2015 Nathan Sturtevant。ユーザ提示リストにあった nathansttt/hog2 は MovingAILab/hog2 へ移管済み（GitHub API の 301 で確認）。MovingAI ベンチマークの生成元。default_branch が PDB-refactor である点に注意。"

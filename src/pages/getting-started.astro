@@ -1,0 +1,63 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { withBase } from "@/lib/paths";
+---
+
+<BaseLayout title="はじめに" description="このサイトの読み方と、表示の見方。">
+  <h1>はじめに</h1>
+
+  <p>
+    このサイトは、Multi-Agent Path Finding（MAPF）とその拡張を、
+    <strong>原論文にあたりながら</strong>学ぶための教材です。
+    書いてある内容には必ず出典を付け、確認できていないことは「不明」と表示します。
+  </p>
+
+  <h2>3 つの表示に注意してください</h2>
+
+  <h3>1. 実装状態</h3>
+  <p>「解説がある」ことと「動く実装がある」ことは別です。各ページの先頭にバッジで出しています。</p>
+  <ul>
+    <li><strong>実行可</strong> — シミュレータで実際に動かせます</li>
+    <li><strong>一部実装</strong> — 動きますが、原論文の全機能ではありません</li>
+    <li><strong>解説のみ</strong> — 実装はありません</li>
+    <li><strong>準備中</strong> — 骨格だけで、解説本文もまだありません</li>
+  </ul>
+  <p>
+    この判定は宣言ではなく、<strong>実際に登録されている実装</strong>から出しています。
+    存在しない実装が「実行可」と表示されることはありません。
+  </p>
+
+  <h3>2. 解説の正確性</h3>
+  <ul>
+    <li><strong>下書き</strong> — 原論文から作成中。記述が不足していることがあります</li>
+    <li><strong>原論文と照合済み</strong> — 原論文と変換テキストを突き合わせて確認しました</li>
+    <li><strong>実装・テストまで照合済み</strong> — 原論文・実装・テストの 3 点で確認しました</li>
+  </ul>
+
+  <h3>3. 理論保証</h3>
+  <p>
+    完全性・最適性の表に出る「<strong>不明</strong>」は、「保証が無い」ではなく 「<strong
+      >原論文で未確認</strong
+    >」の意味です。もっともらしい値で埋めることはしません。
+  </p>
+  <p>
+    また「最適」と「eventually optimal（時間を掛ければ最適へ収束する）」を区別します。
+    後者は有限時間で最適解を返すことを保証しません。
+  </p>
+
+  <h2>出典の書き方</h2>
+  <p>本文中の出典はこの形式です。</p>
+  <pre><code>[cbs-aij-2015, §5.1, Theorem 1, p.12]</code></pre>
+  <p>
+    節番号やページ番号は<strong>確認できたものだけ</strong>書きます。
+    確認できていない項目は省略します。変換テキストの見出し位置から推測することはしません。
+  </p>
+
+  <h2>次に読むもの</h2>
+  <ol>
+    <li><a href={withBase("/mapf/")}>MAPFとは</a> — 問題設定と衝突の種類</li>
+    <li><a href={withBase("/mapd/")}>MAPDとは</a> — 運搬タスクへの拡張</li>
+    <li><a href={withBase("/roadmap/")}>学習ロードマップ</a> — 手法を読む順番</li>
+    <li><a href={withBase("/simulator/")}>シミュレータ</a> — 実際に動かす</li>
+  </ol>
+</BaseLayout>

@@ -1,0 +1,195 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { papers, repositories, bestPaperLink, citationOf, mayBundlePdf } from "@/lib/manifest";
+
+const byPriority = (p: string) => papers.filter((x) => x.priority === p);
+const PRIORITIES = [
+  ["P0", "基礎と MVP"],
+  ["P1", "主要 MAPF 手法"],
+  ["P2", "MAPD・Lifelong"],
+  ["P3", "発展手法・学習ベース"],
+] as const;
+
+const redistCount = {
+  allowed: papers.filter((p) => p.redistribution.status === "allowed").length,
+  linkOnly: papers.filter((p) => p.redistribution.status === "link-only").length,
+  unknown: papers.filter((p) => p.redistribution.status === "unknown").length,
+};
+
+const copyable = repositories.filter((r) => r.copy_allowed === true);
+const notCopyable = repositories.filter((r) => r.copy_allowed !== true);
+---
+
+<BaseLayout
+  title="論文・実装一覧"
+  wide
+  description="このサイトが出典としている原論文と、参照している公開実装の一覧。"
+>
+  <h1>論文・実装一覧</h1>
+
+  <p>
+    このサイトの解説は、ここに挙げた原論文に基づいています。 タイトル・著者・年・会議・DOI
+    は一次情報（出版社のメタデータ、CrossRef、PDF 本文）で照合済みです。
+  </p>
+
+  <h2>PDF の扱い</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>再配布</th><th>本数</th><th>このサイトでの扱い</th></tr>
+      </thead>
+      <tbody>
+        <tr
+          ><td>許諾あり</td><td>{redistCount.allowed}</td><td
+            >条件を守れば同梱可（CC ライセンス）</td
+          ></tr
+        >
+        <tr
+          ><td>外部リンクのみ</td><td>{redistCount.linkOnly}</td><td>配布元へのリンクだけを掲載</td
+          ></tr
+        >
+        <tr
+          ><td>未確認</td><td>{redistCount.unknown}</td><td>同上（判断できないため同梱しない）</td
+          ></tr
+        >
+      </tbody>
+    </table>
+  </div>
+  <p class="small">
+    出版社のランディングページだけでは再配布可否を判断できません。PDF
+    本文の権利表示まで確認しています。
+  </p>
+
+  <h2>原論文（{papers.length} 本）</h2>
+  {
+    PRIORITIES.map(([key, label]) => {
+      const list = byPriority(key);
+      if (list.length === 0) return null;
+      return (
+        <section>
+          <h3>
+            {key} — {label}（{list.length} 本）
+          </h3>
+          <ul class="paper-list">
+            {list.map((paper) => {
+              const href = bestPaperLink(paper);
+              return (
+                <li>
+                  <div class="title">
+                    {href ? (
+                      <a href={href} rel="noopener noreferrer" target="_blank">
+                        {paper.title}
+                      </a>
+                    ) : (
+                      paper.title
+                    )}
+                  </div>
+                  <div class="meta">{citationOf(paper)}</div>
+                  <div class="tags">
+                    <code>{paper.id}</code>
+                    {paper.doi && <span class="tag">DOI: {paper.doi}</span>}
+                    <span class={`tag tag-${paper.redistribution.status}`}>
+                      {paper.redistribution.status === "allowed"
+                        ? "再配布可"
+                        : paper.redistribution.status === "link-only"
+                          ? "外部リンクのみ"
+                          : "再配布可否 未確認"}
+                    </span>
+                    {!mayBundlePdf(paper) && <span class="tag">PDF 非同梱</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      );
+    })
+  }
+
+  <h2>参照実装（{repositories.length} 件）</h2>
+  <p>
+    挙動の確認とテストケース作成のために読んでいる第三者リポジトリです。
+    <strong>コードをこのサイトへ転記してよいのは {copyable.length} 件だけ</strong>で、 残り {
+      notCopyable.length
+    } 件は読むだけです。
+  </p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>リポジトリ</th><th>関係</th><th>ライセンス</th><th>転記</th></tr>
+      </thead>
+      <tbody>
+        {
+          repositories.map((r) => (
+            <tr>
+              <td>
+                <a href={r.url} rel="noopener noreferrer" target="_blank">
+                  {r.name}
+                </a>
+              </td>
+              <td>{r.relation}</td>
+              <td>{r.license_spdx ?? "不明"}</td>
+              <td class={r.copy_allowed === true ? "ok" : "no"}>
+                {r.copy_allowed === true ? "可" : "不可"}
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+  <p class="small">
+    ライセンスは GitHub の自動判定ではなく、clone して実ファイルを読んで判定しています。 自動判定が
+    MIT でも、実体が非営利限定の独自ライセンスだった例があります。
+  </p>
+
+  <style>
+    .paper-list {
+      list-style: none;
+      padding: 0;
+    }
+    .paper-list > li {
+      border-bottom: var(--border-width) solid var(--border);
+      padding-block: var(--space-3);
+    }
+    .title {
+      font-weight: 700;
+    }
+    .meta {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-1);
+      font-size: var(--text-xs);
+    }
+    .tag {
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      padding: 0.05em 0.5em;
+      color: var(--fg-muted);
+    }
+    .tag-allowed {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+    .tag-unknown {
+      color: var(--warn);
+      border-color: var(--warn);
+    }
+    td.ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+    td.no {
+      color: var(--fg-muted);
+    }
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,177 @@
+---
+import { getAlgorithm, type AlgorithmEntry } from "@/lib/manifest";
+
+/**
+ * 理論保証を共通形式で表示する。
+ *
+ * ★ 値は algorithms.yaml からのみ取る。ページ側で上書きさせない。
+ *   原論文で確認できていないものは「不明」と出す。もっともらしい値を埋めない
+ *   （SOURCE_POLICY.md 第 7 条）。
+ *
+ * ★ 「最適」と「eventually optimal」を混同しない（第 8 条）。
+ *   conditional の中身は guarantee_evidence に原文で書いてある。
+ */
+interface Props {
+  algorithmId: string;
+  /** 対象問題。ページ側で補足したい場合に渡す。 */
+  problemLabel?: string;
+  /** 集中型 / 分散型。原論文で確認できた場合のみ渡す。 */
+  architecture?: "集中型" | "分散型" | "decentralized-capable" | "不明";
+}
+
+const { algorithmId, problemLabel, architecture = "不明" } = Astro.props;
+const algo = getAlgorithm(algorithmId);
+
+const COMPLETE_LABEL: Record<string, string> = {
+  true: "あり",
+  false: "なし",
+  conditional: "条件付き",
+  unknown: "不明",
+};
+
+function optimalLabel(entry: AlgorithmEntry): string {
+  const { optimal, bounded_suboptimal: bounded } = entry.guarantees;
+  if (optimal === true) return "最適";
+  if (bounded === true) return "bounded-suboptimal";
+  if (optimal === "conditional") return "条件付き（eventually optimal 等。根拠欄を参照）";
+  if (optimal === false && bounded === false) return "なし";
+  return "不明";
+}
+
+const problemTypes = algo?.problem_types ?? [];
+const PROBLEM_LABEL: Record<string, string> = {
+  "single-agent": "single-agent",
+  "classical-mapf": "one-shot MAPF",
+  "continuous-time-mapf": "continuous-time MAPF",
+  "lifelong-mapf": "lifelong MAPF",
+  mapd: "MAPD",
+  tapf: "TAPF",
+  assignment: "割当問題",
+  flow: "ネットワークフロー",
+  benchmark: "ベンチマーク",
+};
+---
+
+{
+  !algo ? (
+    <p class="guarantee-missing">
+      algorithms.yaml に <code>{algorithmId}</code> がありません。
+    </p>
+  ) : (
+    <div class="guarantee">
+      <div class="table-scroll">
+        <table>
+          <caption>
+            理論保証。<strong>原論文で確認できた記述だけ</strong>を載せています。
+            「不明」は「保証が無い」ではなく「原論文で未確認」の意味です。
+          </caption>
+          <tbody>
+            <tr>
+              <th scope="row">完全性</th>
+              <td>
+                <span class={`badge badge-${String(algo.guarantees.complete)}`}>
+                  {COMPLETE_LABEL[String(algo.guarantees.complete)] ?? "不明"}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">最適性</th>
+              <td>
+                <span class={`badge badge-${String(algo.guarantees.optimal)}`}>
+                  {optimalLabel(algo)}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">対象</th>
+              <td>
+                {problemLabel ??
+                  (problemTypes.length > 0
+                    ? problemTypes.map((t) => PROBLEM_LABEL[t] ?? t).join(" / ")
+                    : "不明")}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">方式</th>
+              <td>{architecture}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {algo.guarantee_evidence ? (
+        <details class="evidence">
+          <summary>保証の根拠（原論文の記述）</summary>
+          <p>{algo.guarantee_evidence}</p>
+        </details>
+      ) : (
+        <p class="no-evidence">
+          この手法の保証は、原論文の該当箇所をまだ確認できていません。
+          確認が済むまで「不明」のままにしています。
+        </p>
+      )}
+    </div>
+  )
+}
+
+<style>
+  .guarantee {
+    margin-block: var(--space-4);
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.1em 0.6em;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    border: 1px solid transparent;
+  }
+  .badge-true {
+    background: var(--ok-subtle);
+    color: var(--ok);
+    border-color: var(--ok);
+  }
+  .badge-false {
+    background: var(--bg-sunken);
+    color: var(--fg-muted);
+    border-color: var(--border-strong);
+  }
+  .badge-conditional {
+    background: var(--warn-subtle);
+    color: var(--warn);
+    border-color: var(--warn);
+  }
+  .badge-unknown {
+    background: var(--bg-sunken);
+    color: var(--fg-subtle);
+    border-color: var(--border);
+    border-style: dashed;
+  }
+  .evidence {
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+  }
+  .evidence summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: var(--text-sm);
+  }
+  .evidence p {
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .no-evidence,
+  .guarantee-missing {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    border-left: 3px solid var(--border-strong);
+    padding-left: var(--space-3);
+  }
+  .guarantee-missing {
+    color: var(--danger);
+    border-left-color: var(--danger);
+  }
+</style>

@@ -1,0 +1,69 @@
+---
+import { getPaper, bestPaperLink } from "@/lib/manifest";
+
+/**
+ * 本文中の出典表示。
+ *
+ * ★ ページ番号・節番号は「確認できたものだけ」書く。
+ *   Marker Markdown の見出し位置から推測してはならない（SOURCE_POLICY.md 第 6 条）。
+ *   確認できていない項目は省略する。省略しても表示は成立する。
+ *
+ * 表示例: [cbs-aij-2015, §5.1, Theorem 1, p.12]
+ */
+interface Props {
+  paperId: string;
+  /** 節番号。例 "5.1"。§ は自動で付ける。 */
+  section?: string;
+  /** Algorithm / Theorem / Lemma などのラベル。例 "Algorithm 1"。 */
+  label?: string;
+  /** ページ番号。確認できない場合は渡さない。 */
+  page?: number | string;
+}
+
+const { paperId, section, label, page } = Astro.props;
+const paper = getPaper(paperId);
+const href = paper ? bestPaperLink(paper) : null;
+
+const parts: string[] = [paperId];
+if (section) parts.push(`§${section}`);
+if (label) parts.push(label);
+if (page !== undefined && page !== null && `${page}`.trim() !== "") parts.push(`p.${page}`);
+const text = `[${parts.join(", ")}]`;
+---
+
+{
+  paper ? (
+    <a
+      class="citation"
+      href={href ?? undefined}
+      rel="noopener noreferrer"
+      target={href ? "_blank" : undefined}
+      title={`${paper.title} — ${paper.venue} (${paper.year})`}
+    >
+      {text}
+    </a>
+  ) : (
+    <span class="citation citation-missing" title={`papers.yaml に ${paperId} がありません`}>
+      {text}
+    </span>
+  )
+}
+
+<style>
+  .citation {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    white-space: nowrap;
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+    vertical-align: baseline;
+  }
+  .citation:hover {
+    color: var(--link);
+  }
+  .citation-missing {
+    color: var(--danger);
+    border-bottom-color: var(--danger);
+  }
+</style>

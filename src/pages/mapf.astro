@@ -1,0 +1,121 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import TerminologyNote from "@/components/sources/TerminologyNote.astro";
+import Caution from "@/components/sources/Caution.astro";
+import { withBase } from "@/lib/paths";
+---
+
+<BaseLayout
+  title="MAPFとは"
+  description="Multi-Agent Path Finding の問題設定、衝突の種類、目的関数を説明します。"
+>
+  <h1>MAPFとは</h1>
+
+  <p>
+    Multi-Agent Path Finding（MAPF）は、グラフ上に置かれた複数のエージェントに対して、
+    <strong>互いに衝突しない経路を全員分まとめて決める</strong>問題です。
+    各エージェントには開始頂点と目標頂点が 1 つずつ与えられます。
+  </p>
+
+  <p>
+    本サイトでは、用語と衝突の分類を
+    <SourceCitation paperId="mapf-benchmarks-2019" /> の定義に統一しています。 論文によって前提が違うため、比較するときは必ずどの定義かを確認してください。
+  </p>
+
+  <h2>なぜ 1 体ずつ解いてはいけないのか</h2>
+  <p>
+    各エージェントに個別に最短経路を引くのは簡単です。しかしそれらを同時に走らせると、
+    狭い通路や交差点でぶつかります。
+    <a href={withBase("/simulator/")}>シミュレータ</a>で「A*（各エージェント独立）」を選ぶと、
+    衝突が実際に残ることを確認できます。
+  </p>
+
+  <h2>基本モデル</h2>
+  <p>本サイトのシミュレータと解説は、次のモデルを既定にしています。</p>
+  <ul>
+    <li>グラフは 4 近傍グリッド（上下左右）。斜め移動なし</li>
+    <li>時間は離散。1 タイムステップで隣接頂点へ 1 歩動く（move）か、その場に留まる（wait）</li>
+    <li>全エージェントが同時に動く</li>
+  </ul>
+
+  <h2>衝突の種類</h2>
+
+  <TerminologyNote term="頂点衝突" original="vertex conflict">
+    同じ時刻に 2 体が同じ頂点を占有すること。最も基本的な禁止事項です。
+  </TerminologyNote>
+
+  <TerminologyNote term="辺の入れ替わり衝突" original="edge conflict / swapping conflict">
+    隣り合う 2 体が、同じタイムステップで互いの位置を入れ替えること。
+    グリッド上では正面ですれ違う形になり、物理的に不可能なため既定で禁止します。
+  </TerminologyNote>
+
+  <TerminologyNote term="追従衝突" original="following conflict">
+    直前まで他のエージェントが居た頂点へ、同じタイムステップで入ること。
+    許すかどうかは論文によって違います。本サイトの既定では<strong>許可</strong>しています。
+  </TerminologyNote>
+
+  <Caution title="ゴール到達後の扱いで結果が変わります">
+    <p>
+      エージェントが目標に着いたあと、<strong>そこに留まり続ける（stay）</strong>のか、
+      <strong>消える（disappear）</strong>のかで、問題の難しさも最適コストも変わります。
+      留まる場合、そのエージェントは他の経路を塞ぐ障害物になります。
+    </p>
+    <p>
+      本サイトの既定は stay です。シミュレータではシナリオ JSON の
+      <code>rules.goalBehavior</code> に保存され、暗黙に変わることはありません。
+    </p>
+  </Caution>
+
+  <h2>目的関数</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>名前</th><th>定義</th><th>直感</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>sum of costs</td>
+          <td>各エージェントが目標へ到達した時刻の総和</td>
+          <td>全体の労力。1 体が大回りしても総和が小さければ良しとする</td>
+        </tr>
+        <tr>
+          <td>makespan</td>
+          <td>全エージェントが完了する時刻（最大値）</td>
+          <td>最後の 1 体が着くまでの時間。一番遅い人に合わせる</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    どちらを最小化するかで最適解は変わります。「この手法は最適」と書かれていても、
+    <strong>どの目的関数に対して最適なのか</strong>を必ず確認してください。
+  </p>
+
+  <h2>計算量について</h2>
+  <p>
+    MAPF を最適に解くことは計算量的に難しい問題として知られています。
+    このため、最適解法・有界準最適解法・保証なしの高速解法が並行して研究されています。
+    具体的な硬さの主張と証明の出典は、各手法のページで確認できた範囲だけを記載します。
+  </p>
+
+  <h2>次に読むもの</h2>
+  <ul>
+    <li><a href={withBase("/roadmap/")}>学習ロードマップ</a> — どの順に読むか</li>
+    <li><a href={withBase("/mapd/")}>MAPDとは</a> — タスクが流れ続ける設定への拡張</li>
+    <li><a href={withBase("/algorithms/")}>アルゴリズム一覧</a></li>
+  </ul>
+
+  <hr />
+  <p class="small">
+    このページは原論文の定義に基づいて書いていますが、節番号・ページ番号までの照合は未了です。
+    確認が済み次第、<code>[paper-id, §x, p.y]</code> 形式の出典を本文へ付けます。
+  </p>
+
+  <style>
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

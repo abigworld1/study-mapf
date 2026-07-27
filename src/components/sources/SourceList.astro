@@ -1,0 +1,126 @@
+---
+import { getPaper, bestPaperLink, citationOf, mayBundlePdf } from "@/lib/manifest";
+
+/**
+ * 原論文の一覧。アルゴリズムページの「原論文」節で使う。
+ *
+ * ★ 再配布が許諾されている論文以外は PDF を同梱しない。外部リンクだけを出す
+ *   （SOURCE_POLICY.md 第 12 条）。
+ */
+interface Props {
+  paperIds: readonly string[];
+  title?: string;
+}
+
+const { paperIds, title } = Astro.props;
+const entries = paperIds.map((id) => ({ id, paper: getPaper(id) }));
+---
+
+{title && <h3>{title}</h3>}
+
+{
+  entries.length === 0 ? (
+    <p class="empty">この手法に対応する原論文は、まだマニフェストへ登録されていません。</p>
+  ) : (
+    <ul class="source-list">
+      {entries.map(({ id, paper }) =>
+        !paper ? (
+          <li class="missing">
+            <code>{id}</code> は papers.yaml に登録されていません。
+          </li>
+        ) : (
+          <li>
+            <div class="title">
+              {(() => {
+                const href = bestPaperLink(paper);
+                return href ? (
+                  <a href={href} rel="noopener noreferrer" target="_blank">
+                    {paper.title}
+                  </a>
+                ) : (
+                  <span>{paper.title}</span>
+                );
+              })()}
+            </div>
+            <div class="meta">{citationOf(paper)}</div>
+            <div class="tags">
+              {paper.doi && (
+                <a
+                  class="tag"
+                  href={`https://doi.org/${paper.doi}`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  DOI
+                </a>
+              )}
+              <span class={`tag tag-${paper.redistribution.status}`}>
+                {paper.redistribution.status === "allowed"
+                  ? "再配布可"
+                  : paper.redistribution.status === "link-only"
+                    ? "外部リンクのみ"
+                    : "再配布可否 未確認"}
+              </span>
+              {!mayBundlePdf(paper) && <span class="tag tag-note">PDF 非同梱</span>}
+            </div>
+          </li>
+        ),
+      )}
+    </ul>
+  )
+}
+
+<style>
+  .source-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .source-list > li {
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+  }
+  .source-list > li + li {
+    margin-top: var(--space-3);
+  }
+  .title {
+    font-weight: 700;
+  }
+  .meta {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    margin-top: var(--space-1);
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+  .tag {
+    font-size: var(--text-xs);
+    padding: 0.1em 0.5em;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    color: var(--fg-muted);
+    text-decoration: none;
+  }
+  .tag-allowed {
+    color: var(--ok);
+    border-color: var(--ok);
+  }
+  .tag-unknown {
+    color: var(--warn);
+    border-color: var(--warn);
+  }
+  .empty,
+  .missing {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+  .missing {
+    color: var(--danger);
+  }
+</style>

@@ -1,0 +1,1305 @@
+# study-mapf 原論文マニフェスト
+#
+# 記入規則は SOURCE_POLICY.md を参照すること。要点のみ再掲する。
+#
+#   * title / authors / venue は PDF 1 ページ目、または出版社の citation_* メタタグで確認した値だけを書く。
+#   * doi は CrossRef で解決を確認したものだけを書く。確認できない場合は null。
+#   * pdf_url は実際に HTTP 200 かつ application/pdf を返した URL だけを書く。
+#   * redistribution.status を allowed にできるのは evidence_url で根拠を示せる場合のみ。
+#   * status は missing → pdf-ready → marker-ready → verified の順で人手更新する。
+#
+# 検証日: 2026-07-26（全 URL を curl で取得確認、PDF は pdftotext で 1 ページ目のタイトルを照合）
+
+# =============================================================================
+# 単一エージェント探索の古典（追加調査対象 A* / Dijkstra / BFS への対応）
+# =============================================================================
+
+- id: astar-1968
+  title: "A Formal Basis for the Heuristic Determination of Minimum Cost Paths"
+  short_title: "A*"
+  algorithms: [astar]
+  authors: ["Peter E. Hart", "Nils J. Nilsson", "Bertram Raphael"]
+  year: 1968
+  venue: "IEEE Transactions on Systems Science and Cybernetics, vol. 4, no. 2, pp. 100-107"
+  doi: "10.1109/TSSC.1968.300136"
+  landing_url: "https://doi.org/10.1109/TSSC.1968.300136"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/astar-1968/paper.pdf
+  marker_markdown: docs/papers/astar-1968/marker.md
+  marker_metadata: docs/papers/astar-1968/marker_meta.json
+  open_access: false
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.1109/TSSC.1968.300136"
+  status: marker-ready
+  priority: P0
+  alternate_urls: []
+  notes: "タイトル・巻号・ページを CrossRef で確認。IEEE 購読制で公開 PDF は未確認。許容ヒューリスティクスでの最適性・整合ヒューリスティクスでの再展開なしはこの論文と 1972 年の訂正記事に基づく（訂正記事は未調査）。"
+
+- id: dijkstra-1959
+  title: "A note on two problems in connexion with graphs"
+  short_title: "Dijkstra"
+  algorithms: [dijkstra]
+  authors: ["Edsger W. Dijkstra"]
+  year: 1959
+  venue: "Numerische Mathematik, vol. 1, pp. 269-271"
+  doi: "10.1007/BF01386390"
+  landing_url: "https://doi.org/10.1007/BF01386390"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/dijkstra-1959/paper.pdf
+  marker_markdown: docs/papers/dijkstra-1959/marker.md
+  marker_metadata: docs/papers/dijkstra-1959/marker_meta.json
+  open_access: false
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.1007/BF01386390"
+  status: marker-ready
+  priority: P0
+  alternate_urls: []
+  notes: "タイトル・巻号・ページを CrossRef で確認。Springer 購読制。"
+
+# BFS については、しばしば引用される Moore (1959) "The shortest path through a maze" の
+# 書誌情報を CrossRef で確認できなかった。捏造を避けるため papers.yaml には登録せず、
+# algorithms.yaml の bfs エントリを primary_paper_ids 空のまま残している。要調査。
+
+# =============================================================================
+# 基礎・サーベイ
+# =============================================================================
+
+- id: mapf-benchmarks-2019
+  title: "Multi-Agent Pathfinding: Definitions, Variants, and Benchmarks"
+  short_title: "MAPF Definitions & Benchmarks"
+  algorithms: [mapf-problem-definitions, movingai-benchmarks]
+  authors:
+    [
+      "Roni Stern",
+      "Nathan R. Sturtevant",
+      "Ariel Felner",
+      "Sven Koenig",
+      "Hang Ma",
+      "Thayne T. Walker",
+      "Jiaoyang Li",
+      "Dor Atzmon",
+      "Liron Cohen",
+      "T. K. Satish Kumar",
+      "Eli Boyarski",
+      "Roman Bartak",
+    ]
+  year: 2019
+  venue: "Symposium on Combinatorial Search (SoCS 2019)"
+  doi: "10.1609/socs.v10i1.18510"
+  landing_url: "https://arxiv.org/abs/1906.08291"
+  pdf_url: "https://arxiv.org/pdf/1906.08291"
+  source_type: survey
+  local_pdf: docs/papers/mapf-benchmarks-2019/paper.pdf
+  marker_markdown: docs/papers/mapf-benchmarks-2019/marker.md
+  marker_metadata: docs/papers/mapf-benchmarks-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P0
+  alternate_urls: ["https://ojs.aaai.org/index.php/SOCS/article/view/18510"]
+  notes: "用語・変種・衝突種別（vertex/edge/following/cycle/swapping）とコスト関数の定義の基準。サイト全体の用語統一はこの論文に合わせる。arXiv ライセンスは nonexclusive-distrib のため PDF 再配布は不可。"
+
+- id: compilation-survey-2022
+  title: "Problem Compilation for Multi-Agent Path Finding: a Survey"
+  short_title: "Compilation Survey"
+  algorithms: [mdd-sat, smt-cbs, bcp]
+  authors: ["Pavel Surynek"]
+  year: 2022
+  venue: "IJCAI 2022 (Survey Track)"
+  doi: "10.24963/ijcai.2022/783"
+  landing_url: "https://www.ijcai.org/proceedings/2022/783"
+  pdf_url: "https://www.ijcai.org/proceedings/2022/0783.pdf"
+  source_type: survey
+  local_pdf: docs/papers/compilation-survey-2022/paper.pdf
+  marker_markdown: docs/papers/compilation-survey-2022/marker.md
+  marker_metadata: docs/papers/compilation-survey-2022/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2022/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "SAT/SMT/ILP へのコンパイル系手法の分類に使う。IJCAI PDF 内に明示的な著作権表示が見つからなかったため再配布可否は unknown。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: cooperative-pathfinding-2005
+  title: "Cooperative Pathfinding"
+  short_title: "Cooperative Pathfinding (CA*/HCA*/WHCA*)"
+  algorithms: [cooperative-astar, hca-star, whca-star, reservation-table, space-time-astar]
+  authors: ["David Silver"]
+  year: 2005
+  venue: "AIIDE 2005"
+  doi: "10.1609/aiide.v1i1.18726"
+  landing_url: "https://ojs.aaai.org/index.php/AIIDE/article/view/18726"
+  pdf_url: "https://ojs.aaai.org/index.php/AIIDE/article/download/18726/18503"
+  source_type: primary
+  local_pdf: docs/papers/cooperative-pathfinding-2005/paper.pdf
+  marker_markdown: docs/papers/cooperative-pathfinding-2005/marker.md
+  marker_metadata: docs/papers/cooperative-pathfinding-2005/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AIIDE/article/view/18726"
+  status: marker-ready
+  priority: P0
+  alternate_urls: ["https://cdn.aaai.org/ojs/18726/18726-52-22369-1-10-20210928.pdf"]
+  notes: "ユーザ提示の davidsilver.uk の URL は 404 だったため AAAI 公式 OJS に差し替えた。PDF 本文に Copyright 2005 AAAI, All rights reserved の記載あり。予約テーブル・CA*・HCA*・WHCA* の原典。"
+
+# =============================================================================
+# CBS 系
+# =============================================================================
+
+- id: cbs-aij-2015
+  title: "Conflict-based search for optimal multi-agent pathfinding"
+  short_title: "CBS (journal)"
+  algorithms: [cbs, ma-cbs]
+  authors: ["Guni Sharon", "Roni Stern", "Ariel Felner", "Nathan R. Sturtevant"]
+  year: 2015
+  venue: "Artificial Intelligence, vol. 219, pp. 40-66"
+  doi: "10.1016/j.artint.2014.11.006"
+  landing_url: "https://doi.org/10.1016/j.artint.2014.11.006"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/cbs-aij-2015/paper.pdf
+  marker_markdown: docs/papers/cbs-aij-2015/marker.md
+  marker_metadata: docs/papers/cbs-aij-2015/marker_meta.json
+  open_access: false
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.1016/j.artint.2014.11.006"
+  status: marker-ready
+  priority: P0
+  alternate_urls:
+    [
+      "https://www.sciencedirect.com/science/article/pii/S0004370214001386",
+      "https://digitalcommons.du.edu/computer_science_faculty/7/",
+    ]
+  notes: "CBS の正典。Elsevier 版のみで公開 PDF は見つからなかった（DU の機関リポジトリはメタデータのみで本文なし）。定理・証明の引用はこの版の節番号で行い、PDF が手に入らない間は cbs-aaai-2012 を代用する。"
+
+- id: cbs-aaai-2012
+  title: "Conflict-Based Search For Optimal Multi-Agent Path Finding"
+  short_title: "CBS (AAAI 2012)"
+  algorithms: [cbs]
+  authors: ["Guni Sharon", "Roni Stern", "Ariel Felner", "Nathan Sturtevant"]
+  year: 2012
+  venue: "AAAI 2012, pp. 563-569"
+  doi: "10.1609/aaai.v26i1.8140"
+  landing_url: "https://ojs.aaai.org/index.php/AAAI/article/view/8140"
+  pdf_url: "https://ojs.aaai.org/index.php/AAAI/article/download/8140/7998"
+  source_type: primary
+  local_pdf: docs/papers/cbs-aaai-2012/paper.pdf
+  marker_markdown: docs/papers/cbs-aaai-2012/marker.md
+  marker_metadata: docs/papers/cbs-aaai-2012/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/8140"
+  status: marker-ready
+  priority: P0
+  alternate_urls: ["https://ojs.aaai.org/index.php/SOCS/article/download/18222/18013"]
+  notes: "cbs-aij-2015 の会議版で無料取得可能。MVP の CBS 解説はまずこちらで書き、保証の記述だけは journal 版で照合する。"
+
+- id: ma-cbs-socs-2012
+  title: "Meta-Agent Conflict-Based Search For Optimal Multi-Agent Path Finding"
+  short_title: "MA-CBS"
+  algorithms: [ma-cbs]
+  authors: ["Guni Sharon", "Roni Stern", "Ariel Felner", "Nathan R. Sturtevant"]
+  year: 2012
+  venue: "SoCS 2012"
+  doi: "10.1609/socs.v3i1.18244"
+  landing_url: "https://ojs.aaai.org/index.php/SOCS/article/view/18244"
+  pdf_url: "https://ojs.aaai.org/index.php/SOCS/article/download/18244/18035"
+  source_type: primary
+  local_pdf: docs/papers/ma-cbs-socs-2012/paper.pdf
+  marker_markdown: docs/papers/ma-cbs-socs-2012/marker.md
+  marker_metadata: docs/papers/ma-cbs-socs-2012/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/SOCS/article/view/18244"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "エージェント併合閾値 B による CBS の一般化。cbs-aij-2015 にも統合されている。"
+
+- id: bcbs-ecbs-socs-2014
+  title: "Suboptimal Variants of the Conflict-Based Search Algorithm for the Multi-Agent Pathfinding Problem"
+  short_title: "BCBS / ECBS"
+  algorithms: [bcbs, ecbs, focal-search]
+  authors: ["Max Barer", "Guni Sharon", "Roni Stern", "Ariel Felner"]
+  year: 2014
+  venue: "SoCS 2014, pp. 19-27"
+  doi: "10.1609/socs.v5i1.18315"
+  landing_url: "https://ojs.aaai.org/index.php/SOCS/article/view/18315"
+  pdf_url: "https://ojs.aaai.org/index.php/SOCS/article/download/18315/18106"
+  source_type: primary
+  local_pdf: docs/papers/bcbs-ecbs-socs-2014/paper.pdf
+  marker_markdown: docs/papers/bcbs-ecbs-socs-2014/marker.md
+  marker_metadata: docs/papers/bcbs-ecbs-socs-2014/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/SOCS/article/view/18315"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "ユーザ提示の URL はランディングページだったため、citation_pdf_url から取得した galley 直リンクへ差し替えた。PDF 本文に Copyright 2014 AAAI, All rights reserved の記載あり。"
+
+- id: icbs-ijcai-2015
+  title: "ICBS: Improved Conflict-Based Search Algorithm for Multi-Agent Pathfinding"
+  short_title: "ICBS"
+  algorithms: [icbs, cbs-bypass, prioritizing-conflicts]
+  authors:
+    [
+      "Eli Boyarski",
+      "Ariel Felner",
+      "Roni Stern",
+      "Guni Sharon",
+      "David Tolpin",
+      "Oded Betzalel",
+      "Solomon Eyal Shimony",
+    ]
+  year: 2015
+  venue: "IJCAI 2015, pp. 740-746"
+  doi: null
+  landing_url: "https://www.ijcai.org/Proceedings/15/Papers/110.pdf"
+  pdf_url: "https://www.ijcai.org/Proceedings/15/Papers/110.pdf"
+  source_type: primary
+  local_pdf: docs/papers/icbs-ijcai-2015/paper.pdf
+  marker_markdown: docs/papers/icbs-ijcai-2015/marker.md
+  marker_metadata: docs/papers/icbs-ijcai-2015/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/Proceedings/2015/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "Bypassing Conflicts (BP) と Prioritizing Conflicts (PC) の原典。PDF 本文で bypass 20 回、Prioritizing conflicts の記載を確認済み。IJCAI 2015 は DOI が付与されていないため doi は null。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: eecbs-aaai-2021
+  title: "EECBS: A Bounded-Suboptimal Search for Multi-Agent Path Finding"
+  short_title: "EECBS"
+  algorithms: [eecbs, focal-search]
+  authors: ["Jiaoyang Li", "Wheeler Ruml", "Sven Koenig"]
+  year: 2021
+  venue: "AAAI 2021"
+  doi: null
+  landing_url: "https://arxiv.org/abs/2010.01367"
+  pdf_url: "https://arxiv.org/pdf/2010.01367"
+  source_type: primary
+  local_pdf: docs/papers/eecbs-aaai-2021/paper.pdf
+  marker_markdown: docs/papers/eecbs-aaai-2021/marker.md
+  marker_metadata: docs/papers/eecbs-aaai-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "AAAI 版の DOI は未確認のため null。EES（Explicit Estimation Search）を CBS 高レベルへ適用した有界準最適解法。"
+
+- id: ccbs-ijcai-2019
+  title: "Multi-Agent Pathfinding with Continuous Time"
+  short_title: "CCBS"
+  algorithms: [ccbs, sipp]
+  authors: ["Anton Andreychuk", "Konstantin Yakovlev", "Dor Atzmon", "Roni Stern"]
+  year: 2019
+  venue: "IJCAI 2019, pp. 39-45"
+  doi: "10.24963/ijcai.2019/6"
+  landing_url: "https://www.ijcai.org/proceedings/2019/6"
+  pdf_url: "https://www.ijcai.org/Proceedings/2019/0006.pdf"
+  source_type: primary
+  local_pdf: docs/papers/ccbs-ijcai-2019/paper.pdf
+  marker_markdown: docs/papers/ccbs-ijcai-2019/marker.md
+  marker_metadata: docs/papers/ccbs-ijcai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2019/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "拡張版が Artificial Intelligence 305:103662 (2022), DOI 10.1016/j.artint.2022.103662 として存在する（CrossRef で確認）。低レベルは SIPP。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: cbsh-icaps-2018
+  title: "Adding Heuristics to Conflict-Based Search for Multi-Agent Path Finding"
+  short_title: "CBSH"
+  algorithms: [cbsh]
+  authors:
+    [
+      "Ariel Felner",
+      "Jiaoyang Li",
+      "Eli Boyarski",
+      "Hang Ma",
+      "Liron Cohen",
+      "T. K. Satish Kumar",
+      "Sven Koenig",
+    ]
+  year: 2018
+  venue: "ICAPS 2018, pp. 83-87"
+  doi: "10.1609/icaps.v28i1.13883"
+  landing_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/13883"
+  pdf_url: "https://tzin.bgu.ac.il/~felner/2018/CBSpH.pdf"
+  source_type: primary
+  local_pdf: docs/papers/cbsh-icaps-2018/paper.pdf
+  marker_markdown: docs/papers/cbsh-icaps-2018/marker.md
+  marker_metadata: docs/papers/cbsh-icaps-2018/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/13883"
+  status: marker-ready
+  priority: P1
+  alternate_urls: ["https://ojs.aaai.org/index.php/ICAPS/article/view/13883"]
+  notes: "pdf_url は著者（Felner）研究室ページの著者版。PDF 取得後に 1 ページ目へ Copyright 2018, Association for the Advancement of Artificial Intelligence. All rights reserved. の記載を確認したため、2026-07-26 に unknown → link-only へ更新した。cardinal conflict に基づく CG ヒューリスティクスの原典。"
+
+- id: cbsh2-ijcai-2019
+  title: "Improved Heuristics for Multi-Agent Path Finding with Conflict-Based Search"
+  short_title: "CBSH2"
+  algorithms: [cbsh2]
+  authors: ["Jiaoyang Li", "Eli Boyarski", "Ariel Felner", "Hang Ma", "Sven Koenig"]
+  year: 2019
+  venue: "IJCAI 2019, pp. 442-449"
+  doi: "10.24963/ijcai.2019/63"
+  landing_url: "https://www.ijcai.org/proceedings/2019/63"
+  pdf_url: "https://www.ijcai.org/proceedings/2019/0063.pdf"
+  source_type: primary
+  local_pdf: docs/papers/cbsh2-ijcai-2019/paper.pdf
+  marker_markdown: docs/papers/cbsh2-ijcai-2019/marker.md
+  marker_metadata: docs/papers/cbsh2-ijcai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2019/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "DG / WDG ヒューリスティクスの原典。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: cbsh2-rtc-aij-2021
+  title: "Pairwise Symmetry Reasoning for Multi-Agent Path Finding Search"
+  short_title: "CBSH2-RTC"
+  algorithms: [cbsh2-rtc, rectangle-reasoning, corridor-reasoning, target-reasoning]
+  authors: ["Jiaoyang Li", "Daniel Harabor", "Peter J. Stuckey", "Sven Koenig"]
+  year: 2021
+  venue: "Artificial Intelligence, vol. 301, art. 103574"
+  doi: "10.1016/j.artint.2021.103574"
+  landing_url: "https://arxiv.org/abs/2103.07116"
+  pdf_url: "https://arxiv.org/pdf/2103.07116"
+  source_type: primary
+  local_pdf: docs/papers/cbsh2-rtc-aij-2021/paper.pdf
+  marker_markdown: docs/papers/cbsh2-rtc-aij-2021/marker.md
+  marker_metadata: docs/papers/cbsh2-rtc-aij-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: ["https://www.sciencedirect.com/science/article/abs/pii/S0004370221001259"]
+  notes: "rectangle / corridor / target の 3 種の対称性推論をまとめた版。PDF 本文で Rectangle Reasoning・Corridor Reasoning・Target Reasoning の記載を確認済み。"
+
+- id: disjoint-splitting-icaps-2019
+  title: "Disjoint Splitting for Multi-Agent Path Finding with Conflict-Based Search"
+  short_title: "Disjoint Splitting"
+  algorithms: [disjoint-splitting]
+  authors:
+    ["Jiaoyang Li", "Daniel Harabor", "Peter J. Stuckey", "Ariel Felner", "Hang Ma", "Sven Koenig"]
+  year: 2019
+  venue: "ICAPS 2019, pp. 279-283"
+  doi: "10.1609/icaps.v29i1.3487"
+  landing_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/3487"
+  pdf_url: "https://ojs.aaai.org/index.php/ICAPS/article/download/3487/3355"
+  source_type: primary
+  local_pdf: docs/papers/disjoint-splitting-icaps-2019/paper.pdf
+  marker_markdown: docs/papers/disjoint-splitting-icaps-2019/marker.md
+  marker_metadata: docs/papers/disjoint-splitting-icaps-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/3487"
+  status: marker-ready
+  priority: P1
+  alternate_urls: ["http://idm-lab.org/bib/abstracts/papers/icaps19a.pdf"]
+  notes: "standard splitting の冗長性を除く分割方式。CT ノードの重複を排除する。"
+
+- id: bcp-ijcai-2019
+  title: "Branch-and-Cut-and-Price for Multi-Agent Pathfinding"
+  short_title: "BCP"
+  algorithms: [bcp]
+  authors: ["Edward Lam", "Pierre Le Bodic", "Daniel Harabor", "Peter J. Stuckey"]
+  year: 2019
+  venue: "IJCAI 2019, pp. 1289-1296"
+  doi: "10.24963/ijcai.2019/179"
+  landing_url: "https://www.ijcai.org/proceedings/2019/179"
+  pdf_url: "https://www.ijcai.org/proceedings/2019/0179.pdf"
+  source_type: primary
+  local_pdf: docs/papers/bcp-ijcai-2019/paper.pdf
+  marker_markdown: docs/papers/bcp-ijcai-2019/marker.md
+  marker_metadata: docs/papers/bcp-ijcai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2019/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "整数計画の分枝・切除・列生成による最適解法。探索系とコンパイル系の橋渡しとして扱う。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: mdd-sat-ecai-2016
+  title: "Efficient SAT Approach to Multi-Agent Path Finding Under the Sum of Costs Objective"
+  short_title: "MDD-SAT"
+  algorithms: [mdd-sat]
+  authors: ["Pavel Surynek", "Ariel Felner", "Roni Stern", "Eli Boyarski"]
+  year: 2016
+  venue: "ECAI 2016 (Frontiers in AI and Applications, vol. 285), pp. 810-818"
+  doi: "10.3233/978-1-61499-672-9-810"
+  landing_url: "https://ebooks.iospress.nl/publication/44829"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/mdd-sat-ecai-2016/paper.pdf
+  marker_markdown: docs/papers/mdd-sat-ecai-2016/marker.md
+  marker_metadata: docs/papers/mdd-sat-ecai-2016/marker_meta.json
+  open_access: true
+  redistribution:
+    status: allowed
+    evidence_url: "https://creativecommons.org/licenses/by-nc/4.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "★ PDF 取得後に判明: 本文 1 ページ目に「published online with Open Access by IOS Press and distributed under the terms of the Creative Commons Attribution Non-Commercial License 4」の記載があり、購読制ではなく CC BY-NC 4.0 の Open Access だった。IOS Press のランディングページからは読み取れず、PDF 本文で初めて確認できた情報である。再配布は著者クレジット表示 + 非営利の条件付きで可。sum-of-costs 目的の SAT 符号化の原典。pdf_url は出版社サイトの直リンクを未特定のため null のままにしてある（要調査）。"
+
+- id: smt-cbs-ijcai-2019
+  title: "Unifying Search-based and Compilation-based Approaches to Multi-agent Path Finding through Satisfiability Modulo Theories"
+  short_title: "SMT-CBS"
+  algorithms: [smt-cbs]
+  authors: ["Pavel Surynek"]
+  year: 2019
+  venue: "IJCAI 2019, pp. 1177-1183"
+  doi: "10.24963/ijcai.2019/164"
+  landing_url: "https://www.ijcai.org/proceedings/2019/164"
+  pdf_url: "https://www.ijcai.org/proceedings/2019/0164.pdf"
+  source_type: primary
+  local_pdf: docs/papers/smt-cbs-ijcai-2019/paper.pdf
+  marker_markdown: docs/papers/smt-cbs-ijcai-2019/marker.md
+  marker_metadata: docs/papers/smt-cbs-ijcai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2019/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "CBS の遅延制約追加を SMT で表現。MDD-SAT と対比して説明する。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+# =============================================================================
+# 優先順位・ルール・構成探索
+# =============================================================================
+
+- id: pbs-aaai-2019
+  title: "Searching with Consistent Prioritization for Multi-Agent Path Finding"
+  short_title: "PBS"
+  algorithms: [pbs, prioritized-planning]
+  authors: ["Hang Ma", "Daniel Harabor", "Peter J. Stuckey", "Jiaoyang Li", "Sven Koenig"]
+  year: 2019
+  venue: "AAAI 2019"
+  doi: null
+  landing_url: "https://www2.cs.sfu.ca/~hangma/pub/aaai19a.pdf"
+  pdf_url: "https://www2.cs.sfu.ca/~hangma/pub/aaai19a.pdf"
+  source_type: primary
+  local_pdf: docs/papers/pbs-aaai-2019/paper.pdf
+  marker_markdown: docs/papers/pbs-aaai-2019/marker.md
+  marker_metadata: docs/papers/pbs-aaai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/4396"
+  status: marker-ready
+  priority: P0
+  alternate_urls: []
+  notes: "pdf_url は著者（Hang Ma）研究室ページの著者版。AAAI 版 DOI は未確認のため null。優先順位を固定せず探索する PBS の原典で、MVP の優先順位付き計画パートの土台。 PDF 取得後に 1 ページ目で「Copyright 2019, Association for the Advancement of Artificial Intelligence. All rights reserved.」を確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: pibt-aij-2022
+  title: "Priority Inheritance with Backtracking for Iterative Multi-agent Path Finding"
+  short_title: "PIBT"
+  algorithms: [pibt]
+  authors: ["Keisuke Okumura", "Manao Machida", "Xavier Defago", "Yasumasa Tamura"]
+  year: 2022
+  venue: "Artificial Intelligence, vol. 310, art. 103752"
+  doi: "10.1016/j.artint.2022.103752"
+  landing_url: "https://arxiv.org/abs/1901.11282"
+  pdf_url: "https://arxiv.org/pdf/1901.11282"
+  source_type: primary
+  local_pdf: docs/papers/pibt-aij-2022/paper.pdf
+  marker_markdown: docs/papers/pibt-aij-2022/marker.md
+  marker_metadata: docs/papers/pibt-aij-2022/marker_meta.json
+  open_access: true
+  redistribution:
+    status: allowed
+    evidence_url: "http://creativecommons.org/licenses/by-nc-nd/4.0/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: ["https://www.ijcai.org/proceedings/2019/13"]
+  notes: "CC BY-NC-ND 4.0。再配布は「非営利」「改変なし」「著者クレジット表示」の 3 条件付きでのみ可。arXiv v5 が AIJ 版に対応。会議版は IJCAI 2019 にあり。"
+
+- id: winpibt-2019
+  title: "winPIBT: Extended Prioritized Algorithm for Iterative Multi-agent Path Finding"
+  short_title: "winPIBT"
+  algorithms: [winpibt]
+  authors: ["Keisuke Okumura", "Yasumasa Tamura", "Xavier Defago"]
+  year: 2019
+  venue: "arXiv preprint (IJCAI-19 Workshop on Multi-Agent Path Finding)"
+  doi: null
+  landing_url: "https://arxiv.org/abs/1905.10149"
+  pdf_url: "https://arxiv.org/pdf/1905.10149"
+  source_type: primary
+  local_pdf: docs/papers/winpibt-2019/paper.pdf
+  marker_markdown: docs/papers/winpibt-2019/marker.md
+  marker_metadata: docs/papers/winpibt-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "掲載先の正式な会議名を確定できていない（arXiv 上はプレプリント）。venue の確定は要調査。PIBT の 1 ステップ制約を任意窓へ拡張。"
+
+- id: lacam-aaai-2023
+  title: "LaCAM: Search-Based Algorithm for Quick Multi-Agent Pathfinding"
+  short_title: "LaCAM"
+  algorithms: [lacam, pibt]
+  authors: ["Keisuke Okumura"]
+  year: 2023
+  venue: "AAAI 2023, pp. 11655-11662"
+  doi: "10.1609/aaai.v37i10.26377"
+  landing_url: "https://ojs.aaai.org/index.php/AAAI/article/view/26377"
+  pdf_url: "https://ojs.aaai.org/index.php/AAAI/article/download/26377/26149"
+  source_type: primary
+  local_pdf: docs/papers/lacam-aaai-2023/paper.pdf
+  marker_markdown: docs/papers/lacam-aaai-2023/marker.md
+  marker_metadata: docs/papers/lacam-aaai-2023/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/26377"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "ユーザ提示 URL はランディングページのため galley 直リンクへ差し替え。lazy constraint による構成生成が中心概念。"
+
+- id: lacam-star-ijcai-2023
+  title: "Improving LaCAM for Scalable Eventually Optimal Multi-Agent Pathfinding"
+  short_title: "LaCAM*"
+  algorithms: [lacam-star]
+  authors: ["Keisuke Okumura"]
+  year: 2023
+  venue: "IJCAI 2023, pp. 243-251"
+  doi: "10.24963/ijcai.2023/28"
+  landing_url: "https://www.ijcai.org/proceedings/2023/28"
+  pdf_url: "https://www.ijcai.org/proceedings/2023/0028.pdf"
+  source_type: primary
+  local_pdf: docs/papers/lacam-star-ijcai-2023/paper.pdf
+  marker_markdown: docs/papers/lacam-star-ijcai-2023/marker.md
+  marker_metadata: docs/papers/lacam-star-ijcai-2023/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2023/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "eventually optimal（時間を掛ければ最適へ収束）であって最適解法ではない。SOURCE_POLICY.md 第 8 条の区別を最も要注意で適用する対象。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: lacam3-aamas-2024
+  title: "Engineering LaCAM*: Towards Real-Time, Large-Scale, and Near-Optimal Multi-Agent Pathfinding"
+  short_title: "LaCAM3"
+  algorithms: [lacam3]
+  authors: ["Keisuke Okumura"]
+  year: 2024
+  venue: "AAMAS 2024, pp. 1501-1509"
+  doi: "10.65109/yqid4918"
+  landing_url: "https://www.ifaamas.org/Proceedings/aamas2024/pdfs/p1501.pdf"
+  pdf_url: "https://www.ifaamas.org/Proceedings/aamas2024/pdfs/p1501.pdf"
+  source_type: primary
+  local_pdf: docs/papers/lacam3-aamas-2024/paper.pdf
+  marker_markdown: docs/papers/lacam3-aamas-2024/marker.md
+  marker_metadata: docs/papers/lacam3-aamas-2024/marker_meta.json
+  open_access: true
+  redistribution:
+    status: allowed
+    evidence_url: "https://creativecommons.org/licenses/by/4.0/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "PDF 本文に This work is licensed under a Creative Commons Attribution International 4.0 の記載を確認。CC BY 4.0 のため著者クレジット表示のうえ再配布可。"
+
+- id: push-and-swap-ijcai-2011
+  title: "Push and Swap: Fast Cooperative Path-Finding with Completeness Guarantees"
+  short_title: "Push and Swap"
+  algorithms: [push-and-swap]
+  authors: ["Ryan Luna", "Kostas E. Bekris"]
+  year: 2011
+  venue: "IJCAI 2011, pp. 294-300"
+  doi: null
+  landing_url: "https://www.ijcai.org/Proceedings/11/Papers/059.pdf"
+  pdf_url: "https://www.ijcai.org/Proceedings/11/Papers/059.pdf"
+  source_type: primary
+  local_pdf: docs/papers/push-and-swap-ijcai-2011/paper.pdf
+  marker_markdown: docs/papers/push-and-swap-ijcai-2011/marker.md
+  marker_metadata: docs/papers/push-and-swap-ijcai-2011/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2011"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "完全性は「2 つの空き頂点がある」等の条件付き。push-and-rotate-aamas-2013 が Push and Swap の完全性の反例を指摘しているため、両論文を必ず併読すること。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: push-and-rotate-aamas-2013
+  title: "Push and Rotate: Cooperative Multi-Agent Path Planning"
+  short_title: "Push and Rotate"
+  algorithms: [push-and-rotate]
+  authors: ["Boris de Wilde", "Adriaan W. ter Mors", "Cees Witteveen"]
+  year: 2013
+  venue: "AAMAS 2013, pp. 87-94"
+  doi: "10.65109/hepf5355"
+  landing_url: "https://www.ifaamas.org/Proceedings/aamas2013/docs/p87.pdf"
+  pdf_url: "https://www.ifaamas.org/Proceedings/aamas2013/docs/p87.pdf"
+  source_type: primary
+  local_pdf: docs/papers/push-and-rotate-aamas-2013/paper.pdf
+  marker_markdown: docs/papers/push-and-rotate-aamas-2013/marker.md
+  marker_metadata: docs/papers/push-and-rotate-aamas-2013/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ifaamas.org/Proceedings/aamas2013/docs/p87.pdf"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "PDF 本文に Copyright 2013 IFAAMAS の記載あり。Push and Swap の完全性に関する脚注は 1 ページ目にある。"
+
+# =============================================================================
+# 最適探索・結合探索
+# =============================================================================
+
+- id: standley-od-id-2010
+  title: "Finding Optimal Solutions to Cooperative Pathfinding Problems"
+  short_title: "OD + ID"
+  algorithms: [operator-decomposition, independence-detection, joint-state-astar]
+  authors: ["Trevor Standley"]
+  year: 2010
+  venue: "AAAI 2010, pp. 173-178"
+  doi: "10.1609/aaai.v24i1.7564"
+  landing_url: "https://ojs.aaai.org/index.php/AAAI/article/view/7564"
+  pdf_url: "https://ojs.aaai.org/index.php/AAAI/article/download/7564/7425"
+  source_type: primary
+  local_pdf: docs/papers/standley-od-id-2010/paper.pdf
+  marker_markdown: docs/papers/standley-od-id-2010/marker.md
+  marker_metadata: docs/papers/standley-od-id-2010/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/7564"
+  status: marker-ready
+  priority: P0
+  alternate_urls: []
+  notes: "初期リストには無かったが Operator Decomposition と Independence Detection の原典であり追加した。結合状態空間 A* の分岐爆発を説明する土台。"
+
+- id: icts-ijcai-2011
+  title: "The Increasing Cost Tree Search for Optimal Multi-agent Pathfinding"
+  short_title: "ICTS"
+  algorithms: [icts]
+  authors: ["Guni Sharon", "Roni Stern", "Meir Goldenberg", "Ariel Felner"]
+  year: 2011
+  venue: "IJCAI 2011, pp. 662-667"
+  doi: null
+  landing_url: "https://www.ijcai.org/Proceedings/11/Papers/117.pdf"
+  pdf_url: "https://www.ijcai.org/Proceedings/11/Papers/117.pdf"
+  source_type: primary
+  local_pdf: docs/papers/icts-ijcai-2011/paper.pdf
+  marker_markdown: docs/papers/icts-ijcai-2011/marker.md
+  marker_metadata: docs/papers/icts-ijcai-2011/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2011"
+  status: marker-ready
+  priority: P1
+  alternate_urls: ["https://tzin.bgu.ac.il/~felner/2011/guni.pdf"]
+  notes: "ユーザ提示の bgu.ac.il URL は同じ IJCAI 2011 版（6 ページ）だったが、より安定な IJCAI 公式 URL を主とした。拡張版は Artificial Intelligence 195:470-495 (2013), DOI 10.1016/j.artint.2012.11.006（CrossRef 確認済み）。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: mstar-aij-2015
+  title: "Subdimensional expansion for multirobot path planning"
+  short_title: "M*"
+  algorithms: [mstar, recursive-mstar]
+  authors: ["Glenn Wagner", "Howie Choset"]
+  year: 2015
+  venue: "Artificial Intelligence, vol. 219, pp. 1-24"
+  doi: "10.1016/j.artint.2014.11.001"
+  landing_url: "https://doi.org/10.1016/j.artint.2014.11.001"
+  pdf_url: "http://biorobotics.ri.cmu.edu/papers/paperUploads/subdim_journal.pdf"
+  source_type: primary
+  local_pdf: docs/papers/mstar-aij-2015/paper.pdf
+  marker_markdown: docs/papers/mstar-aij-2015/marker.md
+  marker_metadata: docs/papers/mstar-aij-2015/marker_meta.json
+  open_access: true
+  redistribution:
+    status: unknown
+    evidence_url: null
+  status: marker-ready
+  priority: P1
+  alternate_urls:
+    [
+      "https://kilthub.cmu.edu/articles/journal_contribution/Subdimensional_Expansion_for_Multirobot_Path_Planning/6561017",
+    ]
+  notes: "ユーザ提示の kilthub 直リンクは 403 だったため、CMU Biorobotics Lab の著者版へ差し替えた（PDF 1 ページ目でタイトル・著者を照合済み）。Recursive M* もこの論文に含まれる。"
+
+- id: sipp-icra-2011
+  title: "SIPP: Safe Interval Path Planning for Dynamic Environments"
+  short_title: "SIPP"
+  algorithms: [sipp]
+  authors: ["Mike Phillips", "Maxim Likhachev"]
+  year: 2011
+  venue: "IEEE International Conference on Robotics and Automation (ICRA 2011)"
+  doi: "10.1109/icra.2011.5980306"
+  landing_url: "https://doi.org/10.1109/icra.2011.5980306"
+  pdf_url: "https://www.cs.cmu.edu/~maxim/files/sipp_icra11.pdf"
+  source_type: primary
+  local_pdf: docs/papers/sipp-icra-2011/paper.pdf
+  marker_markdown: docs/papers/sipp-icra-2011/marker.md
+  marker_metadata: docs/papers/sipp-icra-2011/marker_meta.json
+  open_access: true
+  redistribution:
+    status: unknown
+    evidence_url: null
+  status: marker-ready
+  priority: P0
+  alternate_urls: []
+  notes: "pdf_url は著者（Likhachev）研究室ページの著者版。安全区間表現は CCBS・SIPPwRT・SIPPS の共通基盤なので MVP に含める。"
+
+# =============================================================================
+# LNS・Lifelong MAPF
+# =============================================================================
+
+- id: mapf-lns-ijcai-2021
+  title: "Anytime Multi-Agent Path Finding via Large Neighborhood Search"
+  short_title: "MAPF-LNS"
+  algorithms: [mapf-lns]
+  authors: ["Jiaoyang Li", "Zhe Chen", "Daniel Harabor", "Peter J. Stuckey", "Sven Koenig"]
+  year: 2021
+  venue: "IJCAI 2021, pp. 4127-4135"
+  doi: "10.24963/ijcai.2021/568"
+  landing_url: "https://www.ijcai.org/proceedings/2021/568"
+  pdf_url: "https://www.ijcai.org/proceedings/2021/0568.pdf"
+  source_type: primary
+  local_pdf: docs/papers/mapf-lns-ijcai-2021/paper.pdf
+  marker_markdown: docs/papers/mapf-lns-ijcai-2021/marker.md
+  marker_metadata: docs/papers/mapf-lns-ijcai-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ijcai.org/proceedings/2021/"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "実行可能解を破壊・再修復する anytime 改善。destroy heuristic（random / agent-based / map-based）の説明はこの論文に従う。 再配布可否: PDF 本文に権利表示は無いが、IJCAI の proceedings ページに「Copyright (c) International Joint Conferences on Artificial Intelligence. All rights reserved. No part of this book may be reproduced in any form ... without permission in writing from the publisher.」があることを確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: mapf-lns2-aaai-2022
+  title: "MAPF-LNS2: Fast Repairing for Multi-Agent Path Finding via Large Neighborhood Search"
+  short_title: "MAPF-LNS2"
+  algorithms: [mapf-lns2, sipps]
+  authors: ["Jiaoyang Li", "Zhe Chen", "Daniel Harabor", "Peter J. Stuckey", "Sven Koenig"]
+  year: 2022
+  venue: "AAAI 2022, pp. 10256-10265"
+  doi: "10.1609/aaai.v36i9.21266"
+  landing_url: "https://ojs.aaai.org/index.php/AAAI/article/view/21266"
+  pdf_url: "https://ojs.aaai.org/index.php/AAAI/article/download/21266/21015"
+  source_type: primary
+  local_pdf: docs/papers/mapf-lns2-aaai-2022/paper.pdf
+  marker_markdown: docs/papers/mapf-lns2-aaai-2022/marker.md
+  marker_metadata: docs/papers/mapf-lns2-aaai-2022/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/21266"
+  status: marker-ready
+  priority: P1
+  alternate_urls: []
+  notes: "ユーザ提示 URL はランディングページのため galley 直リンクへ差し替え。SIPPS（soft constraint 付き SIPP）の原典でもある（PDF 本文で 39 箇所確認）。"
+
+- id: ml-lns-aaai-2022
+  title: "Anytime Multi-Agent Path Finding via Machine Learning-Guided Large Neighborhood Search"
+  short_title: "MAPF-ML-LNS"
+  algorithms: [mapf-ml-lns]
+  authors: ["Taoan Huang", "Jiaoyang Li", "Sven Koenig", "Bistra Dilkina"]
+  year: 2022
+  venue: "AAAI 2022, pp. 9368-9376"
+  doi: "10.1609/aaai.v36i9.21168"
+  landing_url: "https://ojs.aaai.org/index.php/AAAI/article/view/21168"
+  pdf_url: "https://cdn.aaai.org/ojs/21168/21168-13-25181-1-2-20220628.pdf"
+  source_type: primary
+  local_pdf: docs/papers/ml-lns-aaai-2022/paper.pdf
+  marker_markdown: docs/papers/ml-lns-aaai-2022/marker.md
+  marker_metadata: docs/papers/ml-lns-aaai-2022/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/AAAI/article/view/21168"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "近傍選択（destroy heuristic）を学習モデルで置き換える MAPF-LNS の改良。"
+
+- id: lns-reevaluation-socs-2025
+  title: "Reevaluation of Large Neighborhood Search for MAPF: Findings and Opportunities"
+  short_title: "LNS Reevaluation"
+  algorithms: [mapf-lns, mapf-lns2, mapf-ml-lns]
+  authors: ["Jiaqi Tan", "Yudong Luo", "Jiaoyang Li", "Hang Ma"]
+  year: 2025
+  venue: "SoCS 2025, pp. 212-220"
+  doi: "10.1609/socs.v18i1.35996"
+  landing_url: "https://ojs.aaai.org/index.php/SOCS/article/view/35996"
+  pdf_url: "https://arxiv.org/pdf/2407.09451"
+  source_type: survey
+  local_pdf: docs/papers/lns-reevaluation-socs-2025/paper.pdf
+  marker_markdown: docs/papers/lns-reevaluation-socs-2025/marker.md
+  marker_metadata: docs/papers/lns-reevaluation-socs-2025/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: ["https://ojs.aaai.org/index.php/SOCS/article/download/35996/38151"]
+  notes: "初期リストには無かったが、参照実装 mapf-lns-unified の README が対応論文として掲げていたため追加（clone 後に判明）。LNS 系手法の比較条件を揃え直した再評価であり、サイトで性能比較を書くときは本論文の測定条件に従うこと。"
+
+- id: rhcr-aaai-2021
+  title: "Lifelong Multi-Agent Path Finding in Large-Scale Warehouses"
+  short_title: "RHCR"
+  algorithms: [rhcr, lifelong-mapf-problem]
+  authors:
+    [
+      "Jiaoyang Li",
+      "Andrew Tinka",
+      "Scott Kiesel",
+      "Joseph W. Durham",
+      "T. K. Satish Kumar",
+      "Sven Koenig",
+    ]
+  year: 2021
+  venue: "AAAI 2021, pp. 11272-11281"
+  doi: "10.1609/aaai.v35i13.17344"
+  landing_url: "https://arxiv.org/abs/2005.07371"
+  pdf_url: "https://arxiv.org/pdf/2005.07371"
+  source_type: primary
+  local_pdf: docs/papers/rhcr-aaai-2021/paper.pdf
+  marker_markdown: docs/papers/rhcr-aaai-2021/marker.md
+  marker_metadata: docs/papers/rhcr-aaai-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "windowed MAPF を h ステップごとに再計画する枠組み。Lifelong MAPF セクションの中核。"
+
+# =============================================================================
+# MAPD
+# =============================================================================
+
+- id: mapd-tp-tpts-central-2017
+  title: "Lifelong Multi-Agent Path Finding for Online Pickup and Delivery Tasks"
+  short_title: "MAPD (TP / TPTS / CENTRAL)"
+  algorithms: [token-passing, tpts, central, mapd-problem]
+  authors: ["Hang Ma", "Jiaoyang Li", "T. K. Satish Kumar", "Sven Koenig"]
+  year: 2017
+  venue: "AAMAS 2017, pp. 837-845"
+  doi: "10.65109/tnmo6004"
+  landing_url: "https://arxiv.org/abs/1705.10868"
+  pdf_url: "https://arxiv.org/pdf/1705.10868"
+  source_type: primary
+  local_pdf: docs/papers/mapd-tp-tpts-central-2017/paper.pdf
+  marker_markdown: docs/papers/mapd-tp-tpts-central-2017/marker.md
+  marker_metadata: docs/papers/mapd-tp-tpts-central-2017/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "MAPD 問題定義と TP / TPTS / CENTRAL の原典。PDF 本文で TP・TPTS・CENTRAL の記載を確認済み。well-formed infrastructure の定義もここ。"
+
+- id: ta-prioritized-hybrid-aamas-2019
+  title: "Task and Path Planning for Multi-Agent Pickup and Delivery"
+  short_title: "TA-Prioritized / TA-Hybrid"
+  algorithms: [ta-prioritized, ta-hybrid]
+  authors: ["Minghua Liu", "Hang Ma", "Jiaoyang Li", "Sven Koenig"]
+  year: 2019
+  venue: "AAMAS 2019, pp. 1152-1160"
+  doi: null
+  landing_url: "https://www.ifaamas.org/Proceedings/aamas2019/pdfs/p1152.pdf"
+  pdf_url: "https://www.ifaamas.org/Proceedings/aamas2019/pdfs/p1152.pdf"
+  source_type: primary
+  local_pdf: docs/papers/ta-prioritized-hybrid-aamas-2019/paper.pdf
+  marker_markdown: docs/papers/ta-prioritized-hybrid-aamas-2019/marker.md
+  marker_metadata: docs/papers/ta-prioritized-hybrid-aamas-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://www.ifaamas.org/Proceedings/aamas2019/pdfs/p1152.pdf"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "PDF 本文に著作権表示・ライセンス表示が見つからず、CrossRef でも DOI を特定できなかった。TA-Hybrid 55 箇所・TA-Prioritized 26 箇所を本文で確認。 PDF 取得後に 1 ページ目で「All rights reserved（1 ページ目の権利表示）」を確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: mla-star-icaps-2019
+  title: "A Multi-Label A* Algorithm for Multi-Agent Pathfinding"
+  short_title: "MLA*"
+  algorithms: [mla-star, hbh]
+  authors: ["Florian Grenouilleau", "Willem-Jan van Hoeve", "John N. Hooker"]
+  year: 2019
+  venue: "ICAPS 2019, pp. 181-185"
+  doi: "10.1609/icaps.v29i1.3474"
+  landing_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/3474"
+  pdf_url: "https://ojs.aaai.org/index.php/ICAPS/article/download/3474/3342"
+  source_type: primary
+  local_pdf: docs/papers/mla-star-icaps-2019/paper.pdf
+  marker_markdown: docs/papers/mla-star-icaps-2019/marker.md
+  marker_metadata: docs/papers/mla-star-icaps-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/ICAPS/article/view/3474"
+  status: marker-ready
+  priority: P2
+  alternate_urls: ["https://ojs.aaai.org/index.php/ICAPS/article/download/3474/3342/6523"]
+  notes: "HBH（Hungarian-Based Heuristic）15 箇所・HBH+MLA* 6 箇所を本文で確認。ユーザ提示 URL も 200 を返すが、citation_pdf_url の正規形へ揃えた。"
+
+- id: rmca-ral-2021
+  title: "Integrated Task Assignment and Path Planning for Capacitated Multi-Agent Pickup and Delivery"
+  short_title: "RMCA"
+  algorithms: [rmca, regret-insertion]
+  authors:
+    ["Zhe Chen", "Javier Alonso-Mora", "Xiaoshan Bai", "Daniel D. Harabor", "Peter J. Stuckey"]
+  year: 2021
+  venue: "IEEE Robotics and Automation Letters, vol. 6, no. 3"
+  doi: "10.1109/lra.2021.3074883"
+  landing_url: "https://arxiv.org/abs/2110.14891"
+  pdf_url: "https://arxiv.org/pdf/2110.14891"
+  source_type: primary
+  local_pdf: docs/papers/rmca-ral-2021/paper.pdf
+  marker_markdown: docs/papers/rmca-ral-2021/marker.md
+  marker_metadata: docs/papers/rmca-ral-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: allowed
+    evidence_url: "http://creativecommons.org/licenses/by-nc-nd/4.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "CC BY-NC-ND 4.0。非営利・改変なし・著者クレジット表示の条件付きで再配布可。regret-based の記述を本文で確認（regret 13 箇所）。容量制約付き MAPD。"
+
+- id: mg-mapd-iros-2022
+  title: "Multi-Goal Multi-Agent Pickup and Delivery"
+  short_title: "MG-MAPD (LNS-PBS / LNS-wPBS)"
+  algorithms: [lns-pbs, lns-wpbs]
+  authors: ["Qinghong Xu", "Jiaoyang Li", "Sven Koenig", "Hang Ma"]
+  year: 2022
+  venue: "IEEE/RSJ IROS 2022"
+  doi: "10.1109/iros47612.2022.9981785"
+  landing_url: "https://arxiv.org/abs/2208.01223"
+  pdf_url: "https://arxiv.org/pdf/2208.01223"
+  source_type: primary
+  local_pdf: docs/papers/mg-mapd-iros-2022/paper.pdf
+  marker_markdown: docs/papers/mg-mapd-iros-2022/marker.md
+  marker_metadata: docs/papers/mg-mapd-iros-2022/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "LNS-PBS 39 箇所・LNS-wPBS 46 箇所を本文で確認。多目的地 MAPD。"
+
+- id: sippwrt-aaai-2019
+  title: "Lifelong Path Planning with Kinematic Constraints for Multi-Agent Pickup and Delivery"
+  short_title: "SIPPwRT"
+  algorithms: [sippwrt]
+  authors: ["Hang Ma", "Wolfgang Honig", "T. K. Satish Kumar", "Nora Ayanian", "Sven Koenig"]
+  year: 2019
+  venue: "AAAI 2019, pp. 7651-7658"
+  doi: null
+  landing_url: "https://arxiv.org/abs/1812.06355"
+  pdf_url: "https://arxiv.org/pdf/1812.06355"
+  source_type: primary
+  local_pdf: docs/papers/sippwrt-aaai-2019/paper.pdf
+  marker_markdown: docs/papers/sippwrt-aaai-2019/marker.md
+  marker_metadata: docs/papers/sippwrt-aaai-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "初期リストには無かったが SIPPwRT の原典として追加。運動学制約付き MAPD、予約テーブル併用の SIPP。AAAI 版 DOI は未確認。"
+
+# =============================================================================
+# TAPF・割当
+# =============================================================================
+
+- id: cbm-tapf-aamas-2016
+  title: "Optimal Target Assignment and Path Finding for Teams of Agents"
+  short_title: "CBM"
+  algorithms: [cbm, tapf-problem, min-cost-max-flow]
+  authors: ["Hang Ma", "Sven Koenig"]
+  year: 2016
+  venue: "AAMAS 2016, pp. 1144-1152"
+  doi: "10.65109/goac4514"
+  landing_url: "https://arxiv.org/abs/1612.05693"
+  pdf_url: "https://arxiv.org/pdf/1612.05693"
+  source_type: primary
+  local_pdf: docs/papers/cbm-tapf-aamas-2016/paper.pdf
+  marker_markdown: docs/papers/cbm-tapf-aamas-2016/marker.md
+  marker_metadata: docs/papers/cbm-tapf-aamas-2016/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "TAPF 問題定義と CBM（Conflict-Based Min-Cost-Flow）の原典。最小費用流を低レベルに使う。"
+
+- id: cbs-ta-aamas-2018
+  title: "Conflict-Based Search with Optimal Task Assignment"
+  short_title: "CBS-TA"
+  algorithms: [cbs-ta]
+  authors: ["Wolfgang Honig", "Scott Kiesel", "Andrew Tinka", "Joseph W. Durham", "Nora Ayanian"]
+  year: 2018
+  venue: "AAMAS 2018"
+  doi: "10.65109/iwjs4760"
+  landing_url: "https://whoenig.github.io/publications/2018_AAMAS_a_Hoenig.pdf"
+  pdf_url: "https://whoenig.github.io/publications/2018_AAMAS_a_Hoenig.pdf"
+  source_type: primary
+  local_pdf: docs/papers/cbs-ta-aamas-2018/paper.pdf
+  marker_markdown: docs/papers/cbs-ta-aamas-2018/marker.md
+  marker_metadata: docs/papers/cbs-ta-aamas-2018/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.65109/iwjs4760"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "pdf_url は著者（Honig）個人ページの著者版。K-best 割当を CBS の根ノード群として展開する。 PDF 取得後に 1 ページ目で「All rights reserved（1 ページ目の権利表示）」を確認したため、2026-07-26 に unknown → link-only へ更新した。"
+
+- id: ita-cbs-mrs-2023
+  title: "Solving Multi-Agent Target Assignment and Path Finding with a Single Constraint Tree"
+  short_title: "ITA-CBS"
+  algorithms: [ita-cbs]
+  authors: ["Yimin Tang", "Zhongqiang Ren", "Jiaoyang Li", "Katia Sycara"]
+  year: 2023
+  venue: "IEEE International Symposium on Multi-Robot and Multi-Agent Systems (MRS 2023)"
+  doi: "10.1109/mrs60187.2023.10416794"
+  landing_url: "https://arxiv.org/abs/2307.00663"
+  pdf_url: "https://arxiv.org/pdf/2307.00663"
+  source_type: primary
+  local_pdf: docs/papers/ita-cbs-mrs-2023/paper.pdf
+  marker_markdown: docs/papers/ita-cbs-mrs-2023/marker.md
+  marker_metadata: docs/papers/ita-cbs-mrs-2023/marker_meta.json
+  open_access: true
+  redistribution:
+    status: allowed
+    evidence_url: "http://creativecommons.org/licenses/by/4.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "CC BY 4.0。著者クレジット表示のうえ再配布可。CBS-TA の K-best 割当を増分 1-best 更新へ置き換える。"
+
+- id: ita-ecbs-socs-2024
+  title: "ITA-ECBS: A Bounded-Suboptimal Algorithm for Combined Target-Assignment and Path-Finding Problem"
+  short_title: "ITA-ECBS"
+  algorithms: [ita-ecbs]
+  authors: ["Yimin Tang", "Sven Koenig", "Jiaoyang Li"]
+  year: 2024
+  venue: "SoCS 2024, pp. 134-142"
+  doi: "10.1609/socs.v17i1.31551"
+  landing_url: "https://ojs.aaai.org/index.php/SOCS/article/view/31551"
+  pdf_url: "https://arxiv.org/pdf/2404.05223"
+  source_type: primary
+  local_pdf: docs/papers/ita-ecbs-socs-2024/paper.pdf
+  marker_markdown: docs/papers/ita-ecbs-socs-2024/marker.md
+  marker_metadata: docs/papers/ita-ecbs-socs-2024/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "https://ojs.aaai.org/index.php/SOCS/article/view/31551"
+  status: marker-ready
+  priority: P3
+  alternate_urls: ["https://ojs.aaai.org/index.php/SOCS/article/download/31551/33711"]
+  notes: "★ 再配布可否に矛盾がある。arXiv の abs ページは CC BY-SA 4.0 を宣言している (http://creativecommons.org/licenses/by-sa/4.0/) が、PDF 本文 1 ページ目には AAAI テンプレート由来の「Copyright (c) 2024, Association for the Advancement of Artificial Intelligence. All rights reserved.」が入っている。矛盾する権利表示のうち厳しい側を採り、2026-07-26 に allowed → link-only へ引き下げた。再配布したい場合は著者または AAAI への確認が必要。ITA-CBS の有界準最適版で、focal search と割当決定用の新しい下界行列を使う。"
+
+- id: hungarian-method-1955
+  title: "The Hungarian method for the assignment problem"
+  short_title: "Hungarian Method"
+  algorithms: [hungarian-method]
+  authors: ["Harold W. Kuhn"]
+  year: 1955
+  venue: "Naval Research Logistics Quarterly, vol. 2, pp. 83-97"
+  doi: "10.1002/nav.3800020109"
+  landing_url: "https://doi.org/10.1002/nav.3800020109"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/hungarian-method-1955/paper.pdf
+  marker_markdown: docs/papers/hungarian-method-1955/marker.md
+  marker_metadata: docs/papers/hungarian-method-1955/marker_meta.json
+  open_access: false
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.1002/nav.3800020109"
+  status: marker-ready
+  priority: P2
+  alternate_urls: []
+  notes: "タイトル・巻号・ページを CrossRef で確認。Wiley 版のみで信頼できる公開 PDF は見つからなかった（Semantic Scholar にも OA 版なし）。取得は大学等の購読経由が必要。"
+
+- id: gale-shapley-1962
+  title: "College Admissions and the Stability of Marriage"
+  short_title: "Gale-Shapley"
+  algorithms: [gale-shapley]
+  authors: ["David Gale", "Lloyd S. Shapley"]
+  year: 1962
+  venue: "The American Mathematical Monthly, vol. 69, no. 1, pp. 9-15"
+  doi: "10.1080/00029890.1962.11989827"
+  landing_url: "https://doi.org/10.1080/00029890.1962.11989827"
+  pdf_url: null
+  source_type: primary
+  local_pdf: docs/papers/gale-shapley-1962/paper.pdf
+  marker_markdown: docs/papers/gale-shapley-1962/marker.md
+  marker_metadata: docs/papers/gale-shapley-1962/marker_meta.json
+  open_access: false
+  redistribution:
+    status: link-only
+    evidence_url: "https://doi.org/10.1080/00029890.1962.11989827"
+  status: marker-ready
+  priority: P2
+  alternate_urls: ["https://www.rand.org/pubs/papers/P2240.html"]
+  notes: "タイトル・巻号・ページを CrossRef で確認。Taylor & Francis 版は購読制。RAND Corporation P-2240 (1961) が先行版として存在するが、直リンク PDF URL は特定できなかった（要調査）。よく引用される 10.2307/2312726 は JSTOR 側の識別子で CrossRef 未登録。"
+
+- id: auction-algorithm-1988
+  title: "The auction algorithm: A distributed relaxation method for the assignment problem"
+  short_title: "Auction Algorithm"
+  algorithms: [auction-algorithm]
+  authors: ["Dimitri P. Bertsekas"]
+  year: 1988
+  venue: "Annals of Operations Research, vol. 14, pp. 105-123"
+  doi: "10.1007/BF02186476"
+  landing_url: "https://link.springer.com/article/10.1007/BF02186476"
+  pdf_url: "https://www.mit.edu/~dimitrib/TheAuctionAP.pdf"
+  source_type: primary
+  local_pdf: docs/papers/auction-algorithm-1988/paper.pdf
+  marker_markdown: docs/papers/auction-algorithm-1988/marker.md
+  marker_metadata: docs/papers/auction-algorithm-1988/marker_meta.json
+  open_access: true
+  redistribution:
+    status: unknown
+    evidence_url: null
+  status: marker-ready
+  priority: P3
+  alternate_urls: ["https://dspace.mit.edu/handle/1721.1/2982"]
+  notes: "pdf_url は著者（Bertsekas）MIT 個人ページの著者版。PDF 1 ページ目で Annals of Operations Research 14(1988)105-123 を確認済み。Hungarian Method の代替として割当問題セクションで扱う。"
+
+- id: network-flow-mapf-2012
+  title: "Multi-agent Path Planning and Network Flow"
+  short_title: "Network Flow MAPF"
+  algorithms: [min-cost-max-flow]
+  authors: ["Jingjin Yu", "Steven M. LaValle"]
+  year: 2012
+  venue: "Workshop on the Algorithmic Foundations of Robotics (WAFR 2012)"
+  doi: null
+  landing_url: "https://arxiv.org/abs/1204.5717"
+  pdf_url: "https://arxiv.org/pdf/1204.5717"
+  source_type: primary
+  local_pdf: docs/papers/network-flow-mapf-2012/paper.pdf
+  marker_markdown: docs/papers/network-flow-mapf-2012/marker.md
+  marker_metadata: docs/papers/network-flow-mapf-2012/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: ["https://people.csail.mit.edu/jingjin/files/YuLav12WAFR.pdf"]
+  notes: "MAPF をネットワークフローへ帰着させる。CBM の最小費用流の背景として使う。WAFR 収録版の DOI は未確認。"
+
+# =============================================================================
+# 学習ベース
+# =============================================================================
+
+- id: primal-ral-2019
+  title: "PRIMAL: Pathfinding via Reinforcement and Imitation Multi-Agent Learning"
+  short_title: "PRIMAL"
+  algorithms: [primal]
+  authors:
+    [
+      "Guillaume Sartoretti",
+      "Justin Kerr",
+      "Yunfei Shi",
+      "Glenn Wagner",
+      "T. K. Satish Kumar",
+      "Sven Koenig",
+      "Howie Choset",
+    ]
+  year: 2019
+  venue: "IEEE Robotics and Automation Letters, vol. 4, no. 3"
+  doi: "10.1109/lra.2019.2903261"
+  landing_url: "https://arxiv.org/abs/1809.03531"
+  pdf_url: "https://arxiv.org/pdf/1809.03531"
+  source_type: primary
+  local_pdf: docs/papers/primal-ral-2019/paper.pdf
+  marker_markdown: docs/papers/primal-ral-2019/marker.md
+  marker_metadata: docs/papers/primal-ral-2019/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "分散方策 + 模倣学習（教師は ODrM*）。保証は無く、成功率で評価される点をサイト側で明示すること。"
+
+- id: primal2-ral-2021
+  title: "PRIMAL2: Pathfinding via Reinforcement and Imitation Multi-Agent Learning - Lifelong"
+  short_title: "PRIMAL2"
+  algorithms: [primal2]
+  authors: ["Mehul Damani", "Zhiyao Luo", "Emerson Wenzel", "Guillaume Sartoretti"]
+  year: 2021
+  venue: "IEEE Robotics and Automation Letters, vol. 6, no. 2"
+  doi: "10.1109/lra.2021.3062803"
+  landing_url: "https://arxiv.org/abs/2010.08184"
+  pdf_url: "https://arxiv.org/pdf/2010.08184"
+  source_type: primary
+  local_pdf: docs/papers/primal2-ral-2021/paper.pdf
+  marker_markdown: docs/papers/primal2-ral-2021/marker.md
+  marker_metadata: docs/papers/primal2-ral-2021/marker_meta.json
+  open_access: true
+  redistribution:
+    status: link-only
+    evidence_url: "http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  status: marker-ready
+  priority: P3
+  alternate_urls: []
+  notes: "PRIMAL の Lifelong MAPF 版。"

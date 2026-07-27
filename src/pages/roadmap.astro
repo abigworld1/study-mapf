@@ -1,0 +1,187 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { withBase } from "@/lib/paths";
+import { getAlgorithm } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+const IMPL_LABEL: Record<string, string> = {
+  runnable: "実行可",
+  partial: "一部実装",
+  "explanation-only": "解説のみ",
+  planned: "準備中",
+};
+
+/**
+ * 実装状態は宣言ではなく registry（実際に登録された Solver）から決める。
+ * ★ テンプレート内に TypeScript の型注釈は書けないので、判定はここで済ませておく。
+ */
+function implStateOf(algorithmId: string): { label: string; runnable: boolean } {
+  const algo = getAlgorithm(algorithmId);
+  const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
+  const declared = algo?.implementation_status ?? "planned";
+  const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+  return { label: IMPL_LABEL[effective] ?? "準備中", runnable };
+}
+
+const STAGES = [
+  {
+    title: "第 1 段階 — 単一エージェントの探索",
+    why: "MAPF のほぼ全ての手法が、内部で単一エージェントの経路探索を呼びます。ここが分かっていないと先へ進めません。",
+    items: [
+      { id: "bfs", note: "単位コストでの最短経路。探索の基本形" },
+      { id: "astar", note: "ヒューリスティクスで展開を減らす" },
+    ],
+  },
+  {
+    title: "第 2 段階 — 時間を状態に入れる",
+    why: "他のエージェントが動いている以上、「いつ、どこに居るか」を状態にしないと衝突を避けられません。「待つ」という選択肢が生まれるのがここです。",
+    items: [
+      { id: "space-time-astar", note: "状態を (頂点, 時刻) に拡張する" },
+      { id: "sipp", note: "時刻を刻まず「安全区間」で表す" },
+    ],
+  },
+  {
+    title: "第 3 段階 — 最初の多エージェント手法",
+    why: "1 体ずつ順に計画し、既に決まった経路を障害物として扱う方法。速い代わりに、順序次第で失敗します。「速いが完全ではない」という感覚をここで掴みます。",
+    items: [
+      { id: "prioritized-planning", note: "固定優先順位。実行可" },
+      { id: "cooperative-astar", note: "予約表という考え方の原典" },
+      { id: "whca-star", note: "先読みを窓で区切る" },
+      { id: "pbs", note: "優先順位を固定せず探索する" },
+    ],
+  },
+  {
+    title: "第 4 段階 — CBS",
+    why: "衝突を「制約」に変えて二層で探索する枠組み。最適解を返します。以降の多くの手法が CBS の改良なので、ここが山場です。",
+    items: [
+      { id: "cbs", note: "二層構造と制約木。最適" },
+      { id: "icbs", note: "衝突の優先順位付けとバイパス" },
+      { id: "ecbs", note: "最適性を緩めて実用規模へ" },
+      { id: "eecbs", note: "非許容推定を使う有界準最適" },
+    ],
+  },
+  {
+    title: "第 5 段階 — 別系統の考え方",
+    why: "CBS 以外の攻め方を知ると、設計の選択肢が広がります。全体を一度に解かず、1 ステップずつ決める発想もあります。",
+    items: [
+      { id: "icts", note: "コストの組を列挙する" },
+      { id: "mstar", note: "衝突した箇所だけ次元を上げる" },
+      { id: "pibt", note: "1 ステップずつ優先度継承で決める" },
+      { id: "lacam", note: "構成を遅延生成して探索する" },
+    ],
+  },
+  {
+    title: "第 6 段階 — 大規模・実運用",
+    why: "実際の倉庫規模になると、最適解を待てません。実行可能解を作ってから改善する、タスクの割当も同時に考える、といった話になります。",
+    items: [
+      { id: "mapf-lns", note: "壊して直すを繰り返す anytime 改善" },
+      { id: "rhcr", note: "窓を区切って再計画し続ける lifelong" },
+      { id: "token-passing", note: "MAPD の基本形" },
+      { id: "cbs-ta", note: "割当と経路計画を同時に最適化" },
+    ],
+  },
+];
+---
+
+<BaseLayout title="学習ロードマップ" wide description="MAPF の手法を、依存関係に沿って読む順番。">
+  <h1>学習ロードマップ</h1>
+
+  <p>
+    MAPF は手法の数が多いですが、互いに依存関係があります。
+    いきなり新しい手法から読むより、この順に辿るほうが速く理解できます。
+  </p>
+  <p class="small">
+    各項目のバッジは実装状態です。「準備中」の解説はまだ骨格だけですが、
+    原論文へのリンクは載せています。
+  </p>
+
+  {
+    STAGES.map((stage, i) => (
+      <section class="stage">
+        <h2>{stage.title}</h2>
+        <p class="why">{stage.why}</p>
+        <ul class="items">
+          {stage.items.map((item) => (
+            <li>
+              <a href={withBase(`/algorithms/${item.id}/`)}>
+                <strong>{getAlgorithm(item.id)?.display_name ?? item.id}</strong>
+              </a>
+              <span class={`chip ${implStateOf(item.id).runnable ? "ok" : "muted"}`}>
+                {implStateOf(item.id).label}
+              </span>
+              <span class="note">{item.note}</span>
+            </li>
+          ))}
+        </ul>
+        {i === 0 && (
+          <p class="tip">
+            第 1・2・3 段階の一部は<a href={withBase("/simulator/")}>シミュレータ</a>で動かせます。
+            読む前に触ると理解が早いです。
+          </p>
+        )}
+      </section>
+    ))
+  }
+
+  <section>
+    <h2>この先</h2>
+    <p>
+      TAPF（チームへの目標割当）、学習ベース（PRIMAL 系）、コンパイル系（SAT / SMT / ILP）は、 上の
+      6 段階を終えてからで十分です。
+      <a href={withBase("/algorithms/")}>アルゴリズム一覧</a>から辿れます。
+    </p>
+  </section>
+
+  <style>
+    .stage {
+      border-left: 3px solid var(--accent);
+      padding-left: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+    .stage h2 {
+      border: none;
+      font-size: var(--text-xl);
+      margin-top: 0;
+    }
+    .why {
+      color: var(--fg-muted);
+    }
+    .items {
+      list-style: none;
+      padding: 0;
+    }
+    .items > li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2);
+      padding-block: var(--space-1);
+    }
+    .note {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      flex: 1 1 14rem;
+    }
+    .chip {
+      font-size: var(--text-xs);
+      padding: 0.05em 0.5em;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+    .chip.ok {
+      color: var(--ok);
+      border-color: var(--ok);
+      background: var(--ok-subtle);
+    }
+    .chip.muted {
+      color: var(--fg-muted);
+      border-color: var(--border-strong);
+      border-style: dashed;
+    }
+    .tip,
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,56 @@
+---
+/**
+ * 注意喚起。誤解しやすい点、実装上の落とし穴、保証の限界に使う。
+ */
+interface Props {
+  title?: string;
+  tone?: "warn" | "danger" | "info";
+}
+const { title = "注意", tone = "warn" } = Astro.props;
+const ROLE = tone === "danger" ? "alert" : "note";
+---
+
+<aside class={`caution tone-${tone}`} role={ROLE === "alert" ? "alert" : undefined}>
+  <p class="head">{title}</p>
+  <div class="body"><slot /></div>
+</aside>
+
+<style>
+  .caution {
+    border: var(--border-width) solid;
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-block: var(--space-4);
+    font-size: var(--text-sm);
+  }
+  .head {
+    margin: 0 0 var(--space-1);
+    font-weight: 700;
+  }
+  .body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+  .tone-warn {
+    background: var(--warn-subtle);
+    border-color: var(--warn);
+    color: var(--fg);
+  }
+  .tone-warn .head {
+    color: var(--warn);
+  }
+  .tone-danger {
+    background: var(--danger-subtle);
+    border-color: var(--danger);
+  }
+  .tone-danger .head {
+    color: var(--danger);
+  }
+  .tone-info {
+    background: var(--info-subtle);
+    border-color: var(--info);
+  }
+  .tone-info .head {
+    color: var(--info);
+  }
+</style>

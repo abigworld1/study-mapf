@@ -1,0 +1,109 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { withBase } from "@/lib/paths";
+import { papers, repositories, algorithms } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+const unknownGuarantees = algorithms.filter((a) =>
+  ["complete", "optimal", "bounded_suboptimal"].some(
+    (k) => a.guarantees[k as "complete"] === "unknown",
+  ),
+).length;
+---
+
+<BaseLayout title="このサイトについて" description="編集方針、出典の扱い、ライセンス。">
+  <h1>このサイトについて</h1>
+
+  <p>
+    MAPF / Lifelong MAPF / MAPD を、原論文にあたりながら学ぶための教材サイトです。
+    現在は基盤を作り終えた段階で、解説本文の多くはこれから書きます。
+  </p>
+
+  <h2>編集方針</h2>
+  <ol>
+    <li>
+      <strong>原論文を最優先する。</strong> サーベイや解説記事は分類と背景の説明にだけ使います。
+    </li>
+    <li>
+      <strong>推測した理論保証を書かない。</strong> 原論文で確認できたものだけを載せ、それ以外は「不明」と表示します。
+    </li>
+    <li>
+      <strong>用語を区別する。</strong> 完全 / 最適 / 有界準最適 / 最終的に最適 を混同しません。
+    </li>
+    <li>
+      <strong>変換テキストだけで判断しない。</strong> 数式・疑似コード・図表は必ず PDF と照合します。
+    </li>
+    <li><strong>ページ番号を推測しない。</strong> 確認できない場合は書きません。</li>
+    <li><strong>資料が足りないページを創作で埋めない。</strong> 「解説準備中」と出します。</li>
+  </ol>
+
+  <h2>現状の数字</h2>
+  <div class="table-scroll">
+    <table>
+      <tbody>
+        <tr><th scope="row">管理している原論文</th><td>{papers.length} 本</td></tr>
+        <tr><th scope="row">参照している公開実装</th><td>{repositories.length} 件</td></tr>
+        <tr><th scope="row">登録した手法</th><td>{algorithms.length} 件</td></tr>
+        <tr
+          ><th scope="row">シミュレータで動く手法</th><td>{RUNNABLE_ALGORITHM_IDS.length} 件</td
+          ></tr
+        >
+        <tr><th scope="row">理論保証が未確認を含む手法</th><td>{unknownGuarantees} 件</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">
+    最後の行が多いのは、まだ照合が終わっていないためです。
+    埋まっていないことを隠さず表示する方針です。
+  </p>
+
+  <h2>論文 PDF の扱い</h2>
+  <p>
+    論文 PDF はローカルの資料として管理していますが、
+    <strong>再配布が許諾されているものを除きサイトへ同梱していません</strong>。
+    配布元へのリンクを掲載します。
+  </p>
+  <p>
+    再配布可否は、出版社のページだけでなく PDF 本文の権利表示まで確認しています。 arXiv
+    のライセンス表示と PDF 本文の権利表示が食い違う例もあったため、
+    その場合は厳しい側を採っています。
+  </p>
+
+  <h2>第三者コードの扱い</h2>
+  <p>
+    公開実装は挙動の確認とテストケース作成にのみ使います。
+    ライセンスが不明なリポジトリ、および非寛容ライセンスのコードからは
+    <strong>1 行も転記しません</strong>。必要な場合は独立に書き直します。
+  </p>
+  <p>
+    ライセンスは GitHub の自動判定ではなく、clone して実ファイルを読んで判定しています。 自動判定が
+    MIT でも、実体が非営利限定の独自ライセンスだった例があります。
+  </p>
+
+  <h2>シミュレータの実装について</h2>
+  <p>
+    シミュレータに載っている実装は<strong>教材用の素朴なもの</strong>で、
+    原論文の完全な再現ではありません。各手法のページに、どこを簡略化しているかを書いています。
+    性能の比較には使えません。
+  </p>
+
+  <h2>リポジトリ</h2>
+  <p>
+    <a href="https://github.com/abigworld1/study-mapf" rel="noopener noreferrer" target="_blank">
+      github.com/abigworld1/study-mapf
+    </a>
+  </p>
+  <p>
+    出典の管理方針は <code>SOURCE_POLICY.md</code>、 解説の書き方は <code>CONTENT_GUIDE.md</code>、
+    アルゴリズムの追加方法は <code>ALGORITHM_IMPLEMENTATION_GUIDE.md</code> にあります。
+  </p>
+
+  <p><a href={withBase("/sources/")}>論文・実装一覧を見る →</a></p>
+
+  <style>
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,109 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import TerminologyNote from "@/components/sources/TerminologyNote.astro";
+import Caution from "@/components/sources/Caution.astro";
+import { withBase } from "@/lib/paths";
+---
+
+<BaseLayout
+  title="MAPDとは"
+  description="Multi-Agent Pickup and Delivery の問題設定と、MAPF との違い。"
+>
+  <h1>MAPDとは</h1>
+
+  <p>
+    Multi-Agent Pickup and Delivery（MAPD）は、
+    <strong>運搬タスクが次々に発生し続ける環境で、割当と経路計画を同時に解き続ける</strong
+    >問題です。 倉庫のロボットがこの形にあたります。
+  </p>
+  <p>
+    問題設定と代表的な解法は <SourceCitation paperId="mapd-tp-tpts-central-2017" /> にあります。
+  </p>
+
+  <h2>MAPF との違い</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th></th><th>MAPF（one-shot）</th><th>MAPD</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>目標</td>
+          <td>各エージェントに固定の目標が 1 つ</td>
+          <td>固定の目標は無い。タスクが与えられる</td>
+        </tr>
+        <tr>
+          <td>タスク</td>
+          <td>なし</td>
+          <td>(pickup, delivery) の対。時間とともに到着し続ける</td>
+        </tr>
+        <tr>
+          <td>割当</td>
+          <td>不要</td>
+          <td><strong>誰がどのタスクをやるかも決める</strong></td>
+        </tr>
+        <tr>
+          <td>終わり</td>
+          <td>全員が目標に着いたら終了</td>
+          <td>終わらない。運用し続ける</td>
+        </tr>
+        <tr>
+          <td>指標</td>
+          <td>sum of costs / makespan</td>
+          <td>service time / throughput / 未処理タスク数</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <TerminologyNote term="Lifelong MAPF">
+    ゴールに着いたエージェントへ次々と新しいゴールが与えられ続ける設定です。 MAPD
+    は、そのタスクが「pickup と delivery の 2 地点の対」で与えられる特殊形にあたります。
+    両者は別物ではなく包含関係にあります。
+  </TerminologyNote>
+
+  <Caution title="MAPD の保証は前提条件つきです">
+    <p>
+      MAPD の解法が主張する保証には、環境の性質に関する前提が付くことがあります
+      （たとえば、待機地点が他のタスク地点を塞がないような配置であること）。
+    </p>
+    <p>
+      本サイトでは、こうした条件を「条件付き」として表示し、
+      原論文の該当箇所を確認できた範囲で根拠を併記します。確認できていないものは「不明」のままにします。
+    </p>
+  </Caution>
+
+  <h2>主な指標</h2>
+  <ul>
+    <li><strong>service time</strong> — タスクが発生してから配達が完了するまでの時間</li>
+    <li><strong>throughput</strong> — 単位時間あたりに完了したタスク数</li>
+    <li>
+      <strong>未処理タスク数</strong> — まだ誰にも割り当てられていない、または配達が終わっていないタスク
+    </li>
+  </ul>
+
+  <h2>シミュレータでの対応状況</h2>
+  <p>
+    シミュレータでは pickup / delivery の配置とタスク生成（タスク数・到着率・seed）ができ、 シナリオ
+    JSON にも保存されます。 ただし<strong>現時点で MAPD に対応した Solver は未実装</strong
+    >のため、実行はできません。 実装が入り次第、シミュレータの選択肢に現れます。
+  </p>
+
+  <p>
+    <a href={withBase("/algorithms/category/mapd/")}>MAPD 系の手法一覧</a> ・
+    <a href={withBase("/algorithms/category/lifelong/")}>Lifelong MAPF の手法一覧</a>
+  </p>
+
+  <hr />
+  <p class="small">
+    このページは原論文の定義に基づいて書いていますが、節番号・ページ番号までの照合は未了です。
+  </p>
+
+  <style>
+    .small {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+  </style>
+</BaseLayout>

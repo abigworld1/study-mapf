@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abigworld1.github.io/study-mapf/schema/paper.schema.json",
+  "title": "study-mapf paper manifest entry",
+  "description": "docs/sources/papers.yaml の 1 要素。原論文 PDF と Marker 変換 Markdown の所在・再配布可否を記録する。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "short_title",
+    "algorithms",
+    "authors",
+    "year",
+    "venue",
+    "doi",
+    "landing_url",
+    "pdf_url",
+    "source_type",
+    "local_pdf",
+    "marker_markdown",
+    "marker_metadata",
+    "open_access",
+    "redistribution",
+    "status",
+    "notes"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "kebab-case の一意 ID。docs/papers/<id>/ のディレクトリ名と一致させること。"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "description": "PDF 1 ページ目で確認した正式タイトル。"
+    },
+    "short_title": { "type": "string", "minLength": 1, "description": "サイト内表示用の短縮名。" },
+    "algorithms": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "description": "algorithms.yaml の algorithm-id。この論文が原論文または主要出典となる手法。"
+    },
+    "authors": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "year": { "type": "integer", "minimum": 1900, "maximum": 2100 },
+    "venue": {
+      "type": "string",
+      "minLength": 1,
+      "description": "会議名・雑誌名。確認できない場合は unknown。"
+    },
+    "doi": {
+      "type": ["string", "null"],
+      "pattern": "^10\\.[0-9]{4,9}/\\S+$",
+      "description": "CrossRef 等で解決を確認した DOI。無い場合は null。推測で書かない。"
+    },
+    "landing_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "出版社・会議のランディングページ。"
+    },
+    "pdf_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "取得実績のある PDF の直リンク。SOURCE_POLICY.md の優先順位に従う。無い場合は null。"
+    },
+    "source_type": { "enum": ["primary", "survey", "tutorial", "thesis"] },
+    "local_pdf": {
+      "type": ["string", "null"],
+      "pattern": "^docs/papers/[a-z0-9-]+/paper\\.pdf$",
+      "description": "リポジトリ相対の PDF 保存先。未取得でもパスは宣言しておく。"
+    },
+    "marker_markdown": {
+      "type": ["string", "null"],
+      "pattern": "^docs/papers/[a-z0-9-]+/marker\\.md$",
+      "description": "Marker 変換 Markdown の保存先。"
+    },
+    "marker_metadata": {
+      "type": ["string", "null"],
+      "pattern": "^docs/papers/[a-z0-9-]+/marker_meta\\.json$",
+      "description": "Marker が出力した場合のみ必須。無い場合はバリデータが warning を出す。"
+    },
+    "open_access": {
+      "type": ["boolean", "null"],
+      "description": "誰でもログイン無しで PDF を取得できるか。再配布可否とは別問題。不明なら null。"
+    },
+    "redistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_url"],
+      "properties": {
+        "status": {
+          "enum": ["allowed", "link-only", "unknown"],
+          "description": "allowed は evidence_url でライセンス根拠を示せる場合のみ。"
+        },
+        "evidence_url": {
+          "type": ["string", "null"],
+          "description": "CC ライセンス表記や著者の再配布許諾ページ。allowed の場合は必須。"
+        }
+      }
+    },
+    "status": {
+      "enum": ["missing", "pdf-ready", "marker-ready", "verified"],
+      "description": "missing=未取得 / pdf-ready=PDF 配置済 / marker-ready=Marker 変換済 / verified=人手で本文照合済。"
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"],
+      "description": "SOURCE_ACQUISITION.md の取得優先度。"
+    },
+    "alternate_urls": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "pdf_url が失効した場合の代替 URL。"
+    },
+    "notes": { "type": ["string", "null"] }
+  }
+}

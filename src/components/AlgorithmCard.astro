@@ -1,0 +1,93 @@
+---
+import { withBase } from "@/lib/paths";
+import { getAlgorithm } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import type { CollectionEntry } from "astro:content";
+
+interface Props {
+  entry: CollectionEntry<"algorithms">;
+}
+const { entry } = Astro.props;
+const fm = entry.data;
+const algo = getAlgorithm(fm.algorithmId);
+const runnable = RUNNABLE_ALGORITHM_IDS.includes(fm.algorithmId);
+const declared = algo?.implementation_status ?? "planned";
+const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+
+const LABEL: Record<string, string> = {
+  runnable: "実行可",
+  partial: "一部実装",
+  "explanation-only": "解説のみ",
+  planned: "準備中",
+};
+const TONE: Record<string, string> = {
+  runnable: "ok",
+  partial: "warn",
+  "explanation-only": "muted",
+  planned: "muted",
+};
+---
+
+<a class="algo-card" href={withBase(`/algorithms/${entry.id}/`)}>
+  <span class="title">
+    {fm.title}
+    <span class="orig">{fm.originalName}</span>
+  </span>
+  <span class={`badge tone-${TONE[effective]}`}>{LABEL[effective]}</span>
+  {fm.summary && <span class="summary">{fm.summary}</span>}
+</a>
+
+<style>
+  .algo-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    text-decoration: none;
+    color: var(--fg);
+    height: 100%;
+  }
+  .algo-card:hover {
+    border-color: var(--accent);
+  }
+  .title {
+    font-weight: 700;
+    display: flex;
+    flex-direction: column;
+  }
+  .orig {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--fg-muted);
+  }
+  .badge {
+    align-self: flex-start;
+    font-size: var(--text-xs);
+    padding: 0.05em 0.5em;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+  .tone-ok {
+    color: var(--ok);
+    border-color: var(--ok);
+    background: var(--ok-subtle);
+  }
+  .tone-warn {
+    color: var(--warn);
+    border-color: var(--warn);
+    background: var(--warn-subtle);
+  }
+  .tone-muted {
+    color: var(--fg-muted);
+    border-color: var(--border-strong);
+    border-style: dashed;
+  }
+  .summary {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+  }
+</style>

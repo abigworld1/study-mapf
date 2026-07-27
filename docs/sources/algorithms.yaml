@@ -1,0 +1,1234 @@
+# study-mapf アルゴリズム分類マニフェスト
+#
+# guarantees の記入規則（SOURCE_POLICY.md 第 7・8 条）:
+#
+#   true        原論文が明示的に主張している
+#   false       原論文が「保証しない」と明示している
+#   conditional 条件付きで成り立つと原論文が述べている（条件を guarantee_evidence / notes に書く）
+#   unknown     原論文で確認できていない。★推測で埋めてはならない★
+#
+# 2026-07-26 に PDF 52 本が揃い、本文から定理・補題を抽出して 17 手法の保証を確定させた。
+# 確定済みのものは guarantee_evidence に原文（英語）とページ番号を入れてある。
+# 残り 60 手法は未確認のまま unknown。PDF 本文に該当する記述を見つけられなかったもので、
+# 推測で埋めてはならない。
+#
+# 抽出コマンドの例:
+#   pdftotext -q docs/papers/<id>/paper.pdf - | tr -s ' \n' ' ' \
+#     | grep -oiE '(Theorem|Lemma|Corollary)[ ]+[0-9.]+[.:][^.]{0,150}\.' \
+#     | grep -iE 'complete|optimal|suboptimal|guarantee|admissible'
+#
+# 用語の区別（第 8 条）:
+#   complete            解が存在すれば必ず見つける
+#   optimal             最適コストの解を返す
+#   bounded_suboptimal  最適コストの w 倍以内を保証する
+#   eventually optimal  時間を掛ければ最適へ収束する（optimal とは別物。conditional + notes で表す）
+#
+# 検証日: 2026-07-26
+
+# =============================================================================
+# foundations — 問題設定そのもの
+# =============================================================================
+
+- id: mapf-problem-definitions
+  display_name: "MAPF 問題定義"
+  aliases: ["Classical MAPF", "Multi-Agent Path Finding"]
+  category: foundations
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mapf-benchmarks-2019]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "アルゴリズムではなく問題定義。頂点衝突・辺衝突・follow・cycle・swap の区別、makespan と sum-of-costs の区別、ゴール到達後の扱い（stay at target / disappear at target）はすべてこの論文の定義に統一する。"
+
+- id: movingai-benchmarks
+  display_name: "MovingAI MAPF ベンチマーク"
+  aliases: ["MAPF benchmark set", "Grid benchmarks"]
+  category: benchmarks-and-tools
+  problem_types: [benchmark]
+  primary_paper_ids: [mapf-benchmarks-2019]
+  implementation_repository_ids: [hog2]
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "random / room / maze / warehouse / city の各マップと scen ファイル形式。サイトのデモで使うインスタンスはここから選び、出典を明記する。"
+
+- id: mapf-visualizer-tool
+  display_name: "MAPF 可視化ツール"
+  aliases: []
+  category: benchmarks-and-tools
+  problem_types: [benchmark]
+  primary_paper_ids: []
+  implementation_repository_ids: [mapf-visualizer]
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "特定論文の実装ではない。サイトのアニメーション表現（時刻ステップ送り、衝突の強調）の参考として扱う。"
+
+# =============================================================================
+# single-agent-search
+# =============================================================================
+
+- id: bfs
+  display_name: "幅優先探索 (BFS)"
+  aliases: ["Breadth-First Search"]
+  category: single-agent-search
+  problem_types: [single-agent]
+  primary_paper_ids: []
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "しばしば引用される Moore (1959) The shortest path through a maze の書誌情報を CrossRef で確認できなかったため primary_paper_ids は空。捏造を避けて空のままにしてある。要調査。単位コストグラフでの最短性・有限グラフでの完全性は教科書的事実だが、原典を特定できるまで guarantees は unknown のままにする。"
+
+- id: dijkstra
+  display_name: "Dijkstra 法"
+  aliases: ["Dijkstra's algorithm", "Uniform Cost Search"]
+  category: single-agent-search
+  problem_types: [single-agent]
+  primary_paper_ids: [dijkstra-1959]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "非負辺コスト・有限グラフという前提が必要。原論文 PDF が購読制で未取得のため guarantees は unknown。MAPF では単一エージェント距離ヒューリスティクス（true distance heuristic）の前計算に使う。"
+
+- id: astar
+  display_name: "A*"
+  aliases: ["A star", "A-star"]
+  category: single-agent-search
+  problem_types: [single-agent]
+  primary_paper_ids: [astar-1968]
+  implementation_repository_ids: [libmultirobotplanning, hog2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "許容ヒューリスティクス下での最適性、整合ヒューリスティクス下での再展開なしは原論文および 1972 年の訂正記事に基づくとされるが、いずれも PDF 未取得のため guarantees は unknown。PDF 取得後に定理番号とともに確定すること。MAPF ではほぼ全手法の低レベル探索の土台。"
+
+# =============================================================================
+# space-time-search
+# =============================================================================
+
+- id: space-time-astar
+  display_name: "時空間 A* (Space-Time A*)"
+  aliases: ["Space-Time A*", "STA*", "時空間探索"]
+  category: space-time-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cooperative-pathfinding-2005]
+  implementation_repository_ids: [libmultirobotplanning, cbsh2-rtc, eecbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "状態を (頂点, 時刻) に拡張した A*。CBS の低レベル、優先順位付き計画の各エージェント計画で共通に使う。与えられた制約集合のもとでの最短経路を返すが、その性質の原典記述を確認できていないため unknown。"
+
+- id: reservation-table
+  display_name: "予約テーブル (Reservation Table)"
+  aliases: ["Reservation Table"]
+  category: space-time-search
+  problem_types: [classical-mapf, lifelong-mapf]
+  primary_paper_ids: [cooperative-pathfinding-2005]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "アルゴリズムというよりデータ構造。既に計画済みのエージェントが占有する (頂点, 時刻) を記録し、後続エージェントの探索から除外する。SIPPwRT が高速な更新・参照のための拡張版を提案している。"
+
+- id: sipp
+  display_name: "SIPP (Safe Interval Path Planning)"
+  aliases: ["Safe Interval Path Planning"]
+  category: space-time-search
+  problem_types: [single-agent, classical-mapf, continuous-time-mapf]
+  primary_paper_ids: [sipp-icra-2011]
+  implementation_repository_ids: [libmultirobotplanning, continuous-cbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "アブストラクトに「既存手法は最適性どころか完全性も犠牲にしている。本論文では…なプランナを開発する」という対比の記述があるが、SIPP 自身の保証の主張部分を PDF 1 ページ目から確定できなかったため unknown。時刻を離散ステップではなく安全区間で表すため、状態数が動的障害物数に比例する点が要点。"
+
+- id: sipps
+  display_name: "SIPPS (SIPP with Soft constraints)"
+  aliases: ["SIPPS"]
+  category: space-time-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mapf-lns2-aaai-2022]
+  implementation_repository_ids: [mapf-lns2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "MAPF-LNS2 の低レベル探索として提案された。ハード制約とソフト制約（衝突数を減らしたいが違反してもよい制約）を同時に扱う SIPP 拡張。原論文 PDF 本文で SIPPS の記載を 39 箇所確認済み。"
+
+- id: sippwrt
+  display_name: "SIPPwRT (SIPP with Reservation Table)"
+  aliases: ["SIPPwRT"]
+  category: space-time-search
+  problem_types: [mapd, lifelong-mapf]
+  primary_paper_ids: [sippwrt-aaai-2019]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "運動学制約（速度・向き）付きの MAPD 向け SIPP 拡張。全エージェントの現在経路を高速に更新・参照するデータ構造を伴う。公開実装は未特定。要調査。"
+
+# =============================================================================
+# prioritized-planning
+# =============================================================================
+
+- id: prioritized-planning
+  display_name: "優先順位付き計画 (Prioritized Planning)"
+  aliases: ["PP", "Prioritized Planning"]
+  category: prioritized-planning
+  problem_types: [classical-mapf]
+  primary_paper_ids: [pbs-aaai-2019, cooperative-pathfinding-2005]
+  implementation_repository_ids: [libmultirobotplanning, push-and-rotate-cbs-pp, mapf-lns-unified]
+  implementation_status: planned
+  guarantees:
+    complete: false
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "pbs-aaai-2019 アブストラクト: 「優先順位付き計画の完全性および最適性に関する限界を初めて示す（limitations of prioritized planning, in terms of completeness and optimality, for the first time）」。具体的な反例と定理番号は PDF 取得後に追記すること。"
+  notes: "固定した優先順位でエージェントを 1 体ずつ計画する。高速だが、優先順位の選び方によっては解ける問題でも失敗する。"
+
+- id: cooperative-astar
+  display_name: "Cooperative A* (CA*)"
+  aliases: ["CA*", "Cooperative A-star"]
+  category: prioritized-planning
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cooperative-pathfinding-2005]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "予約テーブルを共有しながら順番に時空間 A* を実行する最も素朴な形。"
+
+- id: hca-star
+  display_name: "HCA* (Hierarchical Cooperative A*)"
+  aliases: ["HCA*"]
+  category: prioritized-planning
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cooperative-pathfinding-2005]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "CA* に、他エージェントを無視した抽象距離（true distance heuristic）を導入した版。"
+
+- id: whca-star
+  display_name: "WHCA* (Windowed Hierarchical Cooperative A*)"
+  aliases: ["WHCA*"]
+  category: prioritized-planning
+  problem_types: [classical-mapf, lifelong-mapf]
+  primary_paper_ids: [cooperative-pathfinding-2005]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "協調を先読み窓 w ステップ以内に限定する。RHCR の windowed MAPF の発想の源流として位置づける。"
+
+- id: pbs
+  display_name: "PBS (Priority-Based Search)"
+  aliases: ["PBS", "Priority-Based Search"]
+  category: prioritized-planning
+  problem_types: [classical-mapf]
+  primary_paper_ids: [pbs-aaai-2019]
+  implementation_repository_ids: [pbs, rhcr, mapf-lns-unified]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "pbs-aaai-2019 p.7「PBS finds solutions that are very close to optimal, getting slightly worse as the number of agents grows, but never more than 4% worse than optimal.」これは経験的な観測であって保証ではない。最適性・有界準最適性の主張は論文中に無い。完全性については同論文が優先順位付き計画一般の限界を論じているが、PBS 自身の完全性に関する明示的な記述を PDF から特定できなかったため unknown のままにしてある。"
+  notes: "優先順位を固定せず、部分順序を分岐しながら探索する。CBS の二層構造と優先順位付き計画の中間。MAPF-LNS の修復器としても使われる。"
+
+# =============================================================================
+# conflict-based-search
+# =============================================================================
+
+- id: cbs
+  display_name: "CBS (Conflict-Based Search)"
+  aliases: ["CBS", "Conflict-Based Search"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbs-aij-2015, cbs-aaai-2012]
+  implementation_repository_ids:
+    [libmultirobotplanning, cbsh2-rtc, push-and-rotate-cbs-pp, mapf-icbs, hog2]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbs-aij-2015 p.11「We begin with a proof that CBS returns the optimal solution followed by a proof of completeness.」/ p.12 Theorem 1「CBS returns an optimal solution.」/ p.18 Theorem 4「If Φ is admissible then CBSΦ is guaranteed to return the optimal solution.」（コスト関数を一般化した場合）"
+  notes: "高レベル（制約木 CT）と低レベル（単一エージェント時空間探索）の二層構造。本サイトの中核。制約の定義（頂点制約・辺制約）と CT の分岐規則は cbs-aij-2015 の記法に合わせる。"
+
+- id: ma-cbs
+  display_name: "MA-CBS (Meta-Agent CBS)"
+  aliases: ["MA-CBS", "Meta-Agent Conflict-Based Search"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [ma-cbs-socs-2012, cbs-aij-2015]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbs-aij-2015 p.1「MA-CBS is a framework that can be built on top of any optimal and complete MAPF solver in order to enhance its performance.」/ p.19「This constraint-merging mechanism must be designed such that MA-CBS still returns an optimal solution.」完全性は低レベルに使う solver が完全であることに依存するため conditional とした。"
+  notes: "衝突回数が閾値 B を超えたエージェント対をメタエージェントへ併合し、低レベルで結合探索する。B=0 で結合探索、B=∞ で素の CBS になる連続体として説明できる。公開実装は未特定。要調査。"
+
+- id: icbs
+  display_name: "ICBS (Improved CBS)"
+  aliases: ["ICBS"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [icbs-ijcai-2015]
+  implementation_repository_ids: [mapf-icbs, cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "MA-CBS に Prioritizing Conflicts (PC) と Bypassing Conflicts (BP) を加えた版。PDF 本文で bypass 系 20 箇所、Prioritizing conflicts の記載を確認済み。"
+
+- id: prioritizing-conflicts
+  display_name: "衝突の優先順位付け (Prioritizing Conflicts)"
+  aliases: ["PC", "Prioritizing Conflicts", "cardinal conflict"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [icbs-ijcai-2015]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "cardinal / semi-cardinal / non-cardinal の分類。cardinal conflict を優先して解消すると CT の下界が確実に上がる。CBSH 系のヒューリスティクスの前提概念。"
+
+- id: cbs-bypass
+  display_name: "CBS の衝突バイパス (Bypassing Conflicts)"
+  aliases: ["BP", "Bypassing Conflicts", "CBSB", "CBS+BP"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [icbs-ijcai-2015]
+  implementation_repository_ids: [cbsh2-rtc, mapf-icbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "調査対象リストにあった「CBSB」に対応させたエントリ。CBSB という名称が定着した手法名として使われている一次文献は見つけられなかったため、原典である ICBS の Bypassing Conflicts (BP) をこの ID に割り当て、CBSB を alias として記録している。もし CBSB が別手法を指すなら分離すること。要調査。"
+
+- id: bcbs
+  display_name: "BCBS (Bounded CBS)"
+  aliases: ["BCBS"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [bcbs-ecbs-socs-2014]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: false
+    bounded_suboptimal: true
+  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6「Thus, BCBS and ECBS are complete.」/ p.1「bounded-suboptimal variants, where the returned solution is guaranteed to be within a constant factor」"
+  notes: "高レベルと低レベルの双方に focal search を入れ、係数を w1・w2 に分けて配分する。"
+
+- id: ecbs
+  display_name: "ECBS (Enhanced CBS)"
+  aliases: ["ECBS"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [bcbs-ecbs-socs-2014]
+  implementation_repository_ids: [libmultirobotplanning, rhcr]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: false
+    bounded_suboptimal: true
+  guarantee_evidence: "bcbs-ecbs-socs-2014 p.6「Thus, BCBS and ECBS are complete.」/ eecbs-aaai-2021 p.1「ECBS ... is guaranteed to find solutions whose costs are no more than a user-specified factor away from optimal.」"
+  notes: "低レベルの探索木サイズを利用して高レベルの focal 集合を作る。RHCR の既定ソルバでもある。"
+
+- id: focal-search
+  display_name: "Focal Search"
+  aliases: ["Focal Search", "A*-epsilon"]
+  category: conflict-based-search
+  problem_types: [single-agent, classical-mapf]
+  primary_paper_ids: [bcbs-ecbs-socs-2014]
+  implementation_repository_ids: [eecbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: false
+    bounded_suboptimal: true
+  guarantee_evidence: "bcbs-ecbs-socs-2014 アブストラクトで、focal 集合を使うことで解が与えられた準最適性の範囲に収まると述べられている。focal search 自体の原典（Pearl & Kim 1982 とされる）は未調査のため primary_paper_ids は BCBS/ECBS 論文を暫定的に指している。要調査。"
+  notes: "OPEN のうち f ≤ w · f_min を満たすノード集合（FOCAL）から、別の非許容ヒューリスティクスで選ぶ。BCBS・ECBS・EECBS の共通土台。"
+
+- id: eecbs
+  display_name: "EECBS (Explicit Estimation CBS)"
+  aliases: ["EECBS"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [eecbs-aaai-2021]
+  implementation_repository_ids: [eecbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: false
+    bounded_suboptimal: true
+  guarantee_evidence: "eecbs-aaai-2021 p.1「a new bounded-suboptimal variant of CBS」/ 同 p.1「ECBS ... sacrificing optimality and instead guaranteeing that the costs of its solutions are within a given factor of optimal.」EECBS 自身の完全性を明示する記述は PDF から見つけられなかったため complete は unknown のままにしてある。"
+  notes: "Explicit Estimation Search を CBS 高レベルへ適用し、非許容推定をオンライン学習で得る。"
+
+- id: ccbs
+  display_name: "CCBS (Continuous-time CBS)"
+  aliases: ["CCBS", "Continuous CBS"]
+  category: conflict-based-search
+  problem_types: [continuous-time-mapf]
+  primary_paper_ids: [ccbs-ijcai-2019]
+  implementation_repository_ids: [continuous-cbs]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "ccbs-ijcai-2019 アブストラクト:「…これらの仮定に依存せず、完全であり、証明可能に最適な解を与える MAPF アルゴリズム（is complete, and provides provably optimal solutions）」。定理番号は PDF 取得後に追記すること。"
+  notes: "単位時間・格子という仮定を外し、任意の動作時間と幾何的な衝突を扱う。低レベルは SIPP。"
+
+- id: cbsh
+  display_name: "CBSH (CBS with Heuristics)"
+  aliases: ["CBSH", "CBS+H", "CG heuristic"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh-icaps-2018]
+  implementation_repository_ids: [cbsh2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "cardinal conflict のグラフ（Conflict Graph）の最小頂点被覆を高レベルの許容ヒューリスティクスにする。"
+
+- id: cbsh2
+  display_name: "CBSH2 (改良ヒューリスティクス版 CBS)"
+  aliases: ["CBSH2", "DG heuristic", "WDG heuristic"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh2-ijcai-2019, cbsh-icaps-2018]
+  implementation_repository_ids: [cbsh2, eecbs]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "CG に加え DG（Dependency Graph）と WDG（Weighted DG）を導入。cardinal conflict だけを見る CG の限界を示した点が主張。"
+
+- id: cbsh2-rtc
+  display_name: "CBSH2-RTC (対称性推論つき CBSH2)"
+  aliases: ["CBSH2-RTC", "CBSH-RTC"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh2-rtc-aij-2021]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "R = Rectangle、T = Target、C = Corridor。3 種の対称性推論をまとめて搭載した最適解法。"
+
+- id: rectangle-reasoning
+  display_name: "矩形対称性推論 (Rectangle Reasoning)"
+  aliases: ["Rectangle Reasoning", "Rectangle Symmetry"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh2-rtc-aij-2021]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "開けた矩形領域で 2 エージェントが交差するとき、指数個の等価な解消手が生じる。専用のバリア制約で 1 回の分岐に畳む。PDF 本文で Rectangle Reasoning / Rectangle Symmetry の記載を確認済み。"
+
+- id: corridor-reasoning
+  display_name: "回廊対称性推論 (Corridor Reasoning)"
+  aliases: ["Corridor Reasoning", "Corridor Symmetry"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh2-rtc-aij-2021]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "幅 1 の通路で正面衝突するときの対称性。PDF 本文で corridor reasoning の記載を 30 箇所以上確認済み。"
+
+- id: target-reasoning
+  display_name: "目標対称性推論 (Target Reasoning)"
+  aliases: ["Target Reasoning", "Target Symmetry"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [cbsh2-rtc-aij-2021]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "ゴールに到達して停止したエージェントと、その頂点を通りたいエージェントの間に生じる対称性。停止後の扱い（stay at target）に依存するため、問題定義とセットで説明すること。"
+
+- id: disjoint-splitting
+  display_name: "Disjoint Splitting"
+  aliases: ["Disjoint Splitting"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [disjoint-splitting-icaps-2019]
+  implementation_repository_ids: [cbsh2-rtc]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "標準分割では 2 つの子ノードの探索空間が重なる。positive constraint（必ずそこを通れ）を導入して重なりを消す。"
+
+- id: bcp
+  display_name: "BCP (Branch-and-Cut-and-Price)"
+  aliases: ["BCP", "Branch-and-Cut-and-Price"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [bcp-ijcai-2019]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "整数計画の列生成に CBS 的な分岐を組み合わせる。公開実装は未特定（著者 Edward Lam のリポジトリが存在する可能性がある）。要調査。"
+
+- id: mdd-sat
+  display_name: "MDD-SAT"
+  aliases: ["MDD-SAT"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mdd-sat-ecai-2016, compilation-survey-2022]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "MDD（Multi-value Decision Diagram）で変数を絞った sum-of-costs 目的の SAT 符号化。原論文が IOS Press 購読制で入手できていないため、当面は compilation-survey-2022 の記述で説明する。"
+
+- id: smt-cbs
+  display_name: "SMT-CBS"
+  aliases: ["SMT-CBS"]
+  category: conflict-based-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [smt-cbs-ijcai-2019, compilation-survey-2022]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "MDD-SAT が最初に全制約を書き下すのに対し、SMT-CBS は衝突が起きてから制約を遅延追加する。CBS の分岐と SAT の学習の対応づけとして説明する。公開実装は未特定。"
+
+# =============================================================================
+# joint-state-and-subdimensional-search
+# =============================================================================
+
+- id: joint-state-astar
+  display_name: "結合状態 A* (Joint-State A*)"
+  aliases: ["Joint-state A*", "Coupled A*", "A* on the joint configuration space"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [standley-od-id-2010]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "全エージェントの位置の組を 1 状態とする素朴な結合探索。分岐数がエージェント数の指数になることを示すためのベースライン。OD / ID / M* / CBS はいずれもこの爆発への対処として説明できる。"
+
+- id: operator-decomposition
+  display_name: "Operator Decomposition (OD)"
+  aliases: ["OD", "Operator Decomposition"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [standley-od-id-2010]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "standley-od-id-2010 p.3「Therefore, A* with OD is admissible and complete for all choices of agent order due to the admissibility and completeness of the standard A* algorithm.」/ 同 p.5「Both OD and the standard algorithm are complete.」なお同 p.3 に「OD will not guarantee optimal solutions if the implementation is naive.」という注意がある。"
+  notes: "エージェントの移動を 1 体ずつ適用する中間状態を導入し、1 手あたりの分岐数を指数から線形へ落とす。"
+
+- id: independence-detection
+  display_name: "Independence Detection (ID)"
+  aliases: ["ID", "Independence Detection", "Simple ID"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [standley-od-id-2010]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: conditional
+    bounded_suboptimal: false
+  guarantee_evidence: "standley-od-id-2010 p.5「Therefore ID is complete when coupled with a complete search algorithm.」/ cbs-aij-2015 p.7「the ID framework can be implemented on top of any optimal MAPF solver (one that is guaranteed to return an optimal solution)」。いずれも下位ソルバの性質に依存するため conditional。"
+  notes: "相互作用しないエージェント群を分離して独立に解く。任意の MAPF ソルバの上に載るメタ手法であり、CBS 系にも適用できる。"
+
+- id: mstar
+  display_name: "M*"
+  aliases: ["M*", "Subdimensional Expansion", "ODrM*"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mstar-aij-2015]
+  implementation_repository_ids: [libmultirobotplanning, public-cppmomapf]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "mstar-aij-2015 Theorem 1「M* is complete and optimal.」（Lemma 3・6・7 が前提補題）"
+  notes: "まず各エージェントを個別に計画し、衝突が起きた箇所でだけ探索空間の次元を局所的に上げる（subdimensional expansion）。PRIMAL の模倣学習の教師は ODrM*。原論文の保証の主張は PDF 1 ページ目から抽出できなかったため unknown。"
+
+- id: recursive-mstar
+  display_name: "Recursive M* (rM*)"
+  aliases: ["rM*", "Recursive M*"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mstar-aij-2015]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "衝突集合をさらに独立な部分集合へ分解して再帰的に M* を適用する。mstar-aij-2015 に含まれる。"
+
+- id: icts
+  display_name: "ICTS (Increasing Cost Tree Search)"
+  aliases: ["ICTS", "Increasing Cost Tree Search"]
+  category: joint-state-and-subdimensional-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [icts-ijcai-2011]
+  implementation_repository_ids: [hog2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "icts-ijcai-2011 のタイトル「The Increasing Cost Tree Search for Optimal Multi-agent Pathfinding」。定理番号は PDF 取得後、可能なら AIJ 2013 拡張版（DOI 10.1016/j.artint.2012.11.006）で追記すること。"
+  notes: "高レベルで各エージェントのコストの組を列挙し、低レベルで MDD の交差により実現可能性を判定する二層構造。CBS と対比して説明すると分かりやすい。"
+
+# =============================================================================
+# rule-based-and-configuration-search
+# =============================================================================
+
+- id: push-and-swap
+  display_name: "Push and Swap"
+  aliases: ["Push and Swap", "P&S"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [push-and-swap-ijcai-2011]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "push-and-swap-ijcai-2011 タイトル「Fast Cooperative Path-Finding with Completeness Guarantees」/ cbs-aij-2015 p.5「Both TASS and Push and Swap do not return an optimal solution and guarantee completeness for special cases only.」成立クラスに条件があるため conditional。"
+  notes: "★重要★ push-and-rotate-aamas-2013 の 1 ページ目脚注が「一部のインスタンスでは Push and Swap が解を見つけられるかどうかがエージェントの処理順に依存する」と指摘している。完全性を説明する際は必ず両論文を併記すること（SOURCE_POLICY.md 第 4 条）。"
+
+- id: push-and-rotate
+  display_name: "Push and Rotate"
+  aliases: ["Push and Rotate", "P&R"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [push-and-rotate-aamas-2013]
+  implementation_repository_ids: [push-and-rotate-cbs-pp]
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "cbs-aij-2015 p.5「Push and Rotate [10], a variant of Push and Swap, is complete for graphs where at least two vertices are always unoccupied, i.e., k ≤ |V| − 2.」空き頂点が 2 つ以上という条件付き。同箇所が Push and Swap は最適解を返さないと明記している。"
+  notes: "Push / Swap / Rotate の 3 操作。解の質は保証されないが、対象クラス内では解を返す。"
+
+- id: pibt
+  display_name: "PIBT (Priority Inheritance with Backtracking)"
+  aliases: ["PIBT"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf, lifelong-mapf]
+  primary_paper_ids: [pibt-aij-2022]
+  implementation_repository_ids: [pibt2, pypibt]
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "★ pibt-aij-2022 p.3「The proposed method, PIBT, is neither complete nor optimal for MAPF.」/ 同 p.12「Alternatively, with the graph condition of Theorem 1, PIBT is complete for the MAPF variant where agents need not necessarily stay at their goals.」つまり古典的 MAPF では完全でも最適でもなく、ゴール滞在を要求しない変種でのみ、Theorem 1 のグラフ条件下で完全。"
+  notes: "★重要★ この保証は古典的 MAPF の意味での完全性ではなく、反復設定での到達性である。両者を混同しないこと（SOURCE_POLICY.md 第 8 条）。解の質の保証は無い。"
+
+- id: winpibt
+  display_name: "winPIBT"
+  aliases: ["winPIBT"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf, lifelong-mapf]
+  primary_paper_ids: [winpibt-2019]
+  implementation_repository_ids: [pibt2]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "PIBT の 1 ステップ先読みを任意の窓幅へ拡張。"
+
+- id: lacam
+  display_name: "LaCAM"
+  aliases: ["LaCAM", "Lazy Constraints Addition search for MAPF"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [lacam-aaai-2023]
+  implementation_repository_ids: [lacam0]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "lacam-aaai-2023 p.1「From the theoretical side, LaCAM is complete. It returns a solution for solvable instances, otherwise reports the nonexistence.」/ lacam-star-ijcai-2023 p.1「LaCAM is a sub-optimal search-based algorithm」（LaCAM 単体は最適性を主張していない）"
+  notes: "構成（全エージェントの位置の組）を遅延生成しながら探索する。LaCAM 単体は最適性を主張していない。最適性は lacam-star（eventually optimal）で導入される。"
+
+- id: lacam-star
+  display_name: "LaCAM*"
+  aliases: ["LaCAM*", "LaCAM star"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [lacam-star-ijcai-2023]
+  implementation_repository_ids: [lacam2, pylacam]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: conditional
+    bounded_suboptimal: false
+  guarantee_evidence: "★ 表記に注意。lacam-star-ijcai-2023 p.4「LaCAM∗ (Alg. 3) is complete and optimal.」と書かれているが、同論文のタイトルは「Eventually Optimal」であり、lacam3-aamas-2024 のアブストラクトも「guarantees the eventual finding of optimal solutions for cumulative transition costs」と述べている。すなわち有限時間での最適性ではなく anytime な収束を指すため conditional とした。"
+  notes: "★重要★ eventually optimal（時間を掛ければ最適へ収束する）であって、有限時間で最適解を返す optimal ではない。サイト上でも必ず「最終的に最適」と書き、「最適」と省略しないこと（SOURCE_POLICY.md 第 8 条）。対象は累積遷移コストである点にも注意。"
+
+- id: lacam3
+  display_name: "LaCAM3 (Engineering LaCAM*)"
+  aliases: ["LaCAM3", "LaCAM* engineered"]
+  category: rule-based-and-configuration-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [lacam3-aamas-2024]
+  implementation_repository_ids: [lacam3]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: conditional
+    bounded_suboptimal: false
+  guarantee_evidence: "lacam3-aamas-2024 は LaCAM* の実装改良であり、eventually optimal の性質を引き継ぐと読めるが、改良後も保証が保たれることの明示的な記述を PDF 1 ページ目からは確定できなかった。PDF 取得後に確認すること。"
+  notes: "実時間・大規模・準最適寄りの実装最適化。ベンチマークの再現条件は本論文の設定に従うこと。"
+
+# =============================================================================
+# large-neighborhood-search
+# =============================================================================
+
+- id: mapf-lns
+  display_name: "MAPF-LNS"
+  aliases: ["MAPF-LNS", "Anytime MAPF via LNS"]
+  category: large-neighborhood-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mapf-lns-ijcai-2021]
+  implementation_repository_ids: [mapf-lns, mapf-lns-unified]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "実行可能解から出発し、一部エージェントの経路を破壊して再計画することを繰り返す anytime 改善。destroy heuristic は random / agent-based / map-based。初期解は PP や EECBS。"
+
+- id: mapf-lns2
+  display_name: "MAPF-LNS2"
+  aliases: ["MAPF-LNS2"]
+  category: large-neighborhood-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [mapf-lns2-aaai-2022]
+  implementation_repository_ids: [mapf-lns2, mapf-lns-unified]
+  implementation_status: planned
+  guarantees:
+    complete: false
+    optimal: false
+    bounded_suboptimal: false
+  guarantee_evidence: "mapf-lns2-aaai-2022 アブストラクト:「理論的保証は無いものの、経験的には最先端の各種 MAPF アルゴリズムを大きく上回る（it lacks theoretical guarantees, it empirically significantly outperforms …）」。"
+  notes: "衝突を含む解から出発し、衝突数を減らす方向に修復する（LNS1 が実行可能解を要求するのに対する違い）。低レベルは SIPPS。"
+
+- id: mapf-ml-lns
+  display_name: "MAPF-ML-LNS (機械学習誘導 LNS)"
+  aliases: ["MAPF-ML-LNS", "ML-guided LNS"]
+  category: large-neighborhood-search
+  problem_types: [classical-mapf]
+  primary_paper_ids: [ml-lns-aaai-2022]
+  implementation_repository_ids: [mapf-lns-unified]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "ランダムな destroy heuristic の代わりに、改善量を予測する学習モデルで近傍を選ぶ。性能比較を書くときは lns-reevaluation-socs-2025 の測定条件にも当たること。"
+
+- id: regret-insertion
+  display_name: "Regret 挿入法 (Regret Insertion)"
+  aliases: ["Regret insertion", "Regret-based insertion", "regret heuristic"]
+  category: large-neighborhood-search
+  problem_types: [mapd]
+  primary_paper_ids: [rmca-ral-2021]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "調査対象リストの「Regret insertion」に対応させたエントリ。MAPF 文脈では rmca-ral-2021 が regret-based の割当・挿入を用いており（PDF 本文で regret 13 箇所、regret-based を確認）、これを一次出典としている。ただし regret 挿入法自体は車両配送問題（VRP）由来の古典的ヒューリスティクスであり、その原典（Potvin & Rousseau 1993 等とされる）は未確認。要調査。"
+
+# =============================================================================
+# lifelong-mapf
+# =============================================================================
+
+- id: lifelong-mapf-problem
+  display_name: "Lifelong MAPF 問題定義"
+  aliases: ["Lifelong MAPF", "Online MAPF"]
+  category: lifelong-mapf
+  problem_types: [lifelong-mapf]
+  primary_paper_ids: [rhcr-aaai-2021, mapd-tp-tpts-central-2017]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "ゴールに到達したエージェントへ次々と新しいゴールが与えられ続ける設定。MAPD はそのうちタスクが pickup と delivery の 2 地点対で与えられる特殊形。両者の関係をサイト上で明示すること。"
+
+- id: rhcr
+  display_name: "RHCR (Rolling-Horizon Collision Resolution)"
+  aliases: ["RHCR", "Rolling-Horizon Collision Resolution"]
+  category: lifelong-mapf
+  problem_types: [lifelong-mapf]
+  primary_paper_ids: [rhcr-aaai-2021]
+  implementation_repository_ids: [rhcr]
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "先読み窓 w ステップ以内の衝突だけを解消し、h ステップごとに再計画する（w >= h）。既定ソルバは ECBS。w と h の分離が要点で、WHCA* の窓との違いを説明すること。"
+
+# =============================================================================
+# mapd
+# =============================================================================
+
+- id: mapd-problem
+  display_name: "MAPD 問題定義"
+  aliases: ["Multi-Agent Pickup and Delivery", "MAPD"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mapd-tp-tpts-central-2017]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "タスク = (pickup 地点, delivery 地点) が時間とともに到着し続ける。well-formed infrastructure の定義（各エージェントの待機地点が他のタスク地点を塞がない配置）がこの論文の保証の前提になる。"
+
+- id: token-passing
+  display_name: "TP (Token Passing)"
+  aliases: ["TP", "Token Passing"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mapd-tp-tpts-central-2017]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: conditional
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: "mapd-tp-tpts-central-2017 アブストラクトに TP の保証に言及する記述（this guarantee in a simulated warehouse system / TP can …）があるが、抽出が途中で切れており保証の内容と前提を確定できなかった。well-formed infrastructure を前提とする条件付き保証と読めるため conditional にしてある。PDF 取得後に必ず確定すること。"
+  notes: "共有トークン（現在の経路・タスク集合）を 1 体ずつ受け渡し、空いたエージェントがタスクを取って経路を書き込む分散的な方式。PDF 本文で TP / TPTS / CENTRAL の記載を確認済み。"
+
+- id: tpts
+  display_name: "TPTS (Token Passing with Task Swaps)"
+  aliases: ["TPTS"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mapd-tp-tpts-central-2017]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "既に割り当て済みで未 pickup のタスクを、より近いエージェントが奪えるようにした TP の拡張。"
+
+- id: central
+  display_name: "CENTRAL"
+  aliases: ["CENTRAL"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mapd-tp-tpts-central-2017]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "割当と経路計画を集中的に解くベースライン。TP / TPTS との比較対象として使う。"
+
+- id: ta-prioritized
+  display_name: "TA-Prioritized"
+  aliases: ["TA-Prioritized"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [ta-prioritized-hybrid-aamas-2019]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "タスク割当を先に決め、経路は優先順位付き計画で解く。PDF 本文で 26 箇所確認済み。"
+
+- id: ta-hybrid
+  display_name: "TA-Hybrid"
+  aliases: ["TA-Hybrid"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [ta-prioritized-hybrid-aamas-2019]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "割当と経路計画を組み合わせた手法。PDF 本文で 55 箇所確認済み。公開実装は未特定。要調査。"
+
+- id: mla-star
+  display_name: "MLA* (Multi-Label A*)"
+  aliases: ["MLA*", "Multi-Label A*"]
+  category: mapd
+  problem_types: [mapd, single-agent]
+  primary_paper_ids: [mla-star-icaps-2019]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "pickup → delivery のように途中で必ず経由すべき地点がある単一エージェント探索。ラベル（未 pickup / pickup 済み）で状態を分ける。"
+
+- id: hbh
+  display_name: "HBH (Hungarian-Based Heuristic)"
+  aliases: ["HBH", "Hungarian-Based Heuristic", "HBH+MLA*"]
+  category: mapd
+  problem_types: [mapd, assignment]
+  primary_paper_ids: [mla-star-icaps-2019]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "ハンガリアン法で得た割当をタスク選択のヒューリスティクスに使う。PDF 本文で HBH 15 箇所、HBH+MLA* 6 箇所を確認済み。hungarian-method と組で説明する。"
+
+- id: rmca
+  display_name: "RMCA"
+  aliases: ["RMCA"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [rmca-ral-2021]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "1 エージェントが複数タスクを同時に運べる容量制約付き MAPD。regret ベースの割当と経路計画を統合。公開実装は未特定。要調査。"
+
+- id: lns-pbs
+  display_name: "LNS-PBS"
+  aliases: ["LNS-PBS"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mg-mapd-iros-2022]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "多目的地 MAPD 向け。LNS で割当を改善し PBS で経路を解く。PDF 本文で 39 箇所確認済み。"
+
+- id: lns-wpbs
+  display_name: "LNS-wPBS"
+  aliases: ["LNS-wPBS"]
+  category: mapd
+  problem_types: [mapd]
+  primary_paper_ids: [mg-mapd-iros-2022]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "LNS-PBS の windowed 版。PDF 本文で 46 箇所確認済み。"
+
+# =============================================================================
+# tapf-and-task-assignment
+# =============================================================================
+
+- id: tapf-problem
+  display_name: "TAPF 問題定義"
+  aliases: ["Combined Target-Assignment and Path-Finding", "TAPF"]
+  category: tapf-and-task-assignment
+  problem_types: [tapf]
+  primary_paper_ids: [cbm-tapf-aamas-2016]
+  implementation_repository_ids: []
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: unknown
+  guarantee_evidence: null
+  notes: "エージェントがチームに分かれ、チーム内でどの目標へ行くかは自由という設定。MAPF（目標固定）と MAPD（タスクが流れてくる）の中間として説明する。"
+
+- id: cbm
+  display_name: "CBM (Conflict-Based Min-Cost-Flow)"
+  aliases: ["CBM"]
+  category: tapf-and-task-assignment
+  problem_types: [tapf]
+  primary_paper_ids: [cbm-tapf-aamas-2016]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbm-tapf-aamas-2016 p.6「CBM is correct, complete and optimal.」/ 同 p.2「Theoretically, we prove that CBM is correct, complete and optimal.」対象は TAPF 問題。"
+  notes: "CBS の高レベルはそのままに、低レベルを各チームの最小費用流に置き換える。タイトルに Optimal が入っているのは問題設定側（Optimal Target Assignment and Path Finding）であり、アルゴリズムの保証としては PDF で確認すること。公開実装は未特定。"
+
+- id: cbs-ta
+  display_name: "CBS-TA"
+  aliases: ["CBS-TA", "ECBS-TA"]
+  category: tapf-and-task-assignment
+  problem_types: [tapf]
+  primary_paper_ids: [cbs-ta-aamas-2018]
+  implementation_repository_ids: [libmultirobotplanning]
+  implementation_status: planned
+  guarantees:
+    complete: true
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbs-ta-aamas-2018 p.1「We show that our new algorithm, CBS-TA, is complete and optimal.」/ Theorem 4.1「CBS-TA is complete.」/ Theorem 4.2「CBS-TA computes a solution that minimizes the sum of individual costs of all agents if one exists.」なお同 p.5 に有界準最適版 ECBS-TA への言及がある。"
+  notes: "K-best 割当を根ノード群として CT を張る。ECBS-TA を別エントリにするかは、実装段階で扱いを決めてから判断する。"
+
+- id: ita-cbs
+  display_name: "ITA-CBS"
+  aliases: ["ITA-CBS", "Incremental Target Assignment CBS"]
+  category: tapf-and-task-assignment
+  problem_types: [tapf]
+  primary_paper_ids: [ita-cbs-mrs-2023]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "ita-cbs-mrs-2023 p.4「ITA-CBS guarantees to find an optimal TAPF solution if one exists.」/ 同 p.1「We show that ITA-CBS, in theory, is guaranteed to find optimal solutions」/ p.6「We prove that ITA-CBS is optimal」。完全性を明示する記述は見つからなかったため complete は unknown。"
+  notes: "CBS-TA が K-best 割当ごとに根を作るのに対し、単一の制約木の中で 1-best 割当を増分更新する。公開実装は未特定。要調査。"
+
+- id: ita-ecbs
+  display_name: "ITA-ECBS"
+  aliases: ["ITA-ECBS"]
+  category: tapf-and-task-assignment
+  problem_types: [tapf]
+  primary_paper_ids: [ita-ecbs-socs-2024]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: false
+    bounded_suboptimal: true
+  guarantee_evidence: "ita-ecbs-socs-2024 のタイトル「ITA-ECBS: A Bounded-Suboptimal Algorithm for Combined Target-Assignment and Path-Finding Problem」で有界準最適性を明示。"
+  notes: "ITA-CBS の有界準最適版。focal search と、割当決定用の新しい下界行列を使う。公開実装は未特定。要調査。"
+
+# =============================================================================
+# matching-and-assignment
+# =============================================================================
+
+- id: hungarian-method
+  display_name: "ハンガリアン法 (Hungarian Method)"
+  aliases: ["Hungarian Method", "Kuhn-Munkres algorithm"]
+  category: matching-and-assignment
+  problem_types: [assignment]
+  primary_paper_ids: [hungarian-method-1955]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "線形割当問題を多項式時間で最適に解く。MAPF 文脈では CBS-TA・HBH・ITA-CBS の割当部分で使う。原論文が購読制で未取得のため guarantees は unknown。"
+
+- id: gale-shapley
+  display_name: "Gale-Shapley 法 (安定マッチング)"
+  aliases: ["Gale-Shapley", "Deferred Acceptance", "Stable Marriage"]
+  category: matching-and-assignment
+  problem_types: [assignment]
+  primary_paper_ids: [gale-shapley-1962]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "コスト最小化ではなく安定性（ブロッキングペアが存在しないこと）を保証する点で、ハンガリアン法とは目的関数が異なる。この違いをサイト上で明示すること。原論文が購読制で未取得のため guarantees は unknown。"
+
+- id: auction-algorithm
+  display_name: "オークションアルゴリズム (Auction Algorithm)"
+  aliases: ["Auction Algorithm", "Bertsekas auction"]
+  category: matching-and-assignment
+  problem_types: [assignment]
+  primary_paper_ids: [auction-algorithm-1988]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "未割当の主体が同時に入札して価格を上げる分散的な緩和法。分散 MAPD のタスク割当と相性がよい。epsilon-complementary slackness による最適性の議論は PDF 取得後に確認すること。"
+
+- id: min-cost-max-flow
+  display_name: "最小費用最大流 (Min-Cost Max-Flow)"
+  aliases: ["Min-Cost Max-Flow", "MCMF", "network flow"]
+  category: matching-and-assignment
+  problem_types: [flow, tapf]
+  primary_paper_ids: [network-flow-mapf-2012, cbm-tapf-aamas-2016]
+  implementation_repository_ids: []
+  implementation_status: planned
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "時空間グラフ上のフローとして MAPF（特に匿名エージェント版）を定式化する。CBM の低レベルがこれ。flow アルゴリズム自体の原典（Ford-Fulkerson 等）は未調査。要調査。"
+
+# =============================================================================
+# learning-based
+# =============================================================================
+
+- id: primal
+  display_name: "PRIMAL"
+  aliases: ["PRIMAL"]
+  category: learning-based
+  problem_types: [classical-mapf]
+  primary_paper_ids: [primal-ral-2019]
+  implementation_repository_ids: [primal]
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "★重要★ 分散方策を強化学習と模倣学習（教師は ODrM*）で獲得する。論文は成功率と実行時間で評価しており、完全性・最適性は主張していない。サイト上でも「保証なし・経験的性能」と明記すること（SOURCE_POLICY.md 第 7 条）。"
+
+- id: primal2
+  display_name: "PRIMAL2"
+  aliases: ["PRIMAL2", "PRIMAL_2"]
+  category: learning-based
+  problem_types: [lifelong-mapf]
+  primary_paper_ids: [primal2-ral-2021]
+  implementation_repository_ids: [primal2]
+  implementation_status: explanation-only
+  guarantees:
+    complete: unknown
+    optimal: unknown
+    bounded_suboptimal: false
+  guarantee_evidence: null
+  notes: "PRIMAL の Lifelong MAPF 版。保証に関する注意は primal と同じ。"

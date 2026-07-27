@@ -1,0 +1,118 @@
+---
+import { getAlgorithm } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+/**
+ * 実装状態のバッジ。
+ *
+ * ★ 「実装済み」と誤認させないことが最優先。
+ *   シミュレータで実際に動くかどうかは registry（= 実際に登録された Solver）から取り、
+ *   algorithms.yaml の宣言だけを信用しない。両者が食い違ったら registry を優先する。
+ */
+interface Props {
+  algorithmId: string;
+  /** 解説ページの正確性の状態。 */
+  contentStatus?: "draft" | "reviewed" | "verified";
+  showContent?: boolean;
+}
+
+const { algorithmId, contentStatus, showContent = true } = Astro.props;
+const algo = getAlgorithm(algorithmId);
+const runnable = RUNNABLE_ALGORITHM_IDS.includes(algorithmId);
+
+// registry に無いのに runnable を名乗っている場合は、実態（= 動かない）に合わせる。
+const declared = algo?.implementation_status ?? "planned";
+const effective = runnable ? "runnable" : declared === "runnable" ? "planned" : declared;
+
+const IMPL: Record<string, { label: string; tone: string; help: string }> = {
+  runnable: {
+    label: "シミュレータで実行可",
+    tone: "ok",
+    help: "このページのシミュレータで実際に動かせます。",
+  },
+  partial: {
+    label: "一部のみ実装",
+    tone: "warn",
+    help: "動きますが、原論文の全機能を再現してはいません。",
+  },
+  "explanation-only": {
+    label: "解説のみ",
+    tone: "muted",
+    help: "実装はありません。解説と出典だけを載せています。",
+  },
+  planned: {
+    label: "未実装",
+    tone: "muted",
+    help: "実装も解説も準備中です。",
+  },
+};
+
+const CONTENT: Record<string, { label: string; tone: string; help: string }> = {
+  draft: {
+    label: "下書き",
+    tone: "muted",
+    help: "原論文から作成中です。記述が不足している場合があります。",
+  },
+  reviewed: {
+    label: "原論文と照合済み",
+    tone: "info",
+    help: "原論文と Marker Markdown を突き合わせて確認しました。",
+  },
+  verified: {
+    label: "実装・テストまで照合済み",
+    tone: "ok",
+    help: "原論文・実装・テストの 3 点で確認しました。",
+  },
+};
+
+const impl = IMPL[effective] ?? IMPL.planned!;
+const content = contentStatus ? CONTENT[contentStatus] : undefined;
+---
+
+<p class="status-row">
+  <span class={`badge tone-${impl.tone}`} title={impl.help}>{impl.label}</span>
+  {
+    showContent && content && (
+      <span class={`badge tone-${content.tone}`} title={content.help}>
+        解説: {content.label}
+      </span>
+    )
+  }
+</p>
+
+<style>
+  .status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-block: var(--space-3);
+  }
+  .badge {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    padding: 0.15em 0.7em;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+  .tone-ok {
+    background: var(--ok-subtle);
+    color: var(--ok);
+    border-color: var(--ok);
+  }
+  .tone-warn {
+    background: var(--warn-subtle);
+    color: var(--warn);
+    border-color: var(--warn);
+  }
+  .tone-info {
+    background: var(--info-subtle);
+    color: var(--info);
+    border-color: var(--info);
+  }
+  .tone-muted {
+    background: var(--bg-sunken);
+    color: var(--fg-muted);
+    border-color: var(--border-strong);
+    border-style: dashed;
+  }
+</style>

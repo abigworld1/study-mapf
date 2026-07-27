@@ -1,0 +1,303 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Simulator from "@/components/simulator/Simulator.tsx";
+import { listSolverMetadata } from "@/solvers/registry";
+import { withBase } from "@/lib/paths";
+
+const solvers = listSolverMetadata();
+---
+
+<BaseLayout
+  title="シミュレータ"
+  wide
+  description="MAPF のシナリオをブラウザ内で編集し、実装済みのアルゴリズムを動かせます。"
+>
+  <h1>シミュレータ</h1>
+
+  <p>
+    グリッドを編集し、実装済みのアルゴリズムを実行できます。計算はすべてブラウザ内で行い、
+    サーバへは何も送信しません。探索は Web Worker で動くため、実行中も画面操作ができます。
+  </p>
+
+  <noscript>
+    <div class="noscript">
+      <p>
+        <strong>シミュレータの実行には JavaScript が必要です。</strong>
+        下のシミュレーションモデルの説明と、各アルゴリズムの解説ページは JavaScript 無効のままでも読めます。
+      </p>
+      <p><a href={withBase("/algorithms/")}>アルゴリズム一覧へ</a></p>
+    </div>
+  </noscript>
+
+  {
+    /*
+    client:only にしているのは、Canvas と localStorage を使うため SSR しても意味が無く、
+    ハイドレーションの不一致を避けたいから。解説本文は静的に出しているので
+    JS 無効でもページの情報は失われない。
+  */
+  }
+  <Simulator client:only="react" />
+
+  <h2>シミュレーションモデル</h2>
+  <p>このシミュレータが採用しているルールです。論文ごとに前提が違うため、明示しておきます。</p>
+
+  <div class="table-scroll">
+    <table>
+      <tbody>
+        <tr><th scope="row">グラフ</th><td>4 近傍グリッド（上下左右）。斜め移動なし</td></tr>
+        <tr
+          ><th scope="row">時間</th><td
+            >離散時間。1 ステップで move（隣接セルへ 1 歩）または wait</td
+          ></tr
+        >
+        <tr
+          ><th scope="row">vertex conflict</th><td>同時刻に 2 体が同じセルを占有すること。禁止</td
+          ></tr
+        >
+        <tr
+          ><th scope="row">edge-swap conflict</th><td
+            >隣接する 2 体が同一ステップで位置を入れ替えること。既定で禁止</td
+          ></tr
+        >
+        <tr
+          ><th scope="row">goal 到達後</th><td
+            >既定は stay（そこに留まり、他エージェントを妨げる）。disappear も選択可</td
+          ></tr
+        >
+        <tr><th scope="row">目的関数</th><td>sum of costs と makespan の両方を表示</td></tr>
+        <tr
+          ><th scope="row">MAPD の指標</th><td
+            >service time / throughput / 未処理タスク数（対応 Solver 実装後に有効化）</td
+          ></tr
+        >
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    ルールを変えた場合はシナリオ JSON の <code>rules</code> に保存されます。 暗黙に変更されることはありません。
+  </p>
+
+  <h2>実装済みの手法</h2>
+  <p>
+    シミュレータで選べるのは、実際に実装がある手法だけです。 現在 <strong
+      >{solvers.length} 種類</strong
+    >です。
+  </p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>手法</th><th>原語</th><th>状態</th><th>注意</th></tr>
+      </thead>
+      <tbody>
+        {
+          solvers.map((s) => (
+            <tr>
+              <td>{s.displayName}</td>
+              <td>
+                <code>{s.originalName}</code>
+              </td>
+              <td>{s.status === "runnable" ? "実行可" : "一部実装"}</td>
+              <td>{s.implementationNote}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    高度な手法（CBS、PIBT、LaCAM、LNS など）はまだ実装されていません。
+    <a href={withBase("/algorithms/")}>アルゴリズム一覧</a>では、
+    実装済みか解説のみかをバッジで区別しています。
+  </p>
+
+  <style is:global>
+    .sim {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+      gap: var(--space-4);
+      align-items: start;
+      margin-block: var(--space-5);
+    }
+
+    @media (max-width: 60rem) {
+      .sim {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .sim-canvas-wrap {
+      position: sticky;
+      top: 5rem;
+    }
+
+    .sim-canvas {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: var(--canvas-bg);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+      touch-action: manipulation;
+      cursor: crosshair;
+    }
+
+    .sim-desc {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      margin-top: var(--space-2);
+      max-height: 6rem;
+      overflow-y: auto;
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      font-size: var(--text-sm);
+    }
+
+    .sim-controls section {
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      padding: var(--space-3);
+    }
+
+    .sim-controls h3 {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-base);
+    }
+
+    .sim-controls label {
+      display: block;
+      margin-bottom: var(--space-2);
+      color: var(--fg-muted);
+    }
+
+    .sim-controls select,
+    .sim-controls input[type="number"],
+    .sim-controls input[type="range"] {
+      width: 100%;
+      margin-top: var(--space-1);
+      padding: var(--space-1) var(--space-2);
+      background: var(--bg);
+      color: var(--fg);
+      border: var(--border-width) solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      font: inherit;
+    }
+
+    .sim-controls .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      align-items: end;
+    }
+    .sim-controls .row > label {
+      flex: 1 1 5rem;
+      margin-bottom: 0;
+    }
+
+    .sim-controls button {
+      font: inherit;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      border: var(--border-width) solid var(--border-strong);
+      background: var(--bg-sunken);
+      color: var(--fg);
+      cursor: pointer;
+    }
+    .sim-controls button:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+    .sim-controls button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .sim-controls button.primary {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .sim-controls .modes,
+    .sim-controls .toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .sim-controls .chip {
+      border-radius: 999px;
+      padding: 0.2em 0.7em;
+      font-size: var(--text-xs);
+    }
+    .sim-controls .chip.active {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    .sim-controls .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      margin: 0;
+      color: var(--fg);
+    }
+    .sim-controls .toggle input {
+      width: auto;
+      margin: 0;
+    }
+
+    .sim-controls .hint,
+    .sim-controls .note {
+      font-size: var(--text-xs);
+      color: var(--fg-subtle);
+      margin: var(--space-1) 0 0;
+    }
+    .sim-controls .note {
+      color: var(--warn);
+    }
+
+    .sim-controls .metrics {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--space-1) var(--space-2);
+      margin: 0;
+    }
+    .sim-controls .metrics > div {
+      display: contents;
+    }
+    .sim-controls .metrics dt {
+      color: var(--fg-muted);
+    }
+    .sim-controls .metrics dd {
+      margin: 0;
+      text-align: right;
+      font-family: var(--font-mono);
+    }
+    .sim-controls .metrics dd.bad {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .sim-controls .message {
+      border: var(--border-width) solid var(--warn);
+      background: var(--warn-subtle);
+      color: var(--fg);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
+      margin: 0;
+    }
+
+    .noscript {
+      border: 2px solid var(--warn);
+      background: var(--warn-subtle);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      margin-block: var(--space-4);
+    }
+  </style>
+</BaseLayout>

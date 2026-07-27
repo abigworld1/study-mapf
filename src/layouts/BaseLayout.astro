@@ -1,0 +1,217 @@
+---
+import "@/styles/global.css";
+import "katex/dist/katex.min.css";
+import { withBase, assetUrl, isSamePath, isUnderPath } from "@/lib/paths";
+import { MAIN_NAV } from "@/lib/nav";
+import { SITE_TITLE, SITE_DESCRIPTION } from "@/config/site.mjs";
+import ThemeToggle from "@/components/ThemeToggle.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** 本文幅を広くする（一覧・シミュレータ用）。 */
+  wide?: boolean;
+}
+
+const { title, description = SITE_DESCRIPTION, wide = false } = Astro.props;
+const pageTitle = title ? `${title} | ${SITE_TITLE}` : `${SITE_TITLE} — MAPF / MAPD 教材`;
+const currentPath = Astro.url.pathname;
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    <link rel="icon" type="image/svg+xml" href={assetUrl("/favicon.svg")} />
+    <meta property="og:title" content={title ?? SITE_TITLE} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta property="og:image" content={assetUrl("/og.svg")} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {
+      /*
+      テーマのちらつき防止。CSS が来る前に data-theme を決める。
+      JS が無効でも prefers-color-scheme で成立するようにしてある。
+    */
+    }
+    <script is:inline>
+      (function () {
+        try {
+          const saved = localStorage.getItem("study-mapf-theme");
+          if (saved === "light" || saved === "dark") {
+            document.documentElement.setAttribute("data-theme", saved);
+          }
+        } catch {
+          /* localStorage が使えない環境では prefers-color-scheme に任せる */
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">本文へスキップ</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href={withBase("/")}>
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-text">
+            <strong>study-mapf</strong>
+            <small>MAPF / Lifelong MAPF / MAPD 教材</small>
+          </span>
+        </a>
+
+        <nav aria-label="メインナビゲーション" class="main-nav">
+          <ul>
+            {
+              MAIN_NAV.map((item) => {
+                const href = withBase(item.href);
+                const active =
+                  isSamePath(currentPath, href) ||
+                  (item.href !== "/" && isUnderPath(currentPath, href));
+                return (
+                  <li>
+                    <a href={href} aria-current={active ? "page" : undefined}>
+                      {item.label}
+                    </a>
+                  </li>
+                );
+              })
+            }
+          </ul>
+        </nav>
+
+        <ThemeToggle />
+      </div>
+    </header>
+
+    <main id="main" class={wide ? "container" : "prose"}>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>
+          このサイトの解説は原論文に基づいて作成しています。出典は各ページに記載しています。 論文
+          PDF 本体は、再配布が許諾されているものを除き同梱していません。
+        </p>
+        <p>
+          <a href={withBase("/about/")}>このサイトについて</a> ・
+          <a href={withBase("/sources/")}>論文・実装一覧</a> ・
+          <a href="https://github.com/abigworld1/study-mapf">GitHub</a>
+        </p>
+      </div>
+    </footer>
+
+    <style>
+      .site-header {
+        border-bottom: var(--border-width) solid var(--border);
+        background: var(--bg-elevated);
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+
+      .header-inner {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        padding-block: var(--space-3);
+        flex-wrap: wrap;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--fg);
+        text-decoration: none;
+        flex: 0 0 auto;
+      }
+
+      .brand-mark {
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: var(--radius-sm);
+        background:
+          linear-gradient(135deg, var(--accent) 50%, transparent 50%) border-box,
+          var(--bg-sunken);
+        border: 2px solid var(--border-strong);
+      }
+
+      .brand-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+      }
+      .brand-text small {
+        font-size: var(--text-xs);
+      }
+
+      .main-nav {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .main-nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1) var(--space-3);
+      }
+
+      .main-nav a {
+        color: var(--fg-muted);
+        text-decoration: none;
+        font-size: var(--text-sm);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+        display: inline-block;
+      }
+
+      .main-nav a:hover {
+        color: var(--fg);
+        background: var(--bg-sunken);
+      }
+
+      .main-nav a[aria-current="page"] {
+        color: var(--fg);
+        font-weight: 700;
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+
+      main {
+        padding-block: var(--space-6) var(--space-10);
+      }
+
+      .site-footer {
+        border-top: var(--border-width) solid var(--border);
+        background: var(--bg-sunken);
+        padding-block: var(--space-5);
+        font-size: var(--text-sm);
+        color: var(--fg-muted);
+      }
+      .site-footer p {
+        margin-bottom: var(--space-2);
+      }
+
+      @media (max-width: 48rem) {
+        .header-inner {
+          gap: var(--space-2);
+        }
+        .brand-text small {
+          display: none;
+        }
+      }
+    </style>
+  </body>
+</html>

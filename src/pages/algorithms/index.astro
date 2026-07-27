@@ -1,0 +1,151 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import AlgorithmCard from "@/components/AlgorithmCard.astro";
+import { withBase } from "@/lib/paths";
+import { SITE_CATEGORIES, getAlgorithm, siteCategoryOf } from "@/lib/manifest";
+import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+
+const entries = (await getCollection("algorithms")).sort((a, b) => a.data.order - b.data.order);
+
+const grouped = SITE_CATEGORIES.map((cat) => ({
+  ...cat,
+  entries: entries.filter((e) => {
+    const algo = getAlgorithm(e.data.algorithmId);
+    return algo ? siteCategoryOf(algo) === cat.id : false;
+  }),
+})).filter((g) => g.entries.length > 0);
+
+const uncategorized = entries.filter((e) => {
+  const algo = getAlgorithm(e.data.algorithmId);
+  return !algo || siteCategoryOf(algo) === null;
+});
+
+const runnableCount = entries.filter((e) =>
+  RUNNABLE_ALGORITHM_IDS.includes(e.data.algorithmId),
+).length;
+---
+
+<BaseLayout title="アルゴリズム一覧" wide description="MAPF / MAPD の手法を分類別に一覧します。">
+  <h1>アルゴリズム一覧</h1>
+
+  <p>
+    全 {entries.length} 手法。うち <strong>{runnableCount} 手法</strong>が
+    シミュレータで実際に動きます。残りは解説と出典のみ、または準備中です。
+  </p>
+
+  <div class="legend card">
+    <p><strong>バッジの意味</strong></p>
+    <ul>
+      <li><span class="chip ok">実行可</span> シミュレータで動かせます</li>
+      <li><span class="chip warn">一部実装</span> 動きますが原論文の全機能ではありません</li>
+      <li><span class="chip muted">解説のみ / 準備中</span> 実装はありません</li>
+    </ul>
+    <p class="note">
+      実行可否は、宣言ではなく<strong>実際に登録されている実装</strong>から判定しています。
+    </p>
+  </div>
+
+  <nav aria-label="分類" class="cat-nav">
+    {SITE_CATEGORIES.map((c) => <a href={`#${c.id}`}>{c.label}</a>)}
+  </nav>
+
+  {
+    grouped.map((group) => (
+      <section aria-labelledby={group.id}>
+        <h2 id={group.id}>
+          {group.label}
+          <span class="orig">{group.original}</span>
+        </h2>
+        <p class="more">
+          <a href={withBase(`/algorithms/category/${group.id}/`)}>この分類だけを見る</a>
+        </p>
+        <div class="grid-auto">
+          {group.entries.map((entry) => (
+            <AlgorithmCard entry={entry} />
+          ))}
+        </div>
+      </section>
+    ))
+  }
+
+  {
+    uncategorized.length > 0 && (
+      <section aria-labelledby="other">
+        <h2 id="other">その他</h2>
+        <div class="grid-auto">
+          {uncategorized.map((entry) => (
+            <AlgorithmCard entry={entry} />
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <style>
+    .legend ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      font-size: var(--text-sm);
+    }
+    .chip {
+      font-size: var(--text-xs);
+      padding: 0.05em 0.5em;
+      border-radius: 999px;
+      border: 1px solid;
+      margin-right: var(--space-1);
+    }
+    .chip.ok {
+      color: var(--ok);
+      border-color: var(--ok);
+      background: var(--ok-subtle);
+    }
+    .chip.warn {
+      color: var(--warn);
+      border-color: var(--warn);
+      background: var(--warn-subtle);
+    }
+    .chip.muted {
+      color: var(--fg-muted);
+      border-color: var(--border-strong);
+      border-style: dashed;
+    }
+    .legend .note {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      margin-bottom: 0;
+    }
+    .cat-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-block: var(--space-5);
+    }
+    .cat-nav a {
+      font-size: var(--text-sm);
+      border: var(--border-width) solid var(--border);
+      border-radius: 999px;
+      padding: 0.15em 0.8em;
+      text-decoration: none;
+      color: var(--fg-muted);
+    }
+    .cat-nav a:hover {
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+    h2 .orig {
+      display: block;
+      font-size: var(--text-sm);
+      font-weight: 400;
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+    }
+    .more {
+      font-size: var(--text-sm);
+      margin-top: calc(-1 * var(--space-2));
+    }
+  </style>
+</BaseLayout>

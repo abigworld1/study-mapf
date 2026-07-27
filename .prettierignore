@@ -1,0 +1,21 @@
+dist/
+.astro/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+package-lock.json
+
+# 前工程の資料。整形対象外（原文と行番号の対応を壊さないため）
+docs/papers/
+docs/output/
+docs/output2/
+.references/
+
+# 自動生成されるドキュメント
+SOURCE_ACQUISITION.md
+MISSING_PAPERS.md
+
+# マニフェスト。Prettier の折り返しで自作パーサが読めなくなる事故があったため除外する。
+# （パーサ側も複数行フローに対応させたが、差分を安定させるためここでは触らない）
+docs/sources/
