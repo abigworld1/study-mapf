@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-07-27（Codex / Batch 2 完了）
+最終更新: 2026-07-27（Codex / Batch 3 完了）
 
 ---
 
@@ -30,21 +30,24 @@
 
 ## 実装済み（registry に登録されている）
 
-| algorithm-id           | 手法             | status   | fidelity       | 備考                                                                                              |
-| ---------------------- | ---------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------- |
-| `bfs`                  | 幅優先探索       | runnable | educational    | 各エージェント独立。衝突は解消しない                                                              |
-| `astar`                | A*               | runnable | educational    | 同上。ヒューリスティクスの効果を見るため                                                          |
-| `space-time-astar`     | 時空間 A*        | runnable | paper-faithful | 単一 agent の `(cell,time)` 探索。[ノート](docs/notes/implementation/space-time-astar.md)         |
-| `sipp`                 | SIPP             | runnable | paper-faithful | safe interval 探索。MAPF wrapper は固定順。[ノート](docs/notes/implementation/sipp.md)            |
-| `prioritized-planning` | 優先順位付き計画 | runnable | paper-faithful | 固定全順序。PBS の順序探索は含まない。[ノート](docs/notes/implementation/prioritized-planning.md) |
-| `cooperative-astar`    | Cooperative A*   | runnable | paper-faithful | Manhattan + reservation table。[ノート](docs/notes/implementation/cooperative-astar.md)           |
-| `hca-star`             | HCA*             | runnable | paper-faithful | Algorithm 1 の on-demand RRA*。[ノート](docs/notes/implementation/hca-star.md)                    |
-| `whca-star`            | WHCA*            | runnable | paper-faithful | terminal edge、rolling window、RRA* 再利用。[ノート](docs/notes/implementation/whca-star.md)      |
-| `cbs`                  | CBS              | runnable | paper-faithful | standard split、SOC best-first、CAT。[ノート](docs/notes/implementation/cbs.md)                   |
-| `bcbs`                 | BCBS             | runnable | paper-faithful | high / low focal、保証係数 `wH*wL`。[ノート](docs/notes/implementation/bcbs.md)                   |
-| `ecbs`                 | ECBS             | runnable | paper-faithful | low-level `fMin` の和を CT lower bound に使用。[ノート](docs/notes/implementation/ecbs.md)        |
-| `icbs`                 | ICBS (PC+BP)     | partial  | paper-faithful | PC と helpful BP。MA-CBS / MR は未対応。[ノート](docs/notes/implementation/icbs.md)               |
-| `eecbs`                | EECBS            | runnable | paper-faithful | §3 の EES 3-list と online error。§4 改善は未対応。[ノート](docs/notes/implementation/eecbs.md)   |
+| algorithm-id           | 手法             | status   | fidelity            | 備考                                                                                                                                |
+| ---------------------- | ---------------- | -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `bfs`                  | 幅優先探索       | runnable | educational         | 各エージェント独立。衝突は解消しない                                                                                                |
+| `astar`                | A*               | runnable | educational         | 同上。ヒューリスティクスの効果を見るため                                                                                            |
+| `space-time-astar`     | 時空間 A*        | runnable | paper-faithful      | 単一 agent の `(cell,time)` 探索。[ノート](docs/notes/implementation/space-time-astar.md)                                           |
+| `sipp`                 | SIPP             | runnable | paper-faithful      | safe interval 探索。MAPF wrapper は固定順。[ノート](docs/notes/implementation/sipp.md)                                              |
+| `prioritized-planning` | 優先順位付き計画 | runnable | paper-faithful      | 固定全順序。PBS の順序探索は含まない。[ノート](docs/notes/implementation/prioritized-planning.md)                                   |
+| `cooperative-astar`    | Cooperative A*   | runnable | paper-faithful      | Manhattan + reservation table。[ノート](docs/notes/implementation/cooperative-astar.md)                                             |
+| `hca-star`             | HCA*             | runnable | paper-faithful      | Algorithm 1 の on-demand RRA*。[ノート](docs/notes/implementation/hca-star.md)                                                      |
+| `whca-star`            | WHCA*            | runnable | paper-faithful      | terminal edge、rolling window、RRA* 再利用。[ノート](docs/notes/implementation/whca-star.md)                                        |
+| `cbs`                  | CBS              | runnable | paper-faithful      | standard split、SOC best-first、CAT。[ノート](docs/notes/implementation/cbs.md)                                                     |
+| `bcbs`                 | BCBS             | runnable | paper-faithful      | high / low focal、保証係数 `wH*wL`。[ノート](docs/notes/implementation/bcbs.md)                                                     |
+| `ecbs`                 | ECBS             | runnable | paper-faithful      | low-level `fMin` の和を CT lower bound に使用。[ノート](docs/notes/implementation/ecbs.md)                                          |
+| `icbs`                 | ICBS (PC+BP)     | partial  | paper-faithful      | PC と helpful BP。MA-CBS / MR は未対応。[ノート](docs/notes/implementation/icbs.md)                                                 |
+| `eecbs`                | EECBS            | runnable | paper-faithful      | §3 の EES 3-list と online error。§4 改善は未対応。[ノート](docs/notes/implementation/eecbs.md)                                     |
+| `pbs`                  | PBS              | runnable | reference-validated | PT DFS、partial-order UpdatePlan、2 段 CAT。3×2 fixture を author implementation と照合。[ノート](docs/notes/implementation/pbs.md) |
+| `pibt`                 | PIBT             | runnable | reference-validated | Algorithm 1 と one-shot wrapper。2×2 rotation を pypibt と照合。[ノート](docs/notes/implementation/pibt.md)                         |
+| `winpibt`              | winPIBT          | runnable | paper-faithful      | Algorithms 1–2、disentangled provisional paths、retroactive inheritance。[ノート](docs/notes/implementation/winpibt.md)             |
 
 ---
 
@@ -55,7 +58,6 @@
 
 | バッチ  | 対象                                                                     |
 | ------- | ------------------------------------------------------------------------ |
-| Batch 3 | `pbs`, `pibt`, `winpibt`                                                 |
 | Batch 4 | `icts`, `mstar`, `push-and-swap`, `push-and-rotate`                      |
 | Batch 5 | `lacam`, `lacam-star`                                                    |
 | Batch 6 | `mapf-lns`, `mapf-lns2`, `rhcr`                                          |
@@ -76,23 +78,25 @@
 根拠つきで確定済みなのは 29 手法（`guarantee_evidence` が入っているもの）。
 主なもの:
 
-| algorithm-id           | 完全性   | 最適性             | 根拠                                                            |
-| ---------------------- | -------- | ------------------ | --------------------------------------------------------------- |
-| `cbs`                  | 条件付き | 最適               | cbs-aij-2015 Theorem 1 / 3、§5.2.2                              |
-| `icbs`                 | 条件付き | 最適               | icbs-ijcai-2015 pp.1, 4。CBS と coupled low level に依存        |
-| `mstar`                | あり     | 最適               | mstar-aij-2015 Theorem 1                                        |
-| `ccbs`                 | あり     | 最適               | ccbs-ijcai-2019 アブストラクト                                  |
-| `cbm`                  | あり     | 最適               | cbm-tapf-aamas-2016 p.6                                         |
-| `cbs-ta`               | あり     | 最適               | cbs-ta-aamas-2018 Theorem 4.1 / 4.2                             |
-| `bcbs` `ecbs`          | あり     | なし（有界準最適） | bcbs-ecbs-socs-2014 p.6                                         |
-| `eecbs`                | 不明     | なし（有界準最適） | eecbs-aaai-2021 p.5 式 (2)                                      |
-| `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」      |
-| `lacam-star`           | あり     | 条件付き           | 本文は「complete and optimal」だがタイトルは Eventually Optimal |
-| `push-and-rotate`      | 条件付き | なし               | 空き頂点が 2 つ以上（k ≤ \|V\| − 2）                            |
-| `sipp`                 | あり     | time-minimal       | sipp-icra-2011 p.5 Theorem 1 / 2                                |
-| `prioritized-planning` | なし     | なし               | pbs-aaai-2019 p.2 Theorem 1、p.3 Theorem 4 / Corollary 5        |
-| `cooperative-astar`    | なし     | 不明               | cooperative-pathfinding-2005 p.2 Figure 1 と本文                |
-| `hca-star`             | なし     | 不明               | 同 p.2 の限界と p.3 の「CA* の heuristic 置換」                 |
+| algorithm-id           | 完全性   | 最適性             | 根拠                                                                    |
+| ---------------------- | -------- | ------------------ | ----------------------------------------------------------------------- |
+| `cbs`                  | 条件付き | 最適               | cbs-aij-2015 Theorem 1 / 3、§5.2.2                                      |
+| `icbs`                 | 条件付き | 最適               | icbs-ijcai-2015 pp.1, 4。CBS と coupled low level に依存                |
+| `mstar`                | あり     | 最適               | mstar-aij-2015 Theorem 1                                                |
+| `ccbs`                 | あり     | 最適               | ccbs-ijcai-2019 アブストラクト                                          |
+| `cbm`                  | あり     | 最適               | cbm-tapf-aamas-2016 p.6                                                 |
+| `cbs-ta`               | あり     | 最適               | cbs-ta-aamas-2018 Theorem 4.1 / 4.2                                     |
+| `bcbs` `ecbs`          | あり     | なし（有界準最適） | bcbs-ecbs-socs-2014 p.6                                                 |
+| `eecbs`                | 不明     | なし（有界準最適） | eecbs-aaai-2021 p.5 式 (2)                                              |
+| `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」              |
+| `pbs`                  | 不明     | なし               | pbs-aaai-2019 Algorithm 2 / p.7 の 4% は実験観測で保証ではない          |
+| `winpibt`              | 条件付き | 不明               | winpibt-2019 p.7 Theorem 4.3。dodgeable + finite window の reachability |
+| `lacam-star`           | あり     | 条件付き           | 本文は「complete and optimal」だがタイトルは Eventually Optimal         |
+| `push-and-rotate`      | 条件付き | なし               | 空き頂点が 2 つ以上（k ≤ \|V\| − 2）                                    |
+| `sipp`                 | あり     | time-minimal       | sipp-icra-2011 p.5 Theorem 1 / 2                                        |
+| `prioritized-planning` | なし     | なし               | pbs-aaai-2019 p.2 Theorem 1、p.3 Theorem 4 / Corollary 5                |
+| `cooperative-astar`    | なし     | 不明               | cooperative-pathfinding-2005 p.2 Figure 1 と本文                        |
+| `hca-star`             | なし     | 不明               | 同 p.2 の限界と p.3 の「CA* の heuristic 置換」                         |
 
 **PDF を読んで新たに確定した保証は、実装ノートに書くだけでなく
 `algorithms.yaml` の `guarantees` と `guarantee_evidence` へ必ず書き戻すこと。**

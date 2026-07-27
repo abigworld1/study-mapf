@@ -8,6 +8,9 @@ import { cooperativeAStarSolver, hcaStarSolver } from "./prioritized/cooperative
 import { sippSolver } from "./prioritized/sipp-solver.js";
 import { whcaStarSolver } from "./prioritized/whca-star.js";
 import { bcbsSolver, cbsSolver, ecbsSolver, eecbsSolver, icbsSolver } from "./cbs/solvers.js";
+import { pbsSolver } from "./pbs/pbs.js";
+import { pibtSolver } from "./pibt/pibt.js";
+import { winPibtSolver } from "./pibt/winpibt.js";
 
 /**
  * Solver の登録所。
@@ -39,6 +42,9 @@ const SOLVERS: readonly MapfSolver[] = [
   ecbsSolver,
   icbsSolver,
   eecbsSolver,
+  pbsSolver,
+  pibtSolver,
+  winPibtSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

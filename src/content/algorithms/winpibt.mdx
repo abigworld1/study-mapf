@@ -3,14 +3,143 @@ title: "winPIBT"
 algorithmId: winpibt
 originalName: "windowed PIBT"
 order: 310
-summary: ""
-status: draft
+summary: "PIBT の 1-step priority inheritance を有限 window と provisional path へ拡張する先読み手法。"
+status: reviewed
 primarySources:
   - paperId: winpibt-2019
+    sections: ["3.2", "4", "4.1", "4.2", "4.2.1", "4.2.2", "5.1"]
+    pages: [3, 4, 5, 6, 7]
 implementationReferences:
   - repositoryId: pibt2
+lastReviewed: "2026-07-27"
+simulatorSolverId: winpibt
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="winpibt" />
+## 概要
+
+windowed PIBT（winPIBT）は、PIBT が 1 timestep だけ確保する処理を有限 window へ拡張します。agent は window 内の ideal path を先に計算し、time-node pair を 1 個ずつ確定します。将来使いたい cell が別 agent の短い path の終点なら、その agent を過去側から 1 step 延長する retroactive priority inheritance を行います<SourceCitation paperId="winpibt-2019" section="4.1" page={4} />。
+
+## まず何がうれしいのか
+
+1-step PIBT は目の前の退避だけを決めるため、長い aisle や迂回路で往復しやすくなります。winPIBT は数 step 先の進行を provisional に置き、lower-priority agent が higher-priority path の先へ入り込まないようにします。window が 1 なら PIBT の動作へ戻ります。
+
+## 前提となる知識
+
+- PIBT の priority inheritance と backtracking
+- space-time A\* と time-node reservation
+- path の partial assignment と suffix revoke
+- isolated paths と disentangled path set
+
+## 対象問題
+
+原論文は iterative MAPF を中心に説明し、classical MAPF でも全 agent の simultaneous goal configuration を終了条件として評価します。実験では 1000 timestep に到達した run を failure とし、deadlock または dynamic priority による livelock と区別しています<SourceCitation paperId="winpibt-2019" section="5.1" page={7} />。サイト版は fixed goal の one-shot MAPF を実装します。
+
+## 中心となるアイデア
+
+各 agent `i` は確定済み path `πi` と最終確定時刻 `ℓi` を持ちます。ideal provisional path `Πi` は、これから確定したい suffix も一時的に含みます。
+
+長さの違う 2 path が、同時刻に衝突せず、短い path の終点へ長い path が後から侵入せず、短い path も長い path の future progression へ入り込まない状態を論文は disentangled と定義します<SourceCitation paperId="winpibt-2019" section="3.2" page={3} />。
+
+winPIBT は次の 3 段階でこの条件を保ちます。
+
+1. higher-priority provisional paths を避ける ideal path を計算する
+2. ideal path 上の time-node pair を順に確定する
+3. 他 agent の短い path の終点が邪魔なら、その path を priority inheritance で延長する
+
+## アルゴリズムの手順
+
+1. timestep ごとに PIBT と同じ `η+ε` priority を更新します。
+2. priority 降順に agent を処理します。
+3. highest-priority agent は `t+w` まで path を延長できます。
+4. lower agent の上限は、先に処理した higher paths の最短末尾 `κ` を越えないようにします。
+5. recursive `winPIBT(i, α)` は `β=max(α,max ℓ)` まで有効な ideal path の存在を確認します。
+6. ideal suffix を provisional に登録し、`ℓi+1` から `α` まで 1 cell ずつ確定します。
+7. target が短い path の終点なら、その owner を 1 step 延長します。
+8. 同じ長さの owner が未 request なら PIBT と同じ recursion を行います。
+9. recursion が invalid なら未確定 suffix を revoke し、ideal path を再計算します。
+
+## 小さな例
+
+`a1` が window 3 で `X→Y→Z→G` を希望し、`Z` が時刻 0 で `a2` の path 終点だとします。`a1` はまだ `Z@2` を確定しません。先に `a2` を `t=1` まで延長し、その次に必要なら `a2` の移動先を占有する agent へ priority を継承します。`Z` が `t=2` までに空けば `a1` は確定を続けます。空かなければ suffix を捨て、`Z` を使わない ideal path を探し直します。
+
+## データ構造
+
+- `π[i]`: 時刻 0 から `ℓi` までの committed path
+- `Π[i]`: committed prefix と ideal provisional suffix
+- `R`: 現在 request chain にいる agent 集合。rotation の検出に使う
+- `κ`: lower-priority agent が確保できる最大時刻
+- goal-distance table と time-expanded A\* OPEN
+
+## 疑似コード
+
+```text
+for each timestep t:
+  order ← agents sorted by eta + epsilon
+  kappa ← 0
+  for (rank, i) in order:
+    if lastTime(i) <= t:
+      alpha ← t + window(i)                    if rank = 1
+              min(t + window(i), kappa)        otherwise
+      secure(i, alpha, requesting=empty)
+    kappa ← lastTime(i)                         if rank = 1
+            min(kappa, lastTime(i))             otherwise
+
+secure(i, alpha, R):
+  if lastTime(i) >= alpha: return valid
+  beta ← max(alpha, all provisional end times)
+  Pi[i] ← ideal valid path through beta
+  if none: append waits through alpha; return invalid
+  R ← R + i
+  while lastTime(i) < alpha:
+    v ← Pi[i][lastTime(i)+1]
+    extend every shorter path ending at v
+    if a same-length unrequested path ends at v:
+      if securing its next step fails:
+        revoke i's suffix, recompute Pi[i], continue
+    commit v
+  return valid
+```
+
+原論文 Algorithms 1–2 を 1 本にまとめ、`validPath` / `registerPath` の内部をサイトの time-expanded A\* として明示しました<SourceCitation paperId="winpibt-2019" label="Algorithm 1" page={5} /><SourceCitation paperId="winpibt-2019" label="Algorithm 2" page={6} />。
+
+## 実装上の注意
+
+provisional path は reservation table と同じ「確定済み」ではありません。recursion が invalid なら requester の未確定 suffix を取り消せる必要があります。一方、`πi` へ 1 cell ずつ commit した prefix は取り消しません。
+
+長い provisional path と短い path の間では、同時刻 conflict だけを検査しても足りません。短い側が、長い側が将来通る cell へ gap 内で入ることも禁じます。この extra constraint が disentangled invariant を保ちます<SourceCitation paperId="winpibt-2019" section="4.2" page={5} />。
+
+## よくある誤解
+
+- window は reservation を無条件に `w` step 固定する長さではありません。lower agent は `κ` によって短く制限されます。
+- window を大きくすれば常に path quality が上がるわけではありません。論文の実験でも支配的な単一 window は確認されていません。
+- reachability は全 agent の simultaneous goal occupancy と同義ではありません。
+
+<Caution title="Theorem 4.3 は条件付きの individual reachability です">
+  graph が dodgeable で、各 agent の window が常に有限なら、全 agent は有限時間で各 destination
+  へ到達します
+  <SourceCitation paperId="winpibt-2019" section="4.2.1" label="Theorem 4.3" page={7} />
+  。この文は stay-at-goal classical MAPF の simultaneous configuration
+  を保証する定理ではありません。
+</Caution>
+
+## 他手法との比較
+
+- PIBT は `window=1` の special case です。
+- WHCA\* も有限 window を使いますが、fixed priority の reservation table を周期的に再計画する手法です。winPIBT は recursive priority inheritance で path 長そのものを揃えます。
+- RHCR の windowed MAPF は lifelong planning framework であり、winPIBT の `κ` と disentangled path invariant とは別です。
+
+## サイト上の実装との差異
+
+サイト版の `extra.windowSize` は全 agent 共通の固定正整数です。原論文が許す agent 別・時刻別 adaptive window、goal update、task allocation、goal 到達時に reservation を早期終了する iterative modification、decentralized 2w-hop communication は未対応です。A\* の完全同点は seed 固定 rank と row-major 順で決めます。browser の `maxHorizon`、timeout、node limit、AbortSignal を追加しています。
+
+論文が案内する旧 `Kei18/pibt` に対し、manifest 登録済み `pibt2` checkout には winPIBT source が見当たりません。さらに `grid-pathfinding` と GoogleTest submodule が未取得で build できないため、公開実装との出力比較はしていません。コードは Algorithms 1–2 から独立実装し、第三者コードを転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="winpibt" />
+
+まず満杯 2×2 rotation を `windowSize=1` で実行し、PIBT と同じ path になることを確認してください。次に 3 へ増やし、`reserve` と `candidate-evaluation` が current timestep より先まで進む様子を見ます。window を増やしても常に SOC が改善するわけではない点も比較できます。

@@ -114,6 +114,9 @@ test.describe("シミュレータ", () => {
       .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) })
       .getByRole("combobox");
     await expect(solverSelect).toContainText("CBS");
+    await expect(solverSelect).toContainText("PBS");
+    await expect(solverSelect).toContainText("PIBT");
+    await expect(solverSelect).toContainText("winPIBT");
     await expect(solverSelect).not.toContainText("LaCAM");
   });
 

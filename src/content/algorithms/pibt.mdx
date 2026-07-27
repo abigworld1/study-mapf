@@ -3,15 +3,138 @@ title: "PIBT"
 algorithmId: pibt
 originalName: "Priority Inheritance with Backtracking"
 order: 300
-summary: ""
-status: draft
+summary: "動的 priority を占有 agent へ継承し、1 step の衝突なし configuration を再帰的に組み立てる高速手法。"
+status: reviewed
 primarySources:
   - paperId: pibt-aij-2022
+    sections: ["4", "4.2", "4.3", "4.4.1"]
+    pages: [8, 9, 10, 11, 12, 13]
 implementationReferences:
   - repositoryId: pibt2
   - repositoryId: pypibt
+lastReviewed: "2026-07-27"
+simulatorSolverId: pibt
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="pibt" />
+## 概要
+
+Priority Inheritance with Backtracking（PIBT）は、全 path を先に探索せず、次の 1 timestep の configuration を繰り返し作ります。higher-priority agent が別 agent の現在地へ進みたいとき、占有 agent が priority を一時的に継承して先に退きます。退けなければ requester が別候補へ backtrack します<SourceCitation paperId="pibt-aij-2022" label="Algorithm 1" page={9} />。
+
+## まず何がうれしいのか
+
+1 step ごとの判断は局所的です。各 agent の候補は最大 5 個（4 neighbors + wait）で、衝突する連鎖だけを再帰します。大きな constraint tree や joint state OPEN を持たず、短時間で collision-free な動きを作れます。
+
+## 前提となる知識
+
+- configuration: ある時刻の全 agent 位置
+- 動的 priority と priority inheritance
+- vertex conflict、edge-swap conflict、3 体以上の rotation
+- goal からの true-distance table
+
+## 対象問題
+
+原論文は goal が繰り返し更新される iterative MAPF を中心に扱います。§4.4.1 は one-shot MAPF へ使う場合、全 agent が同じ timestep に goal configuration を作るまで反復し、上限時刻で失敗とする方法を説明します<SourceCitation paperId="pibt-aij-2022" section="4.4.1" page={13} />。サイト版はこの fixed-goal one-shot wrapper を実装します。
+
+## 中心となるアイデア
+
+agent `i` の priority は次です。
+
+$$
+p_i(t)=\eta_i(t)+\epsilon_i
+$$
+
+`ηi` は goal にいない時間に増え、goal にいると 0 へ戻ります。`εi∈[0,1)` は agent 固有なので、priority は常に一意です。
+
+agent `i` が候補 cell `v` を選び、現在そこに未割当 agent `j` がいるなら、`j` を再帰的に割り当てます。`j` は `i` の priority を継承した形で先に退きます。`j` が全候補を失敗して wait すると、`i` は `v` を諦めて次候補を試します。
+
+## アルゴリズムの手順
+
+1. goal ごとに障害物込み true distance を BFS で作ります。
+2. `η+ε` の降順に agent を並べます。
+3. 未割当 agent の候補を true distance 昇順に並べます。
+4. 同じ距離なら現在空の cell を先にします。
+5. next configuration で予約済みの cell と、requester との edge swap を捨てます。
+6. 候補の現在の占有者が未割当なら、priority inheritance で再帰します。
+7. 再帰が失敗すれば別候補へ backtrack し、全候補失敗なら wait します。
+8. 全 agent の next cell が決まったら 1 step 実行し、priority を更新します。
+
+## 小さな例
+
+2×2 grid の 4 cell がすべて埋まり、4 体の goal が時計回りに 1 cell 先だとします。`a1` が `a2` の cell を要求し、priority は `a2`、`a3`、`a4` へ継承されます。最後の `a4` は `a1` の元の cell を選べるため、4-cycle 全体が同時に回転します。2 体の swap は禁止しつつ、長さ 3 以上の cycle は許す点が重要です。
+
+## データ構造
+
+- `current`: 現 configuration
+- `next`: 構築中の部分 configuration
+- `occupiedNow` / `occupiedNext`: cell から agent への表
+- `eta` と unique `epsilon`
+- agent ごとの goal-distance table と seed 固定 tie rank
+
+## 疑似コード
+
+```text
+for each timestep t:
+  update p[i] = eta[i] + epsilon[i]
+  for i in descending priority:
+    if next[i] is unset:
+      assign(i, requester=none)
+  execute next configuration
+
+assign(i, requester):
+  candidates ← neighbors(i) + wait
+  sort by (distanceToGoal, currentlyOccupied, fixedTieRank)
+  for v in candidates:
+    if v is already assigned: continue
+    if v causes swap with requester: continue
+    reserve v for i
+    j ← current occupant of v
+    if j is unset and assign(j, requester=i) fails:
+      continue
+    return valid
+  reserve current cell for i
+  return invalid
+```
+
+原論文 Algorithm 1 の再帰構造をサイトの `Cell` と configuration 表現へ合わせています<SourceCitation paperId="pibt-aij-2022" label="Algorithm 1" page={9} />。
+
+## 実装上の注意
+
+requester が候補を仮予約した後、占有 agent が wait して recursion を失敗すると、その wait が同じ cell の予約を上書きします。requester はそこで必ず別候補へ戻らなければなりません。この provisional assignment の順序を崩すと vertex conflict が残ります。
+
+候補の primary key は exact true distance です。論文が指定しない完全同点だけを `context.random()` から一度生成した固定 rank で決めます。Solver 内で `Math.random()` は使いません。
+
+## よくある誤解
+
+- priority inheritance は priority を永久に交換する処理ではありません。その timestep の再帰的な割当権を渡します。
+- 2-agent edge swap を許す処理ではありません。3 体以上の rotation とは別です。
+- 各 agent が一度 goal に着くことと、全 agent が同時に goal にいることは同じではありません。
+
+<Caution title="PIBT の到達性を classical MAPF completeness と混同しないでください">
+  Theorem 1 は、任意の adjacent pair が長さ 3 以上の simple cycle に属する graph で、各 agent が
+  `diam(G)|A|` 以内に一度 goal へ到達することを示します
+  <SourceCitation paperId="pibt-aij-2022" label="Theorem 1" page={11} />
+  。論文は続けて、simultaneous goal configuration と stay-at-goal は保証されないと区別します
+  <SourceCitation paperId="pibt-aij-2022" section="4.3" page={12} />。
+</Caution>
+
+## 他手法との比較
+
+- Prioritized Planning は全 path を順に固定します。PIBT は priority を timestep ごとに変えます。
+- winPIBT は 1-step window を任意の有限 window へ広げ、provisional path を先読みします。
+- PIBT+ は PIBT を configuration search の successor generator として使い、livelock を抑える別 framework です。サイトの PIBT には含めません。
+
+## サイト上の実装との差異
+
+サイト版は goal update / task allocation の無い one-shot MAPF だけを受理します。`extra.maxTimesteps` で classical MAPF の反復上限を指定できます。dodgeable graph condition は自動判定せず、条件外でも実行できますが、上限 failure は解不存在の証明として扱いません。diagonal、following conflict 禁止、disappear at goal は未対応です。
+
+`pibt2` は elapsed priority の次に initial distance を比較し、`pypibt` は初期 fractional priority に start-goal distance を使います。サイト版は AIJ 論文の `η+ε` を採用しました。MIT code は転記していません。`pypibt` と満杯 2×2 clockwise rotation を比較し、success、makespan 1、configuration 列、path validity が一致しました。
+
+## 実験してみる
+
+<SimulatorLink solverId="pibt" />
+
+2×2 の全 cell に agent を置き、goal を時計回りにずらしてください。detailed trace の `priority-order`、`candidate-evaluation`、`inherit-priority`、`backtrack` を見ると、1 個の空き cell がなくても cycle rotation が成立する過程を追えます。次に幅 1 の 2-cell swap を試すと、horizon まで解けないことを確認できます。

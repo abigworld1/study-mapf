@@ -95,6 +95,7 @@ const DETAILED_EXTRA = new Set<string>([
   "update-priority-dag",
   "replan-lower-priority-agent",
   "priority-order",
+  "candidate-evaluation",
   "configuration-expand",
   "add-lazy-constraint",
   "configuration-generate",

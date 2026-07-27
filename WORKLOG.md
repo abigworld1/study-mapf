@@ -1004,3 +1004,123 @@ following conflict、diagonal、disappear at goal、無限 horizon。
 ### 12. 次の推奨バッチ
 
 Batch 3: `pbs` / `pibt` / `winpibt`。
+
+---
+
+## 2026-07-27 — Batch 3 PBS / PIBT / winPIBT の独立実装（担当: Codex）
+
+### 1. 対象アルゴリズム
+
+`pbs`、`pibt`、`winpibt` の 3 件を Solver registry へ追加した。PBS / PIBT は
+author-maintained implementation の固定 fixture と比較できたため `runnable / reference-validated`、
+winPIBT は登録 checkout に対応 source が無いため `runnable / paper-faithful` とした。
+
+### 2. 参照した論文と節
+
+- `pbs-aaai-2019` PDF pp.2–5, 7: Prioritized Planning の限界、Algorithm 2、UpdatePlan、
+  low-level の incomparable / lower 2 段 CAT tie-break、PT depth、4% が実験観測であること
+- `pibt-aij-2022` PDF pp.8–13: Algorithm 1、priority inheritance / backtracking、
+  candidate ordering、Theorem 1、one-shot MAPF wrapper、reachability と simultaneous goal の区別
+- `winpibt-2019` PDF pp.3–7: dodgeable / disentangled、Algorithms 1–2、Lemmas 4.1–4.2、
+  Theorem 4.3、classical MAPF の timestep failure
+
+PDF の該当ページを画像で目視し、Marker fidelity も 3 本個別に実行した。PBS marker は既知どおり
+Figure 5–8 が欠落し語数比 78% なので、Algorithm 2 と実験記述は PDF を直接使用した。
+各 `metadata.yaml` に algorithm / theorem と公開実装との差異を記録した。全文の行単位照合ではないため
+`verification.checked_against_pdf` は `false` のままにした。
+
+### 3. 参照した公開実装
+
+- `.references/pbs` commit `d7b91fa5...`（USC Research License、`copy_allowed: false`）を
+  read-only で確認し、`/tmp` へ CMake build した。3×2 empty swap を Space-Time A\* mode で実行し、
+  browser PBS と success、SOC=6、makespan=4、path validity を比較した
+- `.references/pibt2` commit `faab5b9...`（MIT）で priority / candidate tie-break を確認。
+  `grid-pathfinding` と GoogleTest submodule 欠落により CMake configure は失敗した。winPIBT source は無い
+- `.references/pypibt` commit `a3c97f6...`（MIT）を NumPy 環境で直接実行し、満杯 2×2 clockwise
+  rotation で browser PIBT と success、makespan=1、configuration 列、path validity を比較した。
+  環境に pytest が無いため repository test suite 全体は未実行
+
+第三者コードは転記していない。したがって `THIRD_PARTY_NOTICES.md` の変更は無い。
+
+### 4. 実装したファイル
+
+- `src/solvers/pbs/low-level.ts`: higher paths の hard reservation と、incomparable / lower paths の
+  lexicographic CAT を持つ PBS 専用 Space-Time A\*
+- `src/solvers/pbs/pbs.ts`: priority DAG、PT DFS、Algorithm 2 UpdatePlan、initial partial order option
+- `src/solvers/pibt/pibt.ts`: `eta+epsilon`、1-step recursive inheritance / backtracking、one-shot wrapper
+- `src/solvers/pibt/winpibt.ts`: provisional / committed paths、disentangled gap constraint、
+  exact-horizon time-expanded A\*、retroactive inheritance、suffix revoke、Algorithm 2 の `kappa`
+- `src/solvers/registry.ts`、`src/solvers/limits.ts`: 3 Solver 登録と candidate event の trace 分類
+- `src/content/algorithms/{pbs,pibt,winpibt}.mdx`: 日本語解説を `reviewed` へ更新
+- `docs/notes/implementation/{pbs,pibt,winpibt}.md`: 実装前調査と検証結果
+- `docs/sources/algorithms.yaml`、各 paper metadata、`IMPLEMENTATION_STATUS.md`
+
+全 Solver は `checkLimits()`、deterministic `context.random()`、`context.now()`、AbortSignal、timeout、
+global expansion limit、finite horizon、trace limit、structured result を使用する。
+
+### 5. 追加・更新したテスト
+
+`tests/unit/batch3-solvers.test.ts` を追加し、`tests/unit/invariants.test.ts` と E2E を更新した。
+
+- registry / metadata / unsupported rules / option validation
+- PBS の author implementation 固定 fixture 比較、PT / DAG / replan event
+- fixed Prioritized Planning が失敗する off-center recess を PBS の sibling branch が解く例
+- joint-state BFS は解を確認するが PBS が失敗する中央 recess の既知の不完全例
+- PIBT の満杯 2×2 rotation、inheritance、backtrack、graph condition 外の horizon failure
+- winPIBT `window=1` と PIBT の path 一致、`window>1` の provisional reservation
+- 3 Solver の決定性、timeout、node limit、AbortSignal、input / trace limit
+- 10 seed の反復 `checkPaths()` と simulator 選択肢の E2E
+
+既存テストは削除・skip・弱体化していない。
+
+### 6–7. テスト・ビルド結果
+
+```text
+sources:validate  errors=0 warnings=6
+format:check      All matched files use Prettier code style!
+lint              0 problems
+typecheck         0 errors（86 files、既存 Astro deprecation hints 22）
+test              125 passed（10 files）
+build             62 pages
+e2e               26 passed（Chromium desktop + mobile）
+```
+
+warning 6 件は Batch 2 終了時と同じ既知警告で、今回の変更による追加は無い。
+
+### 8. 理論保証と manifest への書き戻し
+
+- PBS: `complete: unknown` のまま。Algorithm 2 の PT depth `O(M^2)` は completeness theorem ではない。
+  `optimal: false`, `bounded_suboptimal: false` を維持し、p.7 の 4% は経験的観測と evidence に明記
+- PIBT: `complete: conditional`, `optimal: false`, `bounded_suboptimal: false` を維持。
+  条件付き値は Theorem 1 の graph condition と「goal stay を要求しない変種」の reachability であり、
+  classical MAPF completeness ではない
+- winPIBT: `complete: unknown → conditional`。p.7 Theorem 4.3 の dodgeable graph + finite window の
+  individual reachability を evidence に記録。`optimal: unknown` は推測せず維持し、cost bound は false
+
+winPIBT は optimal が unknown のため、「unknown を含む algorithm」の総数は 58 のまま。
+
+### 9. 論文と公開実装との差異
+
+- PBS 公開実装は conflict queue、conflict selection variants、SIPP option を持ち、README 上も
+  original experimental code ではない。browser は paper Algorithm 2 の closure scan を直接実装
+- pibt2 は elapsed の次に initial distance、pypibt は start-goal distance を fractional priority に使う。
+  browser は paper の unique `eta+epsilon` を採用
+- 公開実装は unresolved candidate ties を shuffle する。browser は seed から固定 tie rank を一度作る
+- winPIBT は登録 checkout に source が無く、paper Algorithms 1–2 だけを根拠に独立実装
+
+### 10. ブラウザ版で簡略化した部分
+
+- 3 手法とも 4 近傍、following 許可、stay at goal の one-shot MAPF に限定
+- PBS low level は infinite time から有限 `maxHorizon` へ置換。公開版の SIPP / conflict variants は未対応
+- PIBT は iterative goal update / PIBT+ / decentralized execution を含まない
+- winPIBT の window は全 agent 共通の固定値。adaptive per-agent window、task allocation、
+  iterative goal 到達時の reservation 短縮、decentralized 2w-hop communication は未対応
+
+### 11. 未対応部分
+
+PBS の無限 horizon 非存在証明と full benchmark、PIBT / winPIBT の iterative MAPF / MAPD wrapper、
+dodgeable graph condition の自動判定、PIBT+、adaptive winPIBT、公開 winPIBT implementation との比較。
+
+### 12. 次の推奨バッチ
+
+Batch 4: `icts` / `mstar` / `push-and-swap` / `push-and-rotate`。

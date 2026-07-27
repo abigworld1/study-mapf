@@ -3,16 +3,142 @@ title: "PBS"
 algorithmId: pbs
 originalName: "Priority-Based Search"
 order: 150
-summary: ""
-status: draft
+summary: "衝突する 2 体の相対 priority を分岐し、半順序を depth-first に組み立てる優先順位付き MAPF 解法。"
+status: reviewed
 primarySources:
   - paperId: pbs-aaai-2019
+    sections: ["Prioritized Planning", "Priority-Based Search", "Low-Level Search"]
+    pages: [2, 3, 4, 5, 7]
 implementationReferences:
   - repositoryId: pbs
   - repositoryId: rhcr
   - repositoryId: mapf-lns-unified
+lastReviewed: "2026-07-27"
+simulatorSolverId: pbs
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="pbs" />
+## 概要
+
+Priority-Based Search（PBS）は、agent の total priority order を最初から固定しません。まず各 agent の個別最短 path を置き、衝突した 2 体について「どちらを higher priority にするか」を 2 分岐します。決まった priority は directed acyclic graph（DAG）へ加え、影響を受ける lower-priority agent だけを再計画します<SourceCitation paperId="pbs-aaai-2019" label="Algorithm 2" page={5} />。
+
+## まず何がうれしいのか
+
+固定順の Prioritized Planning は、順序を 1 回選び間違えるだけで解が存在しても失敗します。PBS は衝突が実際に起きるまで 2 体の順序を保留し、必要な ordered pair だけを追加します。全 agent の順列を先に列挙せず、衝突が示した局所的な判断だけを探索できます。
+
+## 前提となる知識
+
+- Prioritized Planning と Space-Time A\*
+- vertex conflict と edge-swap conflict
+- partial order、DAG、topological sort
+- reservation table と conflict avoidance table（CAT）
+
+## 対象問題
+
+原論文は有限 graph 上の one-shot MAPF を扱い、agent は target 到達後もそこへ留まります。path quality は flowtime、すなわちサイトの sum of costs（SOC）で比較します<SourceCitation paperId="pbs-aaai-2019" section="Prioritized Planning" page={2} />。サイト版は graph を 4 近傍 grid に限定します。
+
+## 中心となるアイデア
+
+PT node `N` は partial priority order `≺N` と全 agent の path を持ちます。`ai ≺N aj` は `ai` が higher priority であり、`aj` の path は `ai` と衝突してはいけない、という意味です。
+
+`ai` と `aj` が衝突し、まだ comparable でなければ、次の 2 child を作ります。
+
+- `ai ≺ aj`: `aj` と、その下位で影響を受ける agent を再計画する
+- `aj ≺ ai`: `ai` と、その下位で影響を受ける agent を再計画する
+
+片方の branch が行き止まりなら stack から戻り、もう片方を試します。これが「priority を greedily 選ぶが、必要なら backtrack する」という PBS の核です。
+
+## アルゴリズムの手順
+
+1. 初期 partial order を空にし、各 agent の個別最短 path を求めます。
+2. root PT node を LIFO stack へ入れます。
+3. stack top の node から最初の vertex / edge collision を探します。
+4. collision が無ければ、その plan を返します。
+5. 衝突した 2 体の priority を両向きに分岐します。
+6. 各 child で新しく lower になった agent と lower closure を topological order で調べます。
+7. higher paths と衝突する agent を、higher paths を予約した Space-Time A\* で再計画します。
+8. feasible child を cost の大きい順に push し、次に小さい cost の child を pop します。
+
+## 小さな例
+
+2 体が同じ交差点へ `t=2` に入るとします。root では両者は incomparable です。PBS は `a1 ≺ a2` と `a2 ≺ a1` を作ります。前者では `a2` が `a1` の path を動的障害物として避け、後者では `a1` が避けます。cost の小さい feasible child を先に深掘りし、先で失敗したときだけ sibling へ戻ります。
+
+## データ構造
+
+- priority DAG: direct ordered pairs `higher → lower`
+- PT node: DAG、全 path、SOC、depth、生成順
+- hard reservation table: higher-priority paths
+- 2 段 CAT: incomparable paths との collision 数、lower paths との collision 数
+- low-level OPEN: `(cell,time)`、`g`、true-distance `h`、CAT score
+
+論文の low level は、まず incomparable agents との collision が少ない path、次に lower-priority agents との collision が少ない path を同長 path の tie-break に使います<SourceCitation paperId="pbs-aaai-2019" section="Low-Level Search" page={5} />。
+
+## 疑似コード
+
+```text
+root.order ← initial partial order (default: empty)
+root.paths ← UpdatePlan for every agent
+STACK ← {root}
+
+while STACK is not empty:
+  node ← STACK.pop()
+  conflict ← firstConflict(node.paths)
+  if conflict does not exist:
+    return node.paths
+
+  children ← empty
+  for (higher, lower) in bothDirections(conflict.agents):
+    child.order ← node.order + (higher ≺ lower)
+    if child.order is acyclic and UpdatePlan(child, lower):
+      children.add(child)
+  push children by non-increasing SOC
+return failure
+
+UpdatePlan(node, firstLower):
+  for agent in topologicalOrder(firstLower and its lower closure):
+    if agent is firstLower or collides with a higher agent:
+      agent.path ← shortest path avoiding all higher paths
+      if no path exists: return false
+  return true
+```
+
+原論文 Algorithm 2 の control flow を、サイトの `higher → lower` DAG と `TimedPath` に合わせて短く再構成しています<SourceCitation paperId="pbs-aaai-2019" label="Algorithm 2" page={5} />。
+
+## 実装上の注意
+
+priority edge を足す前に transitive cycle を検査します。再計画では direct parent だけでなく、DAG 上で到達できる全 higher agent を hard reservation にします。higher agent は goal へ永久に留まるため、低レベル探索は goal を見つけただけでは終了せず、future reservation と両立して stay できることも確認します。
+
+論文は higher agents の最大到着時刻以降に通常 A\* へ切り替えます。サイト版は同じ意味を有限 `maxHorizon` の Space-Time A\* で表し、goal の future occupancy を horizon 末尾まで検査します。
+
+## よくある誤解
+
+- PBS は CBS の constraint tree ではなく、priority tree を探索します。
+- partial order の探索は SOC 最適探索ではありません。depth-first で最初に見つけた plan を返します。
+- PT depth が `O(M²)` でも、各 low-level search と時間軸まで含めた実行時間が多項式になるわけではありません<SourceCitation paperId="pbs-aaai-2019" section="Properties" page={5} />。
+
+<Caution title="実験の 4% は準最適保証ではありません">
+  論文 p.7 の「4% より悪くなかった」は、掲載された benchmark 上の経験的観測です
+  <SourceCitation paperId="pbs-aaai-2019" page={7} />
+  。任意 instance に対する bound ではないため、サイトも bounded-suboptimal とは表示しません。
+</Caution>
+
+## 他手法との比較
+
+- Prioritized Planning は初期 priority が total order の PBS とみなせます。
+- CBS は collision を禁止 constraint の 2 分岐にし、best-first SOC search で最適性を保ちます。
+- PBS は priority の一貫性を保つ代わりに探索を軽くしやすい一方、priority-consistent な解しか作りません。
+
+## サイト上の実装との差異
+
+サイト版は `extra.initialPriority` で `{higher, lower}` の配列を受け取れます。paper の initial partial order に対応します。完全同点の low-level state は row-major cell、生成順で決めます。`maxHorizon`、timeout、共有 node limit、AbortSignal はブラウザ用の安全弁です。diagonal、following conflict 禁止、disappear at goal は受理しません。
+
+author-maintained `Jiaoyang-Li/PBS` は conflict queue、複数 conflict selection rule、SIPP option を持ち、README は論文実験の original code ではないと明記します。USC Research License のためコードは転記していません。同 checkout を Space-Time A\* mode で build し、3×2 swap fixture の success、SOC 6、makespan 4、path validity がサイト版と一致することを確認しました。path の完全一致は要求していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="pbs" />
+
+`swap-conflict` を detailed trace で実行し、`detect-conflict` → `set-priority` → `update-priority-dag` → `replan-lower-priority-agent` を追ってください。中央退避所の既知例では joint-state BFS が解を見つけても PBS は失敗します。priority order の探索と MAPF completeness が同じではないことを観察できます。
