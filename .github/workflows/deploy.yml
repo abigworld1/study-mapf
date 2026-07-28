@@ -46,7 +46,15 @@ jobs:
       - name: ビルド
         run: npm run build:only
 
+      # enablement: true にすると、Pages が未設定でもこのワークフローが
+      # 「Source: GitHub Actions」で有効化する。
+      # ★ 既定の false だと、リポジトリ設定で先に有効化してからでないと
+      #   「Get Pages site failed ... Not Found」で落ちる。
+      #   初回 push 時点ではリポジトリが空で設定を保存できないことがあり、
+      #   実際にそれで失敗した。設定をリポジトリ側に持たせて再現可能にする。
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v4
         with:
