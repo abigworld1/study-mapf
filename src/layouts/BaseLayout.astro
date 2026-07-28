@@ -119,12 +119,19 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : un
         z-index: 20;
       }
 
+      /*
+        ★ grid にしてある理由:
+          flex + flex-wrap だと、ナビ項目が折り返した瞬間に
+          テーマ切替ボタンまで次の行へ押し出され、全ページ・全幅で
+          ボタンだけの行ができて縦を 50px ほど無駄にしていた。
+          3 列にしておけばナビが何行になってもボタンは右端に留まる。
+      */
       .header-inner {
-        display: flex;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: center;
         gap: var(--space-4);
         padding-block: var(--space-3);
-        flex-wrap: wrap;
       }
 
       .brand {
@@ -205,11 +212,43 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : un
       }
 
       @media (max-width: 48rem) {
+        /*
+          ★ 狭い画面では 12 項目のナビが 5 行（約 200px）に折り返し、
+            スクロールしないと本文が見えなかった。
+            ブランドとテーマ切替を 1 行目、ナビを 2 行目に置き、
+            ナビは折り返さず横スクロールさせて 1 行に収める。
+            リンクは全て DOM に残るので、キーボードでも支援技術でも辿れる。
+            ページ本体は横スクロールさせない（スクロールするのはナビの中だけ）。
+        */
         .header-inner {
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas:
+            "brand toggle"
+            "nav nav";
           gap: var(--space-2);
+        }
+        .brand {
+          grid-area: brand;
+        }
+        .main-nav {
+          grid-area: nav;
+        }
+        .header-inner :global(.theme-toggle) {
+          grid-area: toggle;
         }
         .brand-text small {
           display: none;
+        }
+
+        .main-nav ul {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          /* スクロールバーで文字が隠れないよう下に余白を持たせる */
+          padding-bottom: var(--space-1);
+          scrollbar-width: thin;
+        }
+        .main-nav li {
+          flex: 0 0 auto;
         }
       }
     </style>

@@ -424,6 +424,38 @@ export default function Simulator({ initialSolverId }: Props) {
 
       <div className="sim-controls">
         <section>
+          <h3>アルゴリズム</h3>
+          <label>
+            手法
+            <select value={solverId} onChange={(e) => setSolverId(e.target.value)}>
+              {solvers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.displayName}（{s.originalName}）
+                </option>
+              ))}
+            </select>
+          </label>
+          {currentSolver?.implementationNote && (
+            <p className="note">{currentSolver.implementationNote}</p>
+          )}
+          <p className="hint">ここに出るのは実装済みの手法だけです。解説だけの手法は選べません。</p>
+
+          <div className="row">
+            <button type="button" className="primary" onClick={onRun} disabled={running}>
+              {running ? "実行中…" : "実行"}
+            </button>
+            <button type="button" onClick={onStop} disabled={!running}>
+              停止
+            </button>
+          </div>
+          {progress && (
+            <p className="hint" aria-live="polite">
+              {progress}
+            </p>
+          )}
+        </section>
+
+        <section>
           <h3>シナリオ</h3>
           <label>
             プリセット
@@ -520,38 +552,6 @@ export default function Simulator({ initialSolverId }: Props) {
           <p className="hint">
             グリッドをクリックすると編集できます。「開始」「目標」は最後に追加したエージェントに適用します。
           </p>
-        </section>
-
-        <section>
-          <h3>アルゴリズム</h3>
-          <label>
-            手法
-            <select value={solverId} onChange={(e) => setSolverId(e.target.value)}>
-              {solvers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName}（{s.originalName}）
-                </option>
-              ))}
-            </select>
-          </label>
-          {currentSolver?.implementationNote && (
-            <p className="note">{currentSolver.implementationNote}</p>
-          )}
-          <p className="hint">ここに出るのは実装済みの手法だけです。解説だけの手法は選べません。</p>
-
-          <div className="row">
-            <button type="button" className="primary" onClick={onRun} disabled={running}>
-              {running ? "実行中…" : "実行"}
-            </button>
-            <button type="button" onClick={onStop} disabled={!running}>
-              停止
-            </button>
-          </div>
-          {progress && (
-            <p className="hint" aria-live="polite">
-              {progress}
-            </p>
-          )}
         </section>
 
         <section>

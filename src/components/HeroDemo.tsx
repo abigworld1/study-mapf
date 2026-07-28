@@ -23,8 +23,20 @@ const LAYERS: Record<LayerName, boolean> = {
  * 優先順位付き計画で 1 度だけ解き、その結果をループ再生するだけ。
  * 探索そのものは見せない（それはシミュレータの役割）。
  */
+/*
+  ★ プリセットは「優先順位付き計画で解ける」ものを選ぶこと。
+    以前は cross を使っていたが、cross は 121 マス中 100 マスが壁（83%）で、
+    しかも固定優先順位では解けない（no-solution）。makespan が 0 になるため
+    下の setInterval が起動せず、トップページは真っ黒な静止画になっていた。
+    bottleneck は壁 7%、1 マスの隘路を 4 体が順に抜けるので、
+    「優先順位で通す」という MAPF の核が一目で伝わる。
+    tests/unit/hero-demo.test.ts がこの前提を固定している。
+*/
+export const HERO_PRESET_ID = "bottleneck";
+export const HERO_SEED = 7;
+
 export default function HeroDemo() {
-  const scenario = useMemo(() => buildPreset("cross", 7), []);
+  const scenario = useMemo(() => buildPreset(HERO_PRESET_ID, HERO_SEED), []);
   const [result, setResult] = useState<SolverResult | null>(null);
   const [time, setTime] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,7 +94,7 @@ export default function HeroDemo() {
     <figure className="hero-demo">
       <canvas ref={canvasRef} aria-hidden="true" />
       <figcaption>
-        十字路で 4 体が交差する例。優先順位付き計画で解いた経路を繰り返し再生しています。
+        1 マスの隘路を 4 体が通り抜ける例。優先順位付き計画で解いた経路を繰り返し再生しています。
         {reduceMotion && "（動きを減らす設定のため静止表示）"}
         {result && result.conflicts.length === 0
           ? " 衝突は 0 件です。"

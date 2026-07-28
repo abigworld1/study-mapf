@@ -5,11 +5,26 @@
 
 対象は次の 3 種類である。
 
-| 種別                 | 置き場所                           | Git 管理                                                                   |
-| -------------------- | ---------------------------------- | -------------------------------------------------------------------------- |
-| 原論文 PDF           | `docs/papers/<paper-id>/paper.pdf` | 原則しない（`.gitignore` 済み、再配布可と確認できたものだけ `git add -f`） |
-| Marker 変換 Markdown | `docs/papers/<paper-id>/marker.md` | する                                                                       |
-| 第三者の公開実装     | `.references/<repository-id>/`     | しない（`.gitignore` 済み）                                                |
+| 種別                 | 置き場所                               | Git 管理                    |
+| -------------------- | -------------------------------------- | --------------------------- |
+| 原論文 PDF           | `docs/papers/<paper-id>/paper.pdf`     | しない（`.gitignore` 済み） |
+| Marker 変換 Markdown | `docs/papers/<paper-id>/marker.md`     | しない（`.gitignore` 済み） |
+| 論文から抽出した図   | `docs/papers/<paper-id>/images/`       | しない（`.gitignore` 済み） |
+| 読解メモ             | `docs/papers/<paper-id>/metadata.yaml` | しない（`.gitignore` 済み） |
+| Marker の生出力      | `docs/output/`, `docs/output2/`        | しない（`.gitignore` 済み） |
+| マニフェスト         | `docs/sources/*.yaml`                  | **する**（ビルドが読む）    |
+| 実装ノート           | `docs/notes/implementation/*.md`       | **する**（自分たちの記述）  |
+| 第三者の公開実装     | `.references/<repository-id>/`         | しない（`.gitignore` 済み） |
+
+**資料コーパスはリポジトリに入っていない。** このリポジトリは public で、
+論文本文の変換物と抽出図は再配布可否が論文ごとに異なる。判断を誤ると
+そのまま再配布になるため、`docs/papers/<id>/` の中身と `docs/output*/` は
+一括で非コミットにしてある（第 11・12 条）。
+
+そのため clone しただけの作業コピーには論文資料が無い。取得方法は
+[SOURCE_ACQUISITION.md](SOURCE_ACQUISITION.md) を見ること。
+`node scripts/validate-sources.mjs` はコーパスの有無を検出し、
+無い環境では実ファイル検査を省いて警告 1 件だけ出す（CI ではこれが正常）。
 
 以下の 12 条は、サイト本文を書くとき・コードを書くときの両方に適用される。
 Claude Code と Codex はどちらもこの規約に従う（[AGENTS.md](AGENTS.md) 参照）。

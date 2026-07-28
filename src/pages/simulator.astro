@@ -132,9 +132,17 @@ const solvers = listSolverMetadata();
       top: 5rem;
     }
 
+    /*
+      ★ aspect-ratio だけだと、広い画面ほど盤面が縦に伸びる。
+        1280x900 では 630px になり、盤面と「実行」ボタンが同時に見えず
+        スクロールしながら操作することになっていた。
+        ビューポート高さで上限を掛けて、常に両方が視界に入るようにする。
+        min() の下側（aspect-ratio 由来の高さ）が効くのは狭い画面のときだけ。
+    */
     .sim-canvas {
       width: 100%;
       aspect-ratio: 4 / 3;
+      max-height: min(60vh, 32rem);
       background: var(--canvas-bg);
       border: var(--border-width) solid var(--border);
       border-radius: var(--radius-md);

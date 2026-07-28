@@ -187,6 +187,31 @@ const counts = { missing: 0, pdfReady: 0, markerReady: 0, verified: 0 };
 // 1 本ずつ warning を出すと他の警告が埋もれるため、集約して 1 件だけ報告する。
 const missingMarkerMeta = [];
 
+/*
+  ★ 資料コーパスは意図的にコミットしていない。
+    PDF は再配布可否が確定していないもの（52 本中 47 本）を含むため
+    .gitignore 済みで、marker.md・metadata.yaml・図画像も同様に外してある。
+    したがって CI の fresh clone には docs/papers/<id>/ の中身が無い。
+
+    ここで status と実ファイルの対応を無条件に検査すると、
+    作業コピーでは errors=0 なのに CI では errors=52 になる。
+    実際そうなっていて、初回デプロイは失敗する状態だった。
+
+    検査の目的は「コーパスを持っている作業コピーで、宣言と実体がずれていないか」
+    を見ることなので、コーパスが無い環境では省く。
+    黙って省くと本当に消えた場合に気付けないので、必ず 1 件通知する。
+*/
+const corpusPresent = papers.some(
+  (p) => p && p.local_pdf && existsSync(resolve(root, p.local_pdf)),
+);
+if (!corpusPresent) {
+  warn(
+    "papers.yaml",
+    "docs/papers/<id>/ の実ファイルがこの作業コピーに無いため、status と実ファイルの対応検査を省略した。" +
+      "コーパスは意図的に非コミットなので、CI ではこれが正常。ローカルで出た場合は取得漏れを疑うこと",
+  );
+}
+
 for (const p of papers) {
   if (!p || !p.id) continue;
   const where = `papers.yaml/${p.id}`;
@@ -222,29 +247,35 @@ for (const p of papers) {
   }
 
   // ---- 9. status と実ファイルの整合
+  //      コーパスを持たない環境（CI）では検査対象が存在しないので数だけ数える。
   switch (p.status) {
     case "missing":
       counts.missing += 1;
-      if (pdf.exists)
+      if (corpusPresent && pdf.exists)
         warn(where, "status が missing だが local_pdf が存在する。pdf-ready へ更新すること");
       break;
     case "pdf-ready":
       counts.pdfReady += 1;
-      if (!pdf.exists) err(where, `status が pdf-ready だが ${p.local_pdf} が無い`);
+      if (corpusPresent && !pdf.exists)
+        err(where, `status が pdf-ready だが ${p.local_pdf} が無い`);
       break;
     case "marker-ready":
       counts.markerReady += 1;
-      if (!pdf.exists) err(where, `status が marker-ready だが ${p.local_pdf} が無い`);
-      if (!md.exists) err(where, `status が marker-ready だが ${p.marker_markdown} が無い`);
-      // Marker が marker_meta.json を出さない場合もあるため error ではなく warning（集約）。
-      if (!meta.exists) missingMarkerMeta.push(p.id);
+      if (corpusPresent) {
+        if (!pdf.exists) err(where, `status が marker-ready だが ${p.local_pdf} が無い`);
+        if (!md.exists) err(where, `status が marker-ready だが ${p.marker_markdown} が無い`);
+        // Marker が marker_meta.json を出さない場合もあるため error ではなく warning（集約）。
+        if (!meta.exists) missingMarkerMeta.push(p.id);
+      }
       break;
     case "verified":
       counts.verified += 1;
-      if (!pdf.exists) err(where, `status が verified だがローカル PDF が無い: ${p.local_pdf}`);
-      if (!md.exists)
-        err(where, `status が verified だが Marker Markdown が無い: ${p.marker_markdown}`);
-      if (!meta.exists) missingMarkerMeta.push(p.id);
+      if (corpusPresent) {
+        if (!pdf.exists) err(where, `status が verified だがローカル PDF が無い: ${p.local_pdf}`);
+        if (!md.exists)
+          err(where, `status が verified だが Marker Markdown が無い: ${p.marker_markdown}`);
+        if (!meta.exists) missingMarkerMeta.push(p.id);
+      }
       break;
     default:
       break; // enum 違反はスキーマ検査側で報告済み

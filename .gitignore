@@ -9,6 +9,24 @@
 # `git add -f` で明示的に追加する運用とする。
 docs/papers/**/*.pdf
 
+# --- 資料コーパス本体（Marker 変換物・抽出図・読解メモ）---
+# 論文本文の変換物と、論文から抽出した図画像はリポジトリへ置かない。
+# 再配布可否が論文ごとに異なり、public リポジトリでは判断を誤ると
+# そのまま再配布になるため、まとめて非公開にする（SOURCE_POLICY.md 第 11・12 条）。
+#
+# ★ ローカルには残す。削除しないこと。サイト本文を書くときの照合に要る。
+# ★ docs/sources/*.yaml は別物。ビルドが読むので必ずコミットする。
+docs/papers/**/marker.md
+docs/papers/**/metadata.yaml
+docs/papers/**/marker_meta.json
+docs/papers/**/images/
+docs/papers/**/*_ja.md
+
+# Marker の生出力一式（論文本文の変換物と抽出図がそのまま入っている）。
+# docs/papers/<id>/marker.md の供給元なので、同じ理由で置かない。
+docs/output/
+docs/output2/
+
 # --- Marker 変換の一時生成物 ---
 docs/papers/**/.marker-tmp/
 docs/papers/**/*.marker.log
