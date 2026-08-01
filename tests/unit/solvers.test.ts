@@ -358,8 +358,28 @@ describe("プリセット", () => {
       const scenario = preset.build(3);
       expect(validateScenario(scenario), `${preset.id} が不正`).toEqual([]);
       for (const agent of scenario.agents) {
-        expect(isWalkable(scenario.map, agent.start)).toBe(true);
-        expect(isWalkable(scenario.map, agent.goal!)).toBe(true);
+        expect(isWalkable(scenario.map, agent.start), `${preset.id}/${agent.id} の start`).toBe(
+          true,
+        );
+      }
+      /*
+        ★ goal の在り処は kind で変わる。
+          TAPF ではエージェントに固定 goal が無く、target はチームが持つ
+          （cbm-tapf-aamas-2016 p.2）。割当自体が解の一部なので、
+          ここで agent.goal を要求すると「もう割り当て済み」を前提にしてしまう。
+      */
+      if (scenario.kind === "tapf") {
+        for (const team of scenario.teams ?? []) {
+          for (const goal of team.goals) {
+            expect(isWalkable(scenario.map, goal), `${preset.id}/${team.id} の target`).toBe(true);
+          }
+        }
+      } else {
+        for (const agent of scenario.agents) {
+          expect(isWalkable(scenario.map, agent.goal!), `${preset.id}/${agent.id} の goal`).toBe(
+            true,
+          );
+        }
       }
     }
   });

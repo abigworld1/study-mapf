@@ -32,6 +32,19 @@ import { createRandom, randomInt } from "@/lib/model/random";
 
 type EditMode = "wall" | "agent" | "start" | "goal" | "pickup" | "delivery";
 
+const OBJECTIVE_LABEL: Record<"makespan" | "sum-of-costs" | "sum-of-loss", string> = {
+  makespan: "makespan（他の指標は最適値ではありません）",
+  "sum-of-costs": "sum of costs（他の指標は最適値ではありません）",
+  "sum-of-loss": "sum of loss（画面の sum of costs とは別の量です）",
+};
+
+const PROBLEM_KIND_LABEL: Record<Scenario["kind"], string> = {
+  "one-shot-mapf": "一括 MAPF",
+  "lifelong-mapf": "lifelong MAPF",
+  mapd: "MAPD",
+  tapf: "TAPF（目標割当つき）",
+};
+
 const DEFAULT_LAYERS: Record<LayerName, boolean> = {
   grid: true,
   obstacles: true,
@@ -51,15 +64,15 @@ interface Props {
 }
 
 export default function Simulator({ initialSolverId }: Props) {
-  const solvers = useMemo(() => listSolverMetadata(), []);
-  const [solverId, setSolverId] = useState(() => initialSolverId ?? solvers[0]?.id ?? "astar");
+  const allSolvers = useMemo(() => listSolverMetadata(), []);
+  const [solverId, setSolverId] = useState(() => initialSolverId ?? allSolvers[0]?.id ?? "astar");
 
   // アルゴリズムページからの導線（?solver=...）を受ける。
   // 実装が無い id が来ても選択は変えない（存在しない手法を選ばせないため）。
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("solver");
-    if (requested && solvers.some((s) => s.id === requested)) setSolverId(requested);
-  }, [solvers]);
+    if (requested && allSolvers.some((s) => s.id === requested)) setSolverId(requested);
+  }, [allSolvers]);
   const [presetId, setPresetId] = useState("open-grid");
   const [seed, setSeed] = useState(1);
   const [rhcrPlanningWindow, setRhcrPlanningWindow] = useState(8);
@@ -67,6 +80,27 @@ export default function Simulator({ initialSolverId }: Props) {
   // 空欄 = 自動。w から導くと、無関係なつまみで運転時間が決まってしまう。
   const [rhcrHorizon, setRhcrHorizon] = useState("");
   const [scenario, setScenario] = useState<Scenario>(() => buildPreset("open-grid", 1));
+
+  /*
+    ★ 手法の一覧は Scenario.kind で絞る。
+
+      metadata.supports は前から宣言されていて registry に solversFor() も
+      あったのに、UI が使っていなかった。そのため RHCR（lifelong 専用）が
+      one-shot のプリセットでも選べてしまい、選んで実行すると必ず
+      「対応していません」エラーになる状態が一度できている。
+      TAPF や MAPD を足すと同じことがまた起きるので、ここで塞ぐ。
+  */
+  const solvers = useMemo(
+    () => allSolvers.filter((s) => s.supports.includes(scenario.kind)),
+    [allSolvers, scenario.kind],
+  );
+
+  // 絞り込みの結果いま選んでいる手法が消えたら、先頭へ移す。
+  useEffect(() => {
+    if (solvers.length > 0 && !solvers.some((s) => s.id === solverId)) {
+      setSolverId(solvers[0]!.id);
+    }
+  }, [solvers, solverId]);
   const [mode, setMode] = useState<EditMode>("wall");
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [selected, setSelected] = useState<Cell | null>(null);
@@ -118,6 +152,8 @@ export default function Simulator({ initialSolverId }: Props) {
       map: scenario.map,
       agents: scenario.agents,
       tasks: scenario.tasks,
+      teams: scenario.teams,
+      targetAssignments: result?.targetAssignments,
       positions,
       paths: layers["planned-paths"] ? paths : undefined,
       conflicts: conflictsNow,
@@ -125,7 +161,7 @@ export default function Simulator({ initialSolverId }: Props) {
       selected,
       layers,
     }),
-    [scenario, positions, paths, conflictsNow, time, selected, layers],
+    [scenario, positions, paths, conflictsNow, time, selected, layers, result?.targetAssignments],
   );
 
   const draw = useCallback(() => {
@@ -454,7 +490,10 @@ export default function Simulator({ initialSolverId }: Props) {
           {currentSolver?.implementationNote && (
             <p className="note">{currentSolver.implementationNote}</p>
           )}
-          <p className="hint">ここに出るのは実装済みの手法だけです。解説だけの手法は選べません。</p>
+          <p className="hint">
+            ここに出るのは、実装済みでかつ「{PROBLEM_KIND_LABEL[scenario.kind]}
+            」に対応した手法だけです。解説だけの手法や、別の問題設定の手法は選べません。
+          </p>
 
           {solverId === "rhcr" && (
             <div>
@@ -733,9 +772,40 @@ export default function Simulator({ initialSolverId }: Props) {
                   {result.conflicts.length}
                 </dd>
               </div>
+              {/*
+                ★ どの量を最小化したのかは必ず添える。
+                  TAPF は手法ごとに目的関数が違う。CBM は makespan
+                  （cbm-tapf-aamas-2016 p.2）、CBS-TA は sum of costs
+                  （cbs-ta-aamas-2018 p.2）で、CBS-TA 論文 p.1 自身が
+                  両者を区別している。画面は両方の数値を出すので、
+                  黙っていると「どれも最適値」と読まれる。
+              */}
+              {result.objective && (
+                <div>
+                  <dt>最小化した量</dt>
+                  <dd>{OBJECTIVE_LABEL[result.objective]}</dd>
+                </div>
+              )}
             </dl>
           ) : (
             <p className="hint">まだ実行していません。</p>
+          )}
+          {result && result.targetAssignments && result.targetAssignments.length > 0 && (
+            <div className="assignments">
+              <h4>目標割当</h4>
+              <ul>
+                {result.targetAssignments.map((assignment) => (
+                  <li key={assignment.agentId}>
+                    <span className="team">{assignment.teamId}</span> {assignment.agentId} →（
+                    {assignment.goal.x}, {assignment.goal.y}）
+                  </li>
+                ))}
+              </ul>
+              <p className="hint">
+                TAPF では、どのエージェントがどの target へ行くかも解の一部です。 盤面の破線の四角が
+                target で、割り当てられたものには実線とエージェント名が付きます。
+              </p>
+            </div>
           )}
           {/*
             ★ warnings は必ず出す。

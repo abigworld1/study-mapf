@@ -175,6 +175,49 @@ test.describe("シミュレータ", () => {
   });
 
   /*
+    TAPF の入り口。目標割当が解の一部であることが画面で見えること、
+    そして「どの量を最小化したのか」が必ず添えられることを固定する。
+    CBM は makespan、CBS-TA は sum of costs を最小化するので
+    （cbs-ta-aamas-2018 p.1 が両者を区別している）、
+    目的関数を言わずに数値だけ出すと「どれも最適」と読まれる。
+  */
+  test("TAPF プリセットを解くと目標割当と目的関数が出る", async ({ page }) => {
+    await page.getByLabel("プリセット").selectOption("tapf-crossing");
+
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    // kind で絞るので、one-shot 専用の手法は選択肢から消えている。
+    await expect(solverSelect).toContainText("全探索割当");
+    await expect(solverSelect).not.toContainText("CBS（Conflict-Based Search）");
+    await expect(solverSelect).not.toContainText("RHCR");
+
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.getByText("目標割当")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".assignments")).toContainText("team1");
+    await expect(page.getByText(/最小化した量/)).toBeVisible();
+    await expect(page.locator(".metrics")).toContainText(
+      "makespan（他の指標は最適値ではありません）",
+    );
+    await expect(page.locator(".solver-warnings")).toContainText(
+      "sum of costs は最適値ではありません",
+    );
+  });
+
+  test("プリセットを TAPF から一括 MAPF に戻すと手法の一覧も戻る", async ({ page }) => {
+    const solverSelect = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) })
+      .getByRole("combobox");
+    await page.getByLabel("プリセット").selectOption("tapf-crossing");
+    await expect(solverSelect).not.toContainText("LaCAM");
+    await page.getByLabel("プリセット").selectOption("open-grid");
+    await expect(solverSelect).toContainText("LaCAM");
+    await expect(solverSelect).not.toContainText("全探索割当");
+  });
+
+  /*
     RHCR は完全ではない。解ける問題で失敗したとき、
     「解が求まりませんでした」だけを見せると解の非存在と読まれる。
     swap-conflict は CBS が sum of costs 11 で解くが RHCR は失敗する。

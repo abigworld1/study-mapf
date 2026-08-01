@@ -4,6 +4,7 @@ import type {
   Conflict,
   GridMap,
   TaskSpec,
+  TeamSpec,
   Time,
   TimedPath,
 } from "@/lib/model/types.js";
@@ -95,6 +96,14 @@ export interface RenderState {
   readonly map: GridMap;
   readonly agents: readonly AgentSpec[];
   readonly tasks?: readonly TaskSpec[];
+  /** TAPF のチーム。target は割当前なのでエージェントの goal とは別に描く。 */
+  readonly teams?: readonly TeamSpec[];
+  /** 解けたあとの目標割当。描画では target にエージェント名を添えるのに使う。 */
+  readonly targetAssignments?: readonly {
+    readonly agentId: string;
+    readonly teamId: string;
+    readonly goal: Cell;
+  }[];
   /** 現在時刻におけるエージェント位置。 */
   readonly positions: Readonly<Record<string, Cell>>;
   readonly paths?: readonly TimedPath[];
@@ -201,6 +210,47 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
+  }
+
+  /*
+    --- TAPF のチーム target
+    ★ エージェントの goal（実線のリング）とは別物なので、描き分ける。
+      TAPF では割当が解の一部で、実行前はどの target を誰が取るか決まっていない。
+      同じ見た目にすると「もう割り当て済み」に見えてしまうため、
+      未割当は破線の四角、割当済みはそこへ実線を重ねる。
+      色だけに頼らないよう、割当済みにはエージェント番号も添える。
+  */
+  if (state.teams && state.teams.length > 0) {
+    ctx.lineWidth = 2;
+    state.teams.forEach((team, teamIndex) => {
+      const color =
+        theme.agents[(team.colorIndex ?? teamIndex) % theme.agents.length] ?? theme.goalRing;
+      for (const goal of team.goals) {
+        ctx.strokeStyle = color;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(px(goal.x) + 5, py(goal.y) + 5, s - 10, s - 10);
+        ctx.setLineDash([]);
+      }
+    });
+    for (const assignment of state.targetAssignments ?? []) {
+      const teamIndex = state.teams.findIndex((t) => t.id === assignment.teamId);
+      const team = state.teams[teamIndex];
+      const color =
+        theme.agents[(team?.colorIndex ?? teamIndex) % theme.agents.length] ?? theme.goalRing;
+      ctx.strokeStyle = color;
+      ctx.strokeRect(px(assignment.goal.x) + 5, py(assignment.goal.y) + 5, s - 10, s - 10);
+      if (state.layers.labels) {
+        ctx.fillStyle = color;
+        ctx.font = `${Math.max(9, Math.floor(s * 0.28))}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          assignment.agentId,
+          px(assignment.goal.x) + s / 2,
+          py(assignment.goal.y) + s / 2,
+        );
+      }
+    }
   }
 
   // --- goals（エージェントの目標。リングで示す）

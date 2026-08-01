@@ -16,6 +16,7 @@ import { mstarSolver } from "./joint/mstar.js";
 import { pushAndRotateSolver, pushAndSwapSolver } from "./push/solvers.js";
 import { lacamSolver, lacamStarSolver } from "./lacam/solvers.js";
 import { mapfLnsSolver, mapfLns2Solver, rhcrSolver } from "./lns/solvers.js";
+import { tapfBaselineSolver } from "./tapf/baseline.js";
 
 /**
  * Solver の登録所。
@@ -59,6 +60,7 @@ const SOLVERS: readonly MapfSolver[] = [
   mapfLnsSolver,
   mapfLns2Solver,
   rhcrSolver,
+  tapfBaselineSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

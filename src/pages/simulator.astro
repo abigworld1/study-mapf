@@ -317,6 +317,28 @@ const solvers = listSolverMetadata();
       color: var(--warn);
     }
 
+    /* TAPF の目標割当。どのエージェントがどの target を取ったかを一覧で出す。 */
+    .sim-controls .assignments {
+      margin-top: var(--space-3);
+    }
+    .sim-controls .assignments h4 {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-sm);
+    }
+    .sim-controls .assignments ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: var(--space-1);
+      font-size: var(--text-sm);
+    }
+    .sim-controls .assignments .team {
+      display: inline-block;
+      min-width: 4.5em;
+      color: var(--fg-muted);
+    }
+
     .sim-controls .message {
       border: var(--border-width) solid var(--warn);
       background: var(--warn-subtle);

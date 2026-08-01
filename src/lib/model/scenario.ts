@@ -1,4 +1,12 @@
-import type { AgentSpec, Cell, GridMap, Scenario, SimulationRules, TaskSpec } from "./types.js";
+import type {
+  AgentSpec,
+  Cell,
+  GridMap,
+  Scenario,
+  SimulationRules,
+  TaskSpec,
+  TeamSpec,
+} from "./types.js";
 import { DEFAULT_RULES } from "./types.js";
 import { createEmptyMap, isWalkable, withBlocked } from "./grid.js";
 import { createRandom, randomInt } from "./random.js";
@@ -24,6 +32,13 @@ export interface ScenarioJson {
     pickup: [number, number];
     delivery: [number, number];
     releaseTime: number;
+  }[];
+  /** TAPF のチーム。agentIds と goals は同数（cbm-tapf-aamas-2016 p.2）。 */
+  readonly teams?: readonly {
+    id: string;
+    agentIds: readonly string[];
+    goals: readonly [number, number][];
+    colorIndex?: number;
   }[];
   readonly rules: SimulationRules;
   readonly seed: number;
@@ -60,6 +75,16 @@ export function scenarioToJson(scenario: Scenario): ScenarioJson {
             pickup: [t.pickup.x, t.pickup.y] as [number, number],
             delivery: [t.delivery.x, t.delivery.y] as [number, number],
             releaseTime: t.releaseTime,
+          })),
+        }
+      : {}),
+    ...(scenario.teams && scenario.teams.length > 0
+      ? {
+          teams: scenario.teams.map((team) => ({
+            id: team.id,
+            agentIds: [...team.agentIds],
+            goals: team.goals.map((g) => [g.x, g.y] as [number, number]),
+            ...(team.colorIndex !== undefined ? { colorIndex: team.colorIndex } : {}),
           })),
         }
       : {}),
@@ -125,6 +150,13 @@ export function scenarioFromJson(input: unknown): Scenario {
     releaseTime: t.releaseTime ?? 0,
   }));
 
+  const teams: TeamSpec[] = (json.teams ?? []).map((t, i) => ({
+    id: t.id || `team${i + 1}`,
+    agentIds: [...(t.agentIds ?? [])],
+    goals: (t.goals ?? []).map((g, j) => toCell(g, `teams[${i}].goals[${j}]`)),
+    colorIndex: t.colorIndex ?? i,
+  }));
+
   return {
     id: json.id ?? "imported",
     name: json.name ?? "読み込んだシナリオ",
@@ -132,6 +164,7 @@ export function scenarioFromJson(input: unknown): Scenario {
     map,
     agents,
     ...(tasks.length > 0 ? { tasks } : {}),
+    ...(teams.length > 0 ? { teams } : {}),
     rules: { ...DEFAULT_RULES, ...(json.rules ?? {}) },
     seed: json.seed ?? 1,
     ...(json.attribution ? { attribution: json.attribution } : {}),
@@ -459,7 +492,141 @@ export const PRESETS: readonly PresetDefinition[] = [
       );
     },
   },
+
+  /*
+    ここから TAPF。cbm-tapf-aamas-2016 p.1 は TAPF が両極端を一般化すると述べる。
+
+      「チームが 1 つ（全エージェントが所属）なら匿名 MAPF になる」
+      「各チームがちょうど 1 体なら非匿名（通常の）MAPF になる」
+
+    その両端と中間が並ぶように 3 つ置く。どこが変わると何が変わるのかを
+    比べられるようにするのが狙い。
+  */
+  {
+    id: "tapf-anonymous",
+    name: "TAPF: 匿名（1 チーム）",
+    description:
+      "4 体が 1 チーム。どの target へ誰が行ってもよい。チームが 1 つなので匿名 MAPF と同じ。",
+    build: (seed) =>
+      tapfScenario(
+        "tapf-anonymous",
+        "TAPF: 匿名（1 チーム）",
+        createEmptyMap(8, 8),
+        [
+          {
+            starts: [
+              { x: 0, y: 0 },
+              { x: 0, y: 2 },
+              { x: 0, y: 5 },
+              { x: 0, y: 7 },
+            ],
+            goals: [
+              { x: 7, y: 0 },
+              { x: 7, y: 2 },
+              { x: 7, y: 5 },
+              { x: 7, y: 7 },
+            ],
+          },
+        ],
+        seed,
+      ),
+  },
+  {
+    id: "tapf-crossing",
+    name: "TAPF: 割当が効く例",
+    description:
+      "1 チーム 2 体。並び順どおりに割り当てると経路が交差するが、入れ替えれば真っすぐ行ける。解いた結果の割当が並び順と違うことを確かめる用。",
+    build: (seed) =>
+      tapfScenario(
+        "tapf-crossing",
+        "TAPF: 割当が効く例",
+        createEmptyMap(7, 5),
+        [
+          {
+            starts: [
+              { x: 0, y: 0 },
+              { x: 0, y: 4 },
+            ],
+            // 並び順のまま（a1→goals[0]）だと交差して makespan 10。
+            // 入れ替えれば makespan 6。最適な割当は並び順ではない。
+            goals: [
+              { x: 6, y: 4 },
+              { x: 6, y: 0 },
+            ],
+          },
+        ],
+        seed,
+      ),
+  },
+  {
+    id: "tapf-two-teams",
+    name: "TAPF: 2 チーム",
+    description:
+      "2 チーム × 2 体。チーム内では交換可能、チームをまたいだ交換は不可。両チームとも並び順とは違う割当が最適になる。",
+    build: (seed) =>
+      tapfScenario(
+        "tapf-two-teams",
+        "TAPF: 2 チーム",
+        createEmptyMap(8, 6),
+        [
+          {
+            starts: [
+              { x: 0, y: 0 },
+              { x: 0, y: 2 },
+            ],
+            goals: [
+              { x: 7, y: 2 },
+              { x: 7, y: 0 },
+            ],
+          },
+          {
+            starts: [
+              { x: 0, y: 3 },
+              { x: 0, y: 5 },
+            ],
+            goals: [
+              { x: 7, y: 5 },
+              { x: 7, y: 3 },
+            ],
+          },
+        ],
+        seed,
+      ),
+  },
 ];
+
+/**
+ * TAPF シナリオを組む。
+ *
+ * ★ agents[].goal はあえて設定しない。TAPF では割当が解の一部であり、
+ *   ここで goal を書くと「もう割り当て済み」に見えてしまう
+ *   （cbm-tapf-aamas-2016 p.2 は割当を求めることを問題の一部としている）。
+ */
+function tapfScenario(
+  id: string,
+  name: string,
+  map: GridMap,
+  teams: readonly { starts: readonly Cell[]; goals: readonly Cell[] }[],
+  seed: number,
+): Scenario {
+  const agents: AgentSpec[] = [];
+  const teamSpecs: TeamSpec[] = [];
+  teams.forEach((team, teamIndex) => {
+    const agentIds: string[] = [];
+    for (const start of team.starts) {
+      const agentId = `a${agents.length + 1}`;
+      agents.push({ id: agentId, start, colorIndex: teamIndex });
+      agentIds.push(agentId);
+    }
+    teamSpecs.push({
+      id: `team${teamIndex + 1}`,
+      agentIds,
+      goals: [...team.goals],
+      colorIndex: teamIndex,
+    });
+  });
+  return { id, name, kind: "tapf", map, agents, teams: teamSpecs, rules: DEFAULT_RULES, seed };
+}
 
 export function getPreset(id: string): PresetDefinition | undefined {
   return PRESETS.find((p) => p.id === id);
@@ -492,6 +659,59 @@ export function validateScenario(scenario: Scenario): string[] {
     if (missing.length > 0) {
       problems.push(`目標が未設定のエージェントがあります: ${missing.map((a) => a.id).join(", ")}`);
     }
+  }
+  if (scenario.kind === "tapf") problems.push(...validateTeams(scenario));
+  return problems;
+}
+
+/**
+ * TAPF のチーム分割を検査する。
+ *
+ * ★ ここで見る条件はどれも cbm-tapf-aamas-2016 p.2 §2.1 の定義そのもので、
+ *   実装の都合ではない。特に「チームの target 数 = チームのエージェント数」は、
+ *   「各エージェントが一意な target へ移動し、全 target が訪問される」が
+ *   成り立つための前提なので、崩れると最適性の議論ができなくなる。
+ */
+function validateTeams(scenario: Scenario): string[] {
+  const problems: string[] = [];
+  const teams = scenario.teams ?? [];
+  if (teams.length === 0) {
+    problems.push("TAPF ではチームを 1 つ以上定義してください");
+    return problems;
+  }
+  const agentIds = new Set(scenario.agents.map((a) => a.id));
+  const assigned = new Set<string>();
+  const seenGoal = new Set<string>();
+  for (const team of teams) {
+    if (team.agentIds.length === 0) {
+      problems.push(`${team.id}: エージェントが 1 体も居ません`);
+    }
+    if (team.agentIds.length !== team.goals.length) {
+      problems.push(
+        `${team.id}: エージェント ${team.agentIds.length} 体に対し target が ${team.goals.length} 個です。` +
+          "TAPF はチームごとに同数であることを要求します（cbm-tapf-aamas-2016 p.2）",
+      );
+    }
+    for (const agentId of team.agentIds) {
+      if (!agentIds.has(agentId)) problems.push(`${team.id}: 未知のエージェント ${agentId}`);
+      if (assigned.has(agentId))
+        problems.push(`${agentId}: 複数のチームに属しています。チームは互いに素であること`);
+      assigned.add(agentId);
+    }
+    for (const goal of team.goals) {
+      if (!isWalkable(scenario.map, goal)) {
+        problems.push(`${team.id}: target (${goal.x},${goal.y}) が壁または範囲外です`);
+      }
+      const key = `${goal.x},${goal.y}`;
+      if (seenGoal.has(key)) problems.push(`target (${goal.x},${goal.y}) が重複しています`);
+      seenGoal.add(key);
+    }
+  }
+  const orphans = scenario.agents.filter((a) => !assigned.has(a.id));
+  if (orphans.length > 0) {
+    problems.push(
+      `どのチームにも属さないエージェントがあります: ${orphans.map((a) => a.id).join(", ")}`,
+    );
   }
   return problems;
 }

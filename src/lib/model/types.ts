@@ -26,6 +26,7 @@ export interface Cell {
 
 export type AgentId = string;
 export type TaskId = string;
+export type TeamId = string;
 
 /** 離散時刻。0 始まり。 */
 export type Time = number;
@@ -74,6 +75,39 @@ export interface TaskSpec {
   readonly releaseTime: Time;
 }
 
+/**
+ * TAPF（target assignment and path finding）のチーム。
+ *
+ * 定義は cbm-tapf-aamas-2016 p.2 §2.1 に従う。
+ *
+ *   「各チーム team_i は K_i 体のエージェントからなる。各チームには
+ *     エージェント数と同じ数の一意な target g_1^i … g_{K_i}^i が与えられる。
+ *     各エージェントは一意な target へ移動しなければならない。
+ *     チーム内の割当は 1 対 1 写像（順列）である。」
+ *
+ * ★ `agentIds.length === goals.length` は論文が要求する不変条件であって、
+ *   こちらの都合ではない。破ると「各 target がちょうど 1 体に訪問される」が
+ *   成立せず、CBM の最適性の前提が崩れる。validateScenario で検査する。
+ *
+ * ★ 同じチームのエージェントは交換可能で、違うチームのエージェントは
+ *   交換不可（同 p.2）。チームが 1 つなら匿名 MAPF、チームが
+ *   エージェント数と同じなら通常の（非匿名）MAPF になる（同 p.1）。
+ *
+ * ★ CBS-TA（cbs-ta-aamas-2018 p.2）はチームではなく割当行列 A を使い、
+ *   エージェント数と goal 数が違う場合や、エージェントごとに割当可能な
+ *   goal が異なる場合も扱える。チーム分割はその特殊形（ブロック対角）
+ *   なので、Batch 7 で CBS-TA を実装するときは行列表現への拡張が要る。
+ */
+export interface TeamSpec {
+  readonly id: TeamId;
+  /** このチームに属するエージェント。Scenario.agents の id を指す。 */
+  readonly agentIds: readonly AgentId[];
+  /** このチームの target。agentIds と同数でなければならない。 */
+  readonly goals: readonly Cell[];
+  /** 表示用の色 index。 */
+  readonly colorIndex?: number;
+}
+
 // ---------------------------------------------------------------- シナリオ
 
 /** ゴール到達後の扱い。保証の議論が変わるため必ず明示する。 */
@@ -114,6 +148,11 @@ export interface Scenario {
   readonly agents: readonly AgentSpec[];
   /** MAPD / lifelong の場合のみ使う。 */
   readonly tasks?: readonly TaskSpec[];
+  /**
+   * TAPF の場合のみ使う。kind: "tapf" なら必須。
+   * このとき agents[].goal は割当前なので未設定でよい。
+   */
+  readonly teams?: readonly TeamSpec[];
   readonly rules: SimulationRules;
   /** 乱数 seed。同じ seed と同じ入力なら同じ結果になること。 */
   readonly seed: number;
@@ -281,6 +320,28 @@ export interface SolverResult {
   readonly conflicts: readonly Conflict[];
   /** MAPD の割当履歴。 */
   readonly assignments?: readonly { taskId: TaskId; agentId: AgentId; time: Time }[];
+  /**
+   * TAPF の目標割当。どのエージェントがチームのどの target を取ったか。
+   * MAPD の assignments と違い、時刻に沿った履歴ではなく一度きりの割当。
+   */
+  readonly targetAssignments?: readonly {
+    readonly agentId: AgentId;
+    readonly teamId: TeamId;
+    readonly goal: Cell;
+  }[];
+  /**
+   * この手法が最小化した目的関数。
+   *
+   * ★ 省略可なのは既存 Solver を壊さないためだが、metrics に出る値と
+   *   最適化した量が食い違う手法では必ず入れること。
+   *   TAPF は特に危ない。CBM は makespan 最適（cbm-tapf-aamas-2016 p.2）、
+   *   CBS-TA は sum of costs 最適（cbs-ta-aamas-2018 p.2）で、
+   *   CBS-TA 論文 p.1 自身が「CBM は makespan を最小化するが、
+   *   idle time の最小化には合わない」と両者を区別している。
+   *   画面は両方の値を出すので、どちらを最適化したのか言わないと
+   *   「表示されている数値がどれも最適」と読まれる。
+   */
+  readonly objective?: "makespan" | "sum-of-costs" | "sum-of-loss";
   /** outcome が error のときの構造化情報。 */
   readonly error?: SolverErrorInfo;
   /** outcome が solved 以外のときの分類。error より粗いが outcome より細かい。 */

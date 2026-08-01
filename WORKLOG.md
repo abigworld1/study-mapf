@@ -1495,6 +1495,105 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-01 TAPF（目標割当）の入り口を作った（Claude Code）
+
+Batch 7（Hungarian / MCMF / Gale-Shapley / CBM / CBS-TA）は割当問題の
+手法群だが、シミュレータに割当を扱う入り口が無く、そのままでは載せられない。
+先に土台を作った。
+
+### 1. どちらの入り口か
+
+マニフェストを見ると「割当の入り口」は 2 つに割れる。
+
+|           | `problem_types`                | 中身                                                    |
+| --------- | ------------------------------ | ------------------------------------------------------- |
+| Batch 7   | `assignment` / `tapf` / `flow` | エージェントに紐付かない goal 集合を割り当ててから MAPF |
+| Batch 8/9 | `mapd`                         | pickup→delivery のタスクが時刻とともに到着し続ける      |
+
+先に必要なのは前者なので、TAPF を作った。MAPD の実行ループは別途。
+
+### 2. モデル（cbm-tapf-aamas-2016 p.2 §2.1）
+
+`TeamSpec { id, agentIds, goals }` を足し、`Scenario.teams` を追加した。
+論文の定義をそのまま不変条件にしている。
+
+- チームの target 数はチームのエージェント数と**同数**
+- チーム内の割当は 1 対 1 写像（順列）
+- 同チーム内は交換可能、チームをまたいだ交換は不可
+
+`validateScenario` で検査する。この同数条件は実装の都合ではなく、
+「各 target がちょうど 1 体に訪問される」の前提なので、崩れると
+最適性の議論ができなくなる。
+
+同 p.1 が述べるとおり、チーム 1 つなら匿名 MAPF、チームが人数分あれば
+通常の MAPF になる。プリセットはその両端と中間が見えるように 3 つ置いた。
+
+TAPF では `agents[].goal` を**設定しない**。割当が解の一部なので、
+書いてしまうと「もう割り当て済み」に見える。
+
+### 3. Solver を `Scenario.kind` で絞るようにした
+
+`metadata.supports` は前から宣言されていて `registry.solversFor()` も
+あったのに、UI が使っていなかった。そのため RHCR（lifelong 専用）が
+one-shot プリセットでも選べて必ずエラーになる状態が一度できている。
+TAPF / MAPD を足すと同じことがまた起きるので、ここで塞いだ。
+「どの kind でも、絞り込んだ手法は全てその kind に対応している」を
+テストで固定した。
+
+### 4. 目的関数を必ず言うようにした
+
+`SolverResult.objective` を足し、画面に「最小化した量」として出す。
+
+TAPF はここが特に危ない。**CBM は makespan を最小化し
+（cbm-tapf-aamas-2016 p.2）、CBS-TA は sum of costs を最小化する
+（cbs-ta-aamas-2018 p.2）。** CBS-TA 論文 p.1 自身が
+「CBM は makespan を最小化するが、idle time の最小化には合わない」と
+両者を区別している。画面は SOC も makespan も出すので、
+黙っていると「表示されている数値はどれも最適」と読まれる。
+LaCAM* の sum-of-loss と同じ罠。
+
+### 5. 動く Solver を 1 つ同梱した
+
+`tapf-baseline`（全探索割当 + CBS）。チーム内の割当を全通り試して
+CBS で解き、makespan 最小を返す。**論文手法ではない**ので
+`algorithms.yaml` には登録せず、`IMPLEMENTATION_STATUS.md` に
+その旨を書いた。置いた理由は 2 つ。
+
+- 入り口だけ作って中身が空だと、RHCR と同じ「選べるのに必ずエラー」になる
+- Batch 7 で CBM の最適性を突き合わせる相手が要る（小規模なら確実に最適）
+
+なお、この方法の scalability の悪さは手法の性質で、
+cbm-tapf-aamas-2016 p.2 が「全割当を探索して最適解を求めるやり方」を
+scalability に難があるものとして名指ししている。なぜ CBM が要るのかの
+対照として機能する。組合せ数 5040 を超える入力は構造化エラーで拒否する。
+
+### 6. 描画
+
+チーム target は破線の四角、割当済みは実線＋エージェント名。
+エージェントの goal（実線のリング）とは描き分ける。割当前と割当後を
+同じ見た目にすると「もう決まっている」ように見えるため。
+
+### テスト
+
+`tests/unit/tapf.test.ts` 13 件（不変条件、JSON 往復、kind 絞り込み、
+最適割当、目的関数の警告、決定性、拒否）。
+`tests/e2e/site.spec.ts` に 2 件（TAPF を解くと割当と目的関数が出る、
+プリセットを戻すと手法一覧も戻る）。
+
+`solvers.test.ts` の「すべてのプリセットが妥当」は全エージェントに
+`goal` がある前提だったので、TAPF では team の target を見るよう直した。
+
+最終ゲート: sources:validate errors=0/warnings=6、format check、lint、
+typecheck 0 errors/22 hints、unit 229 passed、build 62 pages、E2E 40 passed。
+
+### 次
+
+MAPD の実行ループ（Batch 8/9 用）はまだ無い。Batch 7 の CBS-TA は
+チームではなく割当行列を使うので、実装時に `TeamSpec` の拡張が要る。
+詳細は `docs/notes/implementation/tapf-baseline.md` の引き継ぎ節。
+
+---
+
 ## 2026-08-01 Batch 6 レビュー後の修正 2（Claude Code）
 
 上記の修正で残っていた 2 点。どちらも RHCR。
