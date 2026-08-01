@@ -84,7 +84,7 @@
   license_file: license.md
   copy_allowed: false
   clone_status: cloned
-  notes: "USC 独自ライセンス（Copyright 2021）。Lifelong MAPF の windowed 再計画を読む際の基準実装。"
+  notes: "USC 独自ライセンス（Copyright 2021）。Lifelong MAPF の windowed 再計画を読む際の基準実装。論文の online warehouse/task assigner と複数の windowed solver を含むため、ブラウザ版の固定 goal queue とは差異がある。コードは転記しない。"
 
 - id: mapf-lns
   name: Jiaoyang-Li/MAPF-LNS
@@ -99,7 +99,7 @@
   license_file: license.txt
   copy_allowed: false
   clone_status: cloned
-  notes: "USC 独自ライセンス（Copyright 2021）。destroy heuristic の実装詳細を読む用途。"
+  notes: "USC 独自ライセンス（Copyright 2021）。destroy heuristic と initial/replan solver の実装詳細を読む用途。ブラウザ版は既存 Space-Time A* へ簡略化し、コードは転記しない。"
 
 - id: mapf-lns2
   name: Jiaoyang-Li/MAPF-LNS2
@@ -114,7 +114,7 @@
   license_file: license.txt
   copy_allowed: false
   clone_status: cloned
-  notes: "USC 独自ライセンス（Copyright 2021）。default_branch が master ではなく init-LNS である点に注意（GitHub API で確認）。SIPPS の実装を読む際の参照先。"
+  notes: "USC 独自ライセンス（Copyright 2021）。default_branch が master ではなく init-LNS である点に注意（GitHub API で確認）。SIPPS、collision-pair repair、ALNS neighborhood の実装を読む際の参照先。ブラウザ版は SIPPS 全機能を転記せず独立再実装する。"
 
 - id: cbsh2
   name: Jiaoyang-Li/CBSH2

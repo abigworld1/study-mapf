@@ -15,6 +15,7 @@ import { ictsSolver } from "./joint/icts.js";
 import { mstarSolver } from "./joint/mstar.js";
 import { pushAndRotateSolver, pushAndSwapSolver } from "./push/solvers.js";
 import { lacamSolver, lacamStarSolver } from "./lacam/solvers.js";
+import { mapfLnsSolver, mapfLns2Solver, rhcrSolver } from "./lns/solvers.js";
 
 /**
  * Solver の登録所。
@@ -55,6 +56,9 @@ const SOLVERS: readonly MapfSolver[] = [
   pushAndRotateSolver,
   lacamSolver,
   lacamStarSolver,
+  mapfLnsSolver,
+  mapfLns2Solver,
+  rhcrSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

@@ -1,17 +1,111 @@
 ---
 title: "MAPF-LNS2"
 algorithmId: mapf-lns2
-originalName: "MAPF-LNS2"
+originalName: "MAPF-LNS2: Fast Repairing for Multi-Agent Path Finding via Large Neighborhood Search"
 order: 510
-summary: ""
-status: draft
+summary: "衝突を含む暫定 path を出発点に、collision pair を減らす LNS。"
+status: reviewed
 primarySources:
   - paperId: mapf-lns2-aaai-2022
+    sections: ["2", "3", "4", "5"]
+    pages: [1, 2, 3, 4, 5]
 implementationReferences:
   - repositoryId: mapf-lns2
   - repositoryId: mapf-lns-unified
+lastReviewed: "2026-08-01"
+simulatorSolverId: mapf-lns2
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import TerminologyNote from "@/components/sources/TerminologyNote.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="mapf-lns2" />
+## 概要
+
+MAPF-LNS2 は、最初から collision-free plan を要求しません。個別最短 path などの暫定 plan を受け取り、衝突する agent の subset を繰り返し repair して collision pair（CP）を減らします<SourceCitation paperId="mapf-lns2-aaai-2022" section="3" page={2} />。
+
+## まず何がうれしいのか
+
+PP が途中で path を見つけられなくなっても、そこまでの path を捨てずに修復できます。簡単な instance では PP と同程度に速く、難しい instance では「あと数個の衝突が残る暫定解」を返せる点が実用上の利点です。
+
+## 前提となる知識
+
+collision graph、hard / soft dynamic obstacle、SIPP の safe interval が前提です。SIPPS は soft obstacle との衝突数を評価する SIPP の拡張です<SourceCitation paperId="mapf-lns2-aaai-2022" section="4.2" page={3} />。
+
+## 対象問題
+
+原論文は graph 上の one-shot MAPF で、衝突を含む plan も入力として許し、最終的には collision-free plan を求めます<SourceCitation paperId="mapf-lns2-aaai-2022" label="Definition 1" page={1} />。サイト版は 4 近傍、vertex / edge-swap 禁止、following 許可、stay-at-goal です。
+
+## 中心となるアイデア
+
+近傍を外した agent の path を、固定 path を避けながら優先順に計画します。候補は collision pair 数が増えない場合だけ採用し、同数なら SOC を比較します。これが「衝突を一度も許さない PP」と異なる点です。
+
+## アルゴリズムの手順
+
+1. 個別 shortest path から暫定 plan を作る。
+2. collision-based、failure-based、random の neighborhood を選ぶ。
+3. 選択 agent をランダム priority で再計画する。
+4. CP が減る、または CP が同じで SOC が減る場合に accept する。
+5. CP=0、timeout、または上限まで繰り返す。
+
+## 小さな例
+
+3×2 grid で左右の agent が同じ row を交換すると、個別最短 path は中央で vertex conflict になります。collision-based neighborhood は両 agent を同時に選び、一方が下段を通る repair を試します。
+
+## データ構造
+
+暫定 `TimedPath`、collision graph（実装では衝突 pair set）、hard reservation table、neighborhood weight を使います。SIPPS の `safe interval` を完全再現する代わりに、ブラウザ版は Space-Time A\* の hard reservation と候補後の soft CP 評価を分離しています。
+
+## 疑似コード
+
+```text
+P ← 個別 path の暫定 plan
+while CP(P) > 0 and budget が残る:
+  A_s ← collision / failure / random neighborhood
+  P' ← P の A_s を優先順で repair
+  if CP(P') < CP(P) or (CP(P') = CP(P) and SOC(P') < SOC(P)):
+    P ← P'
+return P
+```
+
+これは原論文 §3 の repair と §5 の neighborhood を短く再構成したものです<SourceCitation paperId="mapf-lns2-aaai-2022" section="5" page={5} />。
+
+## 実装上の注意
+
+### SIPPS と CP は同じではない
+
+SIPPS の node `c` は soft obstacle との衝突数の近似で、MAPF-LNS2 の CP（衝突する agent pair 数）そのものではありません。原論文もこの近似を説明しています<SourceCitation paperId="mapf-lns2-aaai-2022" section="4.2" page={4} />。
+
+### 暫定解を返す場合
+
+上限で止まった場合、path と `conflicts` を返します。これは解なしの証明ではなく、現在までの修復結果です。
+
+<Caution title="MAPF-LNS2 に理論保証はありません">
+  原論文の abstract は “it lacks theoretical guarantees” と明記しています。実験の成功率や CP
+  の減少を完全性・最適性と混同しないでください
+  <SourceCitation paperId="mapf-lns2-aaai-2022" page={1} />。
+</Caution>
+
+## よくある誤解
+
+<TerminologyNote term="collision pair (CP)" original="colliding pair">
+  同じ pair が複数時刻で衝突しても、CP は agent pair として数えます。`conflicts`
+  配列の個々の時刻イベント数とは別の統計です。
+</TerminologyNote>
+
+「衝突を含む plan」を返すことは、衝突したまま実行してよいという意味ではありません。サイト UI では `outcome` と残存 `conflicts` を分けて表示します。
+
+## 他手法との比較
+
+MAPF-LNS は collision-free initial solution を必要とする anytime 改善です。MAPF-LNS2 は初期 plan の失敗を修復へ回せるので、PP が path を返せない高密度 instance でも探索を続けられます。CBS / ECBS は品質保証を持ちますが、大規模では重くなります。
+
+## サイト上の実装との差異
+
+論文の SIPPS は hard / soft vertex・target・edge obstacle、safe-interval dominance、PMDO の細部を扱います。サイト版は既存 Space-Time A\* と reservation table を使い、soft collision は候補 path 後の CP 検出で評価します。公式 `Jiaoyang-Li/MAPF-LNS2` は USC Research License のためコードは転記していません。
+
+## 実験してみる
+
+`neighborhoodSize`、`iterations`、`neighborhoodStrategy`（`agent` / `map` / `random`）を変え、初期 CP、`accept-solution`、残存 conflicts を比較してください。
+
+<SimulatorLink solverId="mapf-lns2" />

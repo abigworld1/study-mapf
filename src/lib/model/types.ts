@@ -239,7 +239,7 @@ export interface SolverMetrics {
    */
   readonly suboptimalityBound?: number;
 
-  /** MAPD: タスクの発生から配達完了までの平均時間。 */
+  /** MAPD / lifelong MAPF: タスクまたは goal の発生から完了までの平均時間。 */
   readonly averageServiceTime?: number;
   /** MAPD: 単位時間あたりの完了タスク数。 */
   readonly throughput?: number;

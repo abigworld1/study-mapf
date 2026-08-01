@@ -1,17 +1,112 @@
 ---
 title: "MAPF-LNS"
 algorithmId: mapf-lns
-originalName: "Anytime MAPF via Large Neighborhood Search"
+originalName: "Anytime Multi-Agent Path Finding via Large Neighborhood Search"
 order: 500
-summary: ""
-status: draft
+summary: "実行可能解の一部を壊して再計画し、時間とともに改善する anytime LNS。"
+status: reviewed
 primarySources:
   - paperId: mapf-lns-ijcai-2021
+    sections: ["2", "4", "5.1", "5.2", "5.3"]
+    pages: [1, 3, 4]
 implementationReferences:
   - repositoryId: mapf-lns
   - repositoryId: mapf-lns-unified
+lastReviewed: "2026-08-01"
+simulatorSolverId: mapf-lns
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import TerminologyNote from "@/components/sources/TerminologyNote.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="mapf-lns" />
+## 概要
+
+MAPF-LNS（Large Neighborhood Search）は、まず速い実行可能解を作り、その一部の agent の path だけを壊して再計画します。改善した候補だけを incumbent に採用するので、短い実行でも解を返し、長く動かすほど改善を試せます<SourceCitation paperId="mapf-lns-ijcai-2021" section="4" page={3} />。
+
+## まず何がうれしいのか
+
+CBS のような全体探索は agent 数が増えると急激に重くなります。LNS は「全 agent をやり直す」のではなく、遅延の大きい agent や同じ交差点を使う agent の小グループだけを見直します。そのため、現在の良い部分を保ったまま改善できます。
+
+## 前提となる知識
+
+reservation table、Space-Time A\*、sum of costs、衝突（vertex / edge-swap）の意味を知っていると読みやすくなります。ここでいう neighborhood は地図上の近傍ではなく、再計画する agent の集合です。
+
+## 対象問題
+
+原論文は graph 上の one-shot MAPF、stay at target、vertex / swapping conflict 禁止、path length の総和を扱います<SourceCitation paperId="mapf-lns-ijcai-2021" section="2" page={1} />。サイト版は 4 近傍 grid、following conflict 許可、stay-at-goal に限定します。
+
+## 中心となるアイデア
+
+現在解 `P` から neighborhood `A_s` の path を外し、残りを動的障害物として `A_s` を repair します。候補の全体 cost が小さければ置き換えます。論文の選択肢は agent-based、map-based、random で、ALNS は改善した heuristic を選びやすくします<SourceCitation paperId="mapf-lns-ijcai-2021" section="5" page={3} />。
+
+## アルゴリズムの手順
+
+1. PP や EECBS などで初期解を得る。
+2. neighborhood を選び、選ばれた agent の path を destroy する。
+3. 固定 path を reservation として、選択 agent を順に repair する。
+4. 新しい sum of costs が小さいときだけ accept し、weight と incumbent を更新する。
+5. 時間または反復上限まで繰り返す。
+
+## 小さな例
+
+2 体が同じ交差点を通るとき、固定優先順では一方が長く待つことがあります。agent-based neighborhood は遅延の大きい agent と、その短縮 path を妨げる agent を同時に選び、待ち時間を別の順序へ移す候補を試します。
+
+## データ構造
+
+`TimedPath`、`SimpleReservationTable`、agent の delay、tabu set、3 種の heuristic weight を使います。サイト版の LNS イベントは `select-neighborhood`、`destroy-neighborhood`、`repair-neighborhood`、`accept-solution`、`reject-solution`、`update-incumbent` です。
+
+## 疑似コード
+
+```text
+P ← 初期の collision-free plan
+while budget が残る:
+  A_s ← neighborhood 選択(P)
+  P_candidate ← P の A_s だけを予約表付きで repair
+  if cost(P_candidate) < cost(P):
+    P ← P_candidate
+    incumbent を更新
+return P
+```
+
+これは原論文 §4 の LNS 骨格をサイトの `TimedPath` に合わせて短くしたものです<SourceCitation paperId="mapf-lns-ijcai-2021" section="4" page={3} />。agent-based / map-based の詳細な walk は実装ノートに対応づけています。
+
+## 実装上の注意
+
+### neighborhood の選択
+
+agent-based は delay と衝突相手、map-based は degree 3 以上の intersection、random は agent のランダム subset を使います。論文は同値順を固定していないため、サイト版は seed 由来の rank と row-major 順で決定します。
+
+### 受理判定
+
+固定 agent の cost は候補間で共通なので、選択 agent の改善を全体 SOC の比較として実装できます。候補が repair に失敗した場合は incumbent を壊しません。
+
+<Caution title="MAPF-LNS に最適性保証はありません">
+  原論文自身が no guarantee の near-optimal algorithm
+  と説明しています。経験的な改善曲線を、bounded-suboptimal の保証と読み替えないでください
+  <SourceCitation paperId="mapf-lns-ijcai-2021" page={1} />。
+</Caution>
+
+## よくある誤解
+
+<TerminologyNote term="destroy" original="destroy heuristic">
+  destroy は agent を削除することではありません。現在の path を一時的に外し、同じ agent を repair
+  する操作です。
+</TerminologyNote>
+
+「near-optimal」は最適性の定理ではありません。また、LNS の neighborhood は WHCA\* の時間窓とは別の概念です。
+
+## 他手法との比較
+
+PP は一度決めた順序で速く解きますが、後から改善しません。CBS は全体の衝突を体系的に分割します。MAPF-LNS は PP などで初期解を作り、CBS ほど大きな探索木を持たずに部分的な改善を続けます。
+
+## サイト上の実装との差異
+
+原論文の実験版は EECBS / SIPP / PPS など複数の初期・repair solver を組み合わせます。サイト版は API とブラウザ上限を優先し、既存 Space-Time A\* と予約表へ統一しました。公式 `Jiaoyang-Li/MAPF-LNS` は USC Research License のためコードは転記していません。
+
+## 実験してみる
+
+`neighborhoodSize`、`iterations`、`destroyStrategy`（`agent` / `map` / `random`）を `SolverOptions.extra` で変えて、`update-incumbent` の頻度と SOC を比較できます。
+
+<SimulatorLink solverId="mapf-lns" />

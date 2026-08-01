@@ -830,12 +830,12 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [mapf-lns-ijcai-2021]
   implementation_repository_ids: [mapf-lns, mapf-lns-unified]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
-    optimal: unknown
+    optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "mapf-lns-ijcai-2021 p.1: MAPF-LNS is described as a near-optimal algorithm with no guarantee; the paper does not establish completeness."
   notes: "実行可能解から出発し、一部エージェントの経路を破壊して再計画することを繰り返す anytime 改善。destroy heuristic は random / agent-based / map-based。初期解は PP や EECBS。"
 
 - id: mapf-lns2
@@ -845,7 +845,7 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [mapf-lns2-aaai-2022]
   implementation_repository_ids: [mapf-lns2, mapf-lns-unified]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: false
     optimal: false
@@ -909,13 +909,13 @@
   problem_types: [lifelong-mapf]
   primary_paper_ids: [rhcr-aaai-2021]
   implementation_repository_ids: [rhcr]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: false
+    optimal: false
     bounded_suboptimal: unknown
-  guarantee_evidence: null
-  notes: "先読み窓 w ステップ以内の衝突だけを解消し、h ステップごとに再計画する（w >= h）。既定ソルバは ECBS。w と h の分離が要点で、WHCA* の窓との違いを説明すること。"
+  guarantee_evidence: "rhcr-aaai-2021 §4.4 p.6 gives an incomplete deadlock example; conclusion p.8 states that RHCR does not guarantee completeness or optimality."
+  notes: "先読み窓 w の最初の w step で衝突を解消し、h step を実行して再計画する（w >= h）。原論文は ECBS/PBS/CA*/CBS の windowed variant とオンライン task assigner を使う。ブラウザ版は固定 goal queue と Space-Time A* に簡略化し、one-shot Scenario は一要素 queue として明示的に扱う。w と h の分離が要点で、WHCA* の窓との違いを説明すること。"
 
 # =============================================================================
 # mapd

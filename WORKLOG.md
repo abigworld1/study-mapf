@@ -1428,6 +1428,127 @@ Batch 6 の `mapf-lns` / `mapf-lns2` / `rhcr`。
 
 ---
 
+## 2026-07-31 Batch 6（Codex）
+
+### 1. 対象アルゴリズム
+
+`MAPF-LNS`、`MAPF-LNS2`、`RHCR`。
+
+### 2. 参照資料
+
+- `mapf-lns-ijcai-2021`：§2、§4、§5.1–5.3、Algorithm 1–2、pp.1–4。
+- `mapf-lns2-aaai-2022`：Definition 1–2、§3–5、Algorithm 1–3、Theorem 1–2、pp.1–5。
+- `rhcr-aaai-2021`：§3–4、Algorithm 1、Examples 1–3、§4.4、結論、pp.3–8。
+- 参照実装：`Jiaoyang-Li/MAPF-LNS` commit `95785de`、`Jiaoyang-Li/MAPF-LNS2` commit `1369823`、`Jiaoyang-Li/RHCR` commit `d009a3b`。いずれも USC Research License のため転記していない。
+
+### 3. 実装ファイル
+
+- `src/solvers/lns/solvers.ts`
+- `src/solvers/registry.ts`
+- `tests/unit/batch6-solvers.test.ts`
+- `docs/notes/implementation/mapf-lns.md`
+- `docs/notes/implementation/mapf-lns2.md`
+- `docs/notes/implementation/rhcr.md`
+
+### 4. 実装内容
+
+- MAPF-LNS：初期 PP、agent/map/random neighborhood、予約表付き repair、accept-if-better、ALNS weight、LNS events。
+- MAPF-LNS2：個別最短 path の衝突 plan、collision-pair / failure / random neighborhood、CP 非増加 repair、暫定 path の返却。
+- RHCR：goal queue、planning window `w`、replanning period `h`、`h` step commit、throughput / average service time / pending task metrics。
+- 3 手法すべてに `checkLimits`、timeout、node limit、AbortSignal、決定的 seed、構造化結果、finish event を実装。
+
+### 5. テスト
+
+`tests/unit/batch6-solvers.test.ts` に registry、validity、LNS repair、LNS2 CP repair、determinism、RHCR w/h、metric、rule/options validation を追加した。
+
+### 6. 理論保証と差異
+
+- MAPF-LNS：complete unknown、optimal false、bounded-suboptimal false。IJCAI 2021 p.1 の no-guarantee。
+- MAPF-LNS2：complete false、optimal false、bounded-suboptimal false。AAAI 2022 p.1 abstract の no-theoretical-guarantees。
+- RHCR：complete false、optimal false、bounded-suboptimal unknown。AAAI 2021 §4.4 p.6 の incomplete 例と結論 p.8。
+- ブラウザ版は SIPPS 全機能、EECBS/CBS/PBS windowed variants、online warehouse task assigner、Poisson arrivals を簡略化し、既存 Space-Time A* と固定 goal queue を用いる。
+- 参照実装は 3 件とも CMake ビルドに成功。Moving AI の先頭 2 agent 固定ケースでは、公式 MAPF-LNS が SOC 52、公式 MAPF-LNS2 とブラウザ版 MAPF-LNS2 が SOC 64（ブラウザ makespan 36）だった。公式 RHCR は KIVA / SORTING の短時間起動が timestep 0 で SIGSEGV となり、数値比較は未成立。いずれもコードは転記していない。
+
+### 7. 品質ゲート
+
+最終結果：`npm run sources:validate` は errors=0 / warnings=6、`npm run format:check`、`npm run lint`、`npm run typecheck`（0 errors / 22 hints）、`npm test`（15 files / 211 tests）、`npm run build`（62 pages）、`npm run test:e2e`（32 tests）がすべて通過した。
+
+### 8. 未解決・次工程
+
+SIPPS の hard/soft safe interval dominance、MAPF-LNS の全 repair operator、RHCR の warehouse 固有オンライン task assigner は未対応。次は Batch 7（Hungarian / Min-Cost Max-Flow / Gale-Shapley / CBM / CBS-TA）。
+
+---
+
+## 2026-08-01 Batch 6 レビュー後の修正（Codex）
+
+Claude Code のレビューで確認された公開上の不整合を修正した。
+
+- RHCR は `one-shot-mapf` の既定プリセットも一要素の固定 goal queue として実行できるようにし、シミュレータへ `planning window w` / `replanning period h` の入力を追加した。オンライン到着でないことは `simplified-behavior` 警告で明示する。
+- RHCR の低レベル探索を goal 到達まで延長し、予約・衝突解消だけを最初の `w` step に限定した。`w` より遠い goal、`w < h` の入力、actual arrival time − release time の service time をテストした。
+- MAPF-LNS / MAPF-LNS2 の初期計画失敗・探索打ち切り・衝突を残した返却には「これは解の非存在の証明ではありません」という警告を付けた。LNS の ALNS 更新を論文式（改善量を近傍サイズで割らない）に合わせ、近傍選択を Fisher–Yates にし、agent tabu を一巡ごとにクリアする。
+- RHCR の fidelity を `educational` に下げ、Multi-Label A*、distance 下界による goal 補充、progress-potential による window 拡張、warehouse task assigner が未実装であることをノートとページへ明記した。
+- PDF と照合した引用ページを修正した（RHCR Algorithm 1 p.4、結論 p.8、MAPF-LNS2 Definition 1 p.1）。
+
+追加・更新したテストは `tests/unit/batch6-solvers.test.ts` と `tests/e2e/site.spec.ts`。最終ゲートは sources:validate errors=0/warnings=6、format check、lint、typecheck 0 errors/22 hints、unit 214 passed、build 62 pages、E2E 34 passed。
+
+未対応の論文機能は上記の通りであり、RHCR の complete / optimal を主張しない。MAPF-LNS と MAPF-LNS2 も不完全な anytime 手法で、失敗結果は解なしの証明ではない。次は Batch 7（Hungarian / Min-Cost Max-Flow / Gale-Shapley / CBM / CBS-TA）。
+
+---
+
+## 2026-08-01 Batch 6 レビュー後の修正 2（Claude Code）
+
+上記の修正で残っていた 2 点。どちらも RHCR。
+
+### A. RHCR だけ、失敗時の不完全性警告が入っていなかった
+
+MAPF-LNS / MAPF-LNS2 には「解の非存在の証明ではありません」が入ったが、
+`solveRhcr` は `addIncompleteWarning` を呼んでいなかった。
+UI 既定（w=8, h=2）で全プリセットを回すと、`swap-conflict` と `cross` が
+`no-solution` を返し、警告は「one-shot Scenario を…」の 1 件だけだった。
+
+`swap-conflict` は CBS が sum of costs 11 で解く。RHCR の windowed 優先順位付き
+計画が詰まっただけなのに、画面には「解が求まりませんでした」しか出ない。
+`algorithms.yaml` が論文の結論（p.8）を根拠に `complete: false` と書いている
+手法なので、MAPF-LNS / MAPF-LNS2 と同じ扱いにした。
+
+`addIncompleteWarning` に `nature` を足し、RHCR は anytime 手法ではないので
+「完全性を保証しない枠組み」と名乗る。打ち切り理由は `rhcrFailureDetail` で
+3 通りに分ける（運転時間切れ / window 内で計画できず / 実行上限）。
+
+修正後、solved 以外の 3 プリセットすべてで警告が出ることを確認した。
+
+### B. RHCR の既定 horizon が `w * 4` で、UI から変えられなかった
+
+`w` は衝突を解消する先読みの長さであって運転時間ではない（原論文 §4、p.3）。
+`w * 4` を既定にしていたため、既定 w=8 では 32 step しか回らず、
+`warehouse` プリセットが RHCR と無関係な理由で `pending=1` になっていた。
+
+```text
+warehouse  w=8  h=2  horizon=既定(w*4=32) -> timeout  pending=1
+warehouse  w=8  h=2  horizon=200          -> solved   pending=0
+warehouse  w=20 h=2  horizon=既定(w*4=80) -> solved   pending=0
+```
+
+しかも表示は「時間切れ」なので、10 秒の実行時間制限に見える。
+既定を `defaultMaxTime(scenario)`（マップ面積と goal 距離から決まる）にし、
+シミュレータに「シミュレーション horizon」入力（空欄 = 自動）を足した。
+horizon を使い切ったときの警告も「実行時間の上限ではなく運転時間の上限」と
+書き分けた。修正後 `warehouse` は solved / pending=0 になる。
+
+`narrow-corridor` は horizon をいくら伸ばしても pending=1 で残るが、
+これは論文 §4.4（p.6）が説明する deadlock そのもので、A の警告が付く。
+
+### テスト
+
+`batch6-solvers.test.ts` に 2 件（RHCR の不完全性警告、既定 horizon が w に
+依存しないこと）、`site.spec.ts` に 2 件（horizon 入力が空欄で出ること、
+swap-conflict で警告が画面に出ること）を追加。
+
+最終ゲート: sources:validate errors=0/warnings=6、format check、lint、
+typecheck 0 errors/22 hints、unit 216 passed、build 62 pages、E2E 36 passed。
+
+---
+
 ## 2026-07-27 Batch 5 レビュー後の修正（Claude Code）
 
 ### 1. LaCAM* が打ち切って返した解を「最適ではない」と言うようにした

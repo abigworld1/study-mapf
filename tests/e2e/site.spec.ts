@@ -75,6 +75,21 @@ test.describe("サイト全体", () => {
     await expect(page.getByText(/サイト表示 SOC は内部 sum-of-loss/)).toBeVisible();
   });
 
+  test("Batch 6 のページは実装状態と差異を表示する", async ({ page }) => {
+    for (const [path, name] of [
+      ["mapf-lns", "MAPF-LNS"],
+      ["mapf-lns2", "MAPF-LNS2"],
+      ["rhcr", "RHCR"],
+    ] as const) {
+      await page.goto(`./algorithms/${path}/`);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
+      await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "サイト上の実装との差異" })).toBeVisible();
+    }
+    await page.goto("./algorithms/mapf-lns2/");
+    await expect(page.getByText(/理論保証はありません/)).toBeVisible();
+  });
+
   test("比較表を絞り込める", async ({ page }) => {
     await page.goto("./compare/");
     const rows = page.locator("#compare-table tbody tr");
@@ -138,7 +153,42 @@ test.describe("シミュレータ", () => {
     await expect(solverSelect).toContainText("Push and Rotate");
     await expect(solverSelect).toContainText("LaCAM");
     await expect(solverSelect).toContainText("LaCAM*");
-    await expect(solverSelect).not.toContainText("MAPF-LNS");
+    await expect(solverSelect).toContainText("MAPF-LNS");
+    await expect(solverSelect).toContainText("MAPF-LNS2");
+    // RHCR も registry に登録された実装済み solver として選択肢に出る。
+    await expect(solverSelect).toContainText("RHCR");
+  });
+
+  test("RHCR は既定 one-shot プリセットを固定 goal queue として実行できる", async ({ page }) => {
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    await solverSelect.selectOption("rhcr");
+    await expect(page.getByLabel("planning window w")).toBeVisible();
+    await expect(page.getByLabel("replanning period h")).toBeVisible();
+    // 運転時間は w とは別のつまみ。空欄なら Solver 側がマップから決める。
+    await expect(page.getByLabel("シミュレーション horizon")).toHaveValue("");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.getByText(/sum of costs/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".solver-warnings")).toContainText("one-shot Scenario");
+  });
+
+  /*
+    RHCR は完全ではない。解ける問題で失敗したとき、
+    「解が求まりませんでした」だけを見せると解の非存在と読まれる。
+    swap-conflict は CBS が sum of costs 11 で解くが RHCR は失敗する。
+  */
+  test("RHCR が解けなかったとき、非存在の証明ではないと画面に出る", async ({ page }) => {
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    await algorithmSection.getByRole("combobox").selectOption("rhcr");
+    await page.getByLabel("プリセット").selectOption("swap-conflict");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.locator(".solver-warnings")).toContainText("解の非存在の証明ではありません", {
+      timeout: 30_000,
+    });
   });
 
   /*

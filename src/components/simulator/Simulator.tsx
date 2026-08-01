@@ -62,6 +62,10 @@ export default function Simulator({ initialSolverId }: Props) {
   }, [solvers]);
   const [presetId, setPresetId] = useState("open-grid");
   const [seed, setSeed] = useState(1);
+  const [rhcrPlanningWindow, setRhcrPlanningWindow] = useState(8);
+  const [rhcrReplanningPeriod, setRhcrReplanningPeriod] = useState(2);
+  // 空欄 = 自動。w から導くと、無関係なつまみで運転時間が決まってしまう。
+  const [rhcrHorizon, setRhcrHorizon] = useState("");
   const [scenario, setScenario] = useState<Scenario>(() => buildPreset("open-grid", 1));
   const [mode, setMode] = useState<EditMode>("wall");
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
@@ -310,9 +314,21 @@ export default function Simulator({ initialSolverId }: Props) {
     };
 
     try {
+      // horizon が空欄のときは渡さない。Solver 側がマップと goal 距離から決める。
+      const options =
+        solverId === "rhcr"
+          ? {
+              ...(rhcrHorizon.trim() === "" ? {} : { horizon: Number(rhcrHorizon) }),
+              extra: {
+                planningWindow: rhcrPlanningWindow,
+                replanningPeriod: rhcrReplanningPeriod,
+              },
+            }
+          : undefined;
       const res = await runSolver({
         solverId,
         scenario,
+        options,
         seed,
         onEvent,
         signal: controller.signal,
@@ -331,7 +347,7 @@ export default function Simulator({ initialSolverId }: Props) {
       setRunning(false);
       setProgress("");
     }
-  }, [scenario, seed, solverId]);
+  }, [rhcrHorizon, rhcrPlanningWindow, rhcrReplanningPeriod, scenario, seed, solverId]);
 
   const onStop = useCallback(() => {
     abortRef.current?.abort();
@@ -439,6 +455,48 @@ export default function Simulator({ initialSolverId }: Props) {
             <p className="note">{currentSolver.implementationNote}</p>
           )}
           <p className="hint">ここに出るのは実装済みの手法だけです。解説だけの手法は選べません。</p>
+
+          {solverId === "rhcr" && (
+            <div>
+              <div className="row">
+                <label>
+                  planning window w
+                  <input
+                    type="number"
+                    min={1}
+                    max={2000}
+                    value={rhcrPlanningWindow}
+                    onChange={(event) => setRhcrPlanningWindow(Number(event.target.value) || 1)}
+                  />
+                </label>
+                <label>
+                  replanning period h
+                  <input
+                    type="number"
+                    min={1}
+                    max={2000}
+                    value={rhcrReplanningPeriod}
+                    onChange={(event) => setRhcrReplanningPeriod(Number(event.target.value) || 1)}
+                  />
+                </label>
+                <label>
+                  シミュレーション horizon
+                  <input
+                    type="number"
+                    min={1}
+                    max={2000}
+                    placeholder="自動"
+                    value={rhcrHorizon}
+                    onChange={(event) => setRhcrHorizon(event.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="hint">
+                RHCR は w ≥ h を要求します。w は衝突解消の先読み、h は実行周期、horizon は何 step
+                運転するかです。horizon を空欄にするとマップと goal の距離から自動で決めます。
+              </p>
+            </div>
+          )}
 
           <div className="row">
             <button type="button" className="primary" onClick={onRun} disabled={running}>

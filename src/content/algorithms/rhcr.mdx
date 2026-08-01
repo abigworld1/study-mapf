@@ -3,14 +3,111 @@ title: "RHCR"
 algorithmId: rhcr
 originalName: "Rolling-Horizon Collision Resolution"
 order: 600
-summary: ""
-status: draft
+summary: "planning window と再計画周期を分けて lifelong MAPF を運用する枠組み。"
+status: reviewed
 primarySources:
   - paperId: rhcr-aaai-2021
+    sections: ["3", "4", "4.1", "4.2", "4.3", "4.4"]
+    pages: [3, 4, 5, 6, 8]
 implementationReferences:
   - repositoryId: rhcr
+lastReviewed: "2026-08-01"
+simulatorSolverId: rhcr
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import TerminologyNote from "@/components/sources/TerminologyNote.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="rhcr" />
+## 概要
+
+RHCR（Rolling-Horizon Collision Resolution）は、lifelong MAPF を一度に解かず、短い planning window `w` の collision を解消し、`h` step だけ実行して再計画する枠組みです。`w` と `h` を分けることで、先の衝突を見ながら計画計算を抑えます<SourceCitation paperId="rhcr-aaai-2021" section="4" page={3} />。
+
+## まず何がうれしいのか
+
+倉庫では agent が goal に着くたび次の goal を受け取ります。全ての将来 goal を先に知る必要がない RHCR は、現在から近い範囲だけを解き、throughput を保ちながら計画時間を抑えられます。
+
+## 前提となる知識
+
+lifelong MAPF、flowtime、throughput、Space-Time A*、windowed planning を知っていると読みやすくなります。`w` は WHCA* のような one-shot の単一窓ではなく、連続 episode の先読み長です。
+
+## 対象問題
+
+原論文は online に goal sequence が与えられる lifelong MAPF を対象とし、agent の path は最初の `w` step だけ collision-free であればよいとします<SourceCitation paperId="rhcr-aaai-2021" section="3" page={3} />。サイト版は `lifelong-mapf` Scenario を使い、one-shot Scenario は一要素の固定 goal queue へ明示的に変換します。warehouse 固有の task assigner は含めません。
+
+## 中心となるアイデア
+
+現在時刻 `t` で全 agent の start を現在位置へ移し、goal までの path を計画します。衝突を解消するのは最初の `w` step だけで、先頭 `h` step をコミットして次の episode へ進みます<SourceCitation paperId="rhcr-aaai-2021" section="4" page={3} />。
+
+## アルゴリズムの手順
+
+1. 各 agent の現在位置と goal queue を準備する。
+2. `w` と `h` を検査する（`w >= h`）。
+3. 各 agent の goal まで path を計画し、最初の `w` step の衝突を解消する。
+4. 最初の `h` step を実行し、到達した goal を queue から削除する。
+5. horizon まで `replan` を繰り返す。
+
+## 小さな例
+
+`w=4, h=2` なら、4 step 先の交差点 conflict を考慮して path を作り、2 step だけ実行します。2 step 後には実際の位置から再び 4 step 先を見ます。`w` を大きくしても throughput が常に良くなるわけではなく、論文の Example 1 はその反例を示します<SourceCitation paperId="rhcr-aaai-2021" section="4.3" page={5} />。
+
+## データ構造
+
+現在時刻、agent ごとの `goalQueue`、episode の reservation table、累積 `TimedPath`、完了 goal の service time を保持します。イベントは `replan`、`move`、`progress` です。metrics では SOC だけでなく throughput、average service time、pending tasks を見ます。
+
+## 疑似コード
+
+```text
+t ← 0
+while t < horizon and pending goals がある:
+  各 agent の start ← t 時点の位置
+  P ← goal sequence を訪れる windowed MAPF(w)
+  P の先頭 h step を実行
+  到達した goal を queue から削除
+  t ← t + h
+return 累積 path と throughput
+```
+
+原論文 Algorithm 1 は goal sequence 用の location-time A* を示します。サイト版では一 episode の各 agent に既存 Space-Time A* を適用し、`w` 以内の予約だけを共有する `w/h` の制御構造へ簡略化しています<SourceCitation paperId="rhcr-aaai-2021" label="Algorithm 1" page={4} />。
+
+## 実装上の注意
+
+### `w` と `h` は別物
+
+`w` は衝突を解消する先読み、`h` は実際にコミットする周期です。`w=h` でも RHCR は再計画を繰り返しますが、`w>h` なら先の衝突を見てから短い区間を実行します。
+
+### deadlock avoidance
+
+論文は progress potential `P(w)` で window を拡張する方法を説明します。しかし、これを加えても RHCR は incomplete です<SourceCitation paperId="rhcr-aaai-2021" section="4.4" page={6} />。
+
+<Caution title="RHCR は完全でも最適でもありません">
+論文の結論は completeness / optimality を保証しないと明記しています。throughput の実験結果や `w >= h` を、任意の lifelong MAPF の解の存在保証と解釈しないでください<SourceCitation paperId="rhcr-aaai-2021" page={8} />。
+</Caution>
+
+## よくある誤解
+
+<TerminologyNote term="throughput" original="throughput">
+  throughput は単位時間あたりの goal 到達数です。one-shot MAPF の sum of costs や makespan
+  とは別の目的です。
+</TerminologyNote>
+
+RHCR は MAPD の task assignment solver ではありません。pickup / delivery の割当が必要な場合は MAPD 用の手法と task assigner を組み合わせます。
+
+## 他手法との比較
+
+WHCA\* は one-shot MAPF の rolling window planner です。RHCR は lifelong の goal sequence と `h` step 実行を持ち、各 episode で新しい goal を受け取れる点が違います。全体を一度に解く CBS / ECBS は将来情報を利用できますが、オンライン運用では再計画コストが増えます。
+
+## サイト上の実装との差異
+
+公式 RHCR は warehouse の entry / exit、Poisson arrival、ECBS / PBS / CA\* / CBS の windowed variants を含みます。サイト版は共通 Scenario API に合わせ、固定 goal queue と windowed prioritized planning に簡略化しました。公式リポジトリは USC Research License のためコードは転記していません。
+
+## 実験してみる
+
+シミュレータで RHCR を選ぶと表示される `planning window w` と `replanning period h` を変え、throughput、平均 service time、replan 回数、pendingTasks を比較してください。`w < h` は入力エラーとして返します。
+
+`シミュレーション horizon` は何 step 運転するかで、`w` とは独立です。空欄にするとマップと goal の距離から自動で決まります。`w` を変えても運転時間は変わらないので、`w` の効果だけを取り出して観察できます。
+
+`swap-conflict` プリセットを試すと、CBS が解ける問題で RHCR が失敗する様子が見られます。`w` や horizon を増やしても解けません。windowed 優先順位付き計画が詰まっただけなので、解が無いという意味ではない旨が警告として表示されます。
+
+<SimulatorLink solverId="rhcr" />
