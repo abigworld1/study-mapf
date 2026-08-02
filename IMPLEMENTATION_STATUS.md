@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-08-02（Claude Code / MAPD 実行ループ）
+最終更新: 2026-08-02（Codex / Batch 8 MAPD）
 
 ---
 
@@ -60,6 +60,9 @@
 | `rhcr`                 | RHCR             | runnable | educational         | planning window `w` / replanning period `h`、goal queue、throughput。Multi-Label A* と online task assigner は未対応。[ノート](docs/notes/implementation/rhcr.md) |
 | `tapf-baseline`        | 全探索割当 + CBS | runnable | educational         | **サイト独自の参照実装で、論文手法ではない。** TAPF の入り口と Batch 7 の最適性検証用。[ノート](docs/notes/implementation/tapf-baseline.md)                       |
 | `mapd-greedy`          | 貪欲割当（MAPD） | runnable | educational         | **サイト独自で、論文手法ではない。** MAPD 実行ループの土台と Batch 8 の対照用。[ノート](docs/notes/implementation/mapd-loop.md)                                   |
+| `token-passing`        | TP               | runnable | educational         | 明示的 token、Path1 / Path2、MLA* low-level。well-formed 条件付き solvability。[ノート](docs/notes/implementation/token-passing.md)                               |
+| `tpts`                 | TPTS             | runnable | educational         | TP 共通 token、前 step を含む未 pickup assignment swap、Path2。well-formed 条件付き solvability。[ノート](docs/notes/implementation/tpts.md)                      |
+| `central`              | CENTRAL          | runnable | educational         | Hungarian + MLA* の centralized strawman。解決性・最適性保証なし。[ノート](docs/notes/implementation/central.md)                                                  |
 | `min-cost-max-flow`    | 最小費用最大流   | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
 | `cbm`                  | CBM              | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
 | `cbs-ta`               | CBS-TA           | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |
@@ -71,22 +74,24 @@
 以下の手法はページの骨格だけ、または単体 Solver ではない内部ライブラリで、`status: planned` / `library` / `explanation-only`。
 実装状況は `docs/sources/algorithms.yaml` の `implementation_status` を参照。
 
-| バッチ  | 対象                                                               |
-| ------- | ------------------------------------------------------------------ |
-| Batch 7 | `hungarian-method`, `gale-shapley`（library。CBS-TA などから利用） |
-| Batch 8 | `token-passing`, `tpts`, `central`, `mla-star`                     |
-| Batch 9 | `rmca`, `lns-pbs`, `lns-wpbs`                                      |
-| 最後    | `primal`, `primal2`                                                |
+| バッチ  | 対象                                                                         |
+| ------- | ---------------------------------------------------------------------------- |
+| Batch 7 | `hungarian-method`, `gale-shapley`（library。CBS-TA などから利用）           |
+| Batch 8 | `mla-star`, `hbh`（library）、`token-passing`, `tpts`, `central`（runnable） |
+| Batch 9 | `rmca`, `lns-pbs`, `lns-wpbs`                                                |
+| 最後    | `primal`, `primal2`                                                          |
 
 `primal` / `primal2` は学習済みモデルとライセンスを確認できない限り
 **`explanation-only` のまま**にすること。
 
 ## 内部ライブラリ（単体では実行不可）
 
-| algorithm-id       | 実装                                 | 利用先                        |
-| ------------------ | ------------------------------------ | ----------------------------- |
-| `hungarian-method` | `src/lib/assignment/hungarian.ts`    | CBS-TA の assignment 候補順序 |
-| `gale-shapley`     | `src/lib/assignment/gale-shapley.ts` | 安定マッチングの教材用純関数  |
+| algorithm-id       | 実装                                 | 利用先                                   |
+| ------------------ | ------------------------------------ | ---------------------------------------- |
+| `hungarian-method` | `src/lib/assignment/hungarian.ts`    | CBS-TA の assignment 候補順序            |
+| `gale-shapley`     | `src/lib/assignment/gale-shapley.ts` | 安定マッチングの教材用純関数             |
+| `mla-star`         | `src/solvers/mapd/mla-star.ts`       | TP / TPTS / CENTRAL / HBH の低レベル探索 |
+| `hbh`              | `src/solvers/mapd/strategies.ts`     | 中央 assignment の内部 heuristic         |
 
 これらは実装が無いという意味ではない。シミュレータから直接動かせないため、UI では
 「内部実装あり（単体では実行不可）」と表示する。
@@ -95,9 +100,9 @@
 
 ## 理論保証の確定状況
 
-`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **55 / 77**。
+`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **54 / 77**。
 
-根拠つきで確定済みなのは 35 手法（`guarantee_evidence` が入っているもの）。
+根拠つきで確定済みなのは 39 手法（`guarantee_evidence` が入っているもの）。
 主なもの:
 
 | algorithm-id           | 完全性   | 最適性             | 根拠                                                                    |
@@ -111,6 +116,10 @@
 | `hungarian-method`     | あり     | 最適               | hungarian-method-1955 pp.89–90 Theorem 7 / Routine I                    |
 | `gale-shapley`         | あり     | 条件付き           | gale-shapley-1962 pp.5, 7 Theorem 1 / 2                                 |
 | `min-cost-max-flow`    | 条件付き | 条件付き           | network-flow-mapf-2012 p.9 Corollary 23 / 25                            |
+| `token-passing`        | 条件付き | 不明               | mapd-tp-tpts-central-2017 p.4 Theorem 3（well-formed 前提）             |
+| `tpts`                 | 条件付き | 不明               | mapd-tp-tpts-central-2017 p.5 Theorem 5（well-formed 前提）             |
+| `central`              | なし     | なし               | mapd-tp-tpts-central-2017 p.5 §5 の明示的な否定                         |
+| `mla-star` / `hbh`     | 不明     | 不明               | mla-star-icaps-2019 の Algorithm 1 / 2 を確認したが保証定理なし         |
 | `bcbs` `ecbs`          | あり     | なし（有界準最適） | bcbs-ecbs-socs-2014 p.6                                                 |
 | `eecbs`                | 不明     | なし（有界準最適） | eecbs-aaai-2021 p.5 式 (2)                                              |
 | `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」              |

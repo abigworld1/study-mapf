@@ -1,15 +1,96 @@
 ---
-title: "HBH+MLA*"
+title: "MLA*"
 algorithmId: mla-star
-originalName: "Hungarian-Based Heuristic + Multi-Label A*"
+originalName: "Multi-Label A*"
 order: 730
-summary: ""
-status: draft
+summary: "pickup と delivery のような ordered goals を一つの A* 探索で扱う低レベル探索。"
+status: reviewed
 primarySources:
   - paperId: mla-star-icaps-2019
 implementationReferences: []
+lastReviewed: "2026-08-02"
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
 
-<PreparingNotice algorithmId="mla-star" />
+## 概要
+
+MLA*（Multi-Label A*）は、agent が順番に訪れる複数の goal を一つの探索で扱います。MAPD の pickup → delivery を、pickup で一度探索を止めるのではなく label の変化として表します<SourceCitation paperId="mla-star-icaps-2019" section="Multi-Label A* Algorithm" label="Algorithm 1" page={3} />。
+
+## まず何がうれしいのか
+
+pickup に着いたあと delivery へすぐ進む経路も探索に含められます。pickup で待ち続けると、別 agent の予定と不必要に衝突する経路を選ぶことがあります。
+
+## 前提となる知識
+
+A\*、時刻付き path、vertex conflict / edge-swap conflict、MAPD の task を知っていると読みやすくなります。
+
+## 対象問題
+
+入力は現在位置、ordered goals（このページでは pickup と delivery）、token に保存された他 agent の path です。サイトでは 4 近傍・離散時間・wait を使い、token の path と衝突する状態を捨てます。
+
+## 中心となるアイデア
+
+探索状態 `(position, time, label)` の label は「pickup 前 / pickup 後」です。pickup に到着した node から、同じ位置・同じ時刻の pickup 後 label を作ります。delivery に pickup 後 label で到達したら解です。
+
+## アルゴリズムの手順
+
+1. 現在位置を pickup 前 label で OPEN に入れる。
+2. `f = g + h` が最小の node を取り出す。
+3. pickup に到着したら label を進める。
+4. token と衝突しない wait / move successor を追加する。
+5. delivery に到着した node を返す。
+
+## 小さな例
+
+agent が `(0,0)`、pickup が `(1,0)`、delivery が `(1,1)` なら、label 0 の `(1,0)` から label 1 の同じ node を作り、次の移動で delivery に到着します。pickup で止まり続ける予約は作りません。
+
+## データ構造
+
+priority queue、`(cell,time,label)` ごとの parent、token の時刻付き path を使います。heuristic は pickup / delivery までの壁考慮距離です。
+
+## 疑似コード
+
+```text
+OPEN ← {(start, t, before-pickup)}
+while OPEN is not empty:
+  n ← min_f(OPEN)
+  if n is after-pickup and n.cell = delivery: return path(n)
+  if n is before-pickup and n.cell = pickup:
+    OPEN.add((n.cell, n.time, after-pickup))
+  for next in {wait} ∪ neighbors(n.cell):
+    if next conflicts with token: continue
+    OPEN.add(next with the same label)
+return failure
+```
+
+これは論文 Algorithm 1 の構造を共通モデルへ短く写したものです。`tmax`（別 path の pickup 終端より遅い pickup を捨てる条件）もサイト版で扱います<SourceCitation paperId="mla-star-icaps-2019" label="Algorithm 1" page={3} />。
+
+## 実装上の注意
+
+MLA\* は TP / TPTS / CENTRAL の低レベルで使われます。token は予約表の代用ではなく、他 agent の path と task assignment を保持する共有状態です。
+
+<Caution title="MLA* の保証を A* から推測しない">
+  原論文の本文と Algorithm 1 を確認しましたが、MLA*
+  固有の完全性・最適性・有界準最適性を述べる定理は確認できませんでした。サイトの保証表は `unknown`
+  のままです。
+</Caution>
+
+## よくある誤解
+
+- label は agent の優先順位ではなく、ordered goals の段階です。
+- pickup と delivery を別々の A* で呼ぶ実装は MLA* ではありません。
+- 実験で service time が改善しても、理論保証を意味しません。
+
+## 他手法との比較
+
+TP の原論文は sequential A* を使います。MLA* はその低レベルを一つの label 探索へ置き換え、HBH は割当順を決める上位 heuristic です<SourceCitation paperId="mla-star-icaps-2019" section="The Multi-Agent Pickup and Delivery Problem" page={2} />。
+
+## サイト上の実装との差異
+
+サイト版は token の path を直接照合し、同点を `f`、`h`、生成順で決めます。大規模実験用の C++ 環境、複数 task の一般 ordered goals、無制限の探索時間は扱いません。MLA\* は単独 MAPD Solver ではなく内部ライブラリです。
+
+## 実験してみる
+
+TP / TPTS / CENTRAL を選ぶと、内部で MLA\* の `expand-node` と token 更新を確認できます。

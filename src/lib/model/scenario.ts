@@ -308,6 +308,108 @@ const MAPD_PRESETS: readonly PresetDefinition[] = [
       };
     },
   },
+  {
+    id: "mapd-task-swap",
+    name: "MAPD: タスクの奪い合いが効く例",
+    description:
+      "遠い agent が取ったタスクを、あとで空いた近い agent が奪えると得をする。TP と TPTS の差が出る。",
+    build: (seed) => {
+      /*
+        ★ TPTS の定義（mapd-tp-tpts-central-2017 p.4 §4.2）を試す形。
+
+          「an agent with the token can assign itself … also to a task that is
+            already assigned another agent as long as that agent is still
+            moving to the pickup location of the task」
+
+        t=0 では a2 が t2（すぐ隣）で塞がるので、遠い t1 は a1 が取って
+        長い距離を歩き始める。a2 は t2 を数手で終えて t1 の pickup の
+        近くで空くので、TPTS ならそこで t1 を奪える。TP は奪えない。
+
+        ★ endpoint は alcove（y=0 / y=2）だけに置き、通路 y=1 には
+          1 つも置かない。こうすると Definition 1 の条件 (c)
+          「2 endpoint 間に他の endpoint を通らない経路がある」が成り立つ。
+          通路上に作業地点を置くと (c) が壊れ、TP / TPTS の保証の外へ出てしまう。
+          保証つき手法の利点を見せる盤面が保証の対象外、では説明にならない。
+      */
+      const alcoves = [1, 9, 11, 13];
+      let map = createEmptyMap(15, 3);
+      for (let x = 0; x < 15; x += 1) {
+        if (alcoves.includes(x)) continue;
+        map = withBlocked(map, { x, y: 0 }, true);
+        map = withBlocked(map, { x, y: 2 }, true);
+      }
+      return {
+        id: "mapd-task-swap",
+        name: "MAPD: タスクの奪い合いが効く例",
+        kind: "mapd",
+        map,
+        agents: [
+          { id: "a1", start: { x: 1, y: 0 }, colorIndex: 0 },
+          { id: "a2", start: { x: 13, y: 2 }, colorIndex: 1 },
+        ],
+        tasks: [
+          { id: "t1", pickup: { x: 11, y: 0 }, delivery: { x: 9, y: 2 }, releaseTime: 0 },
+          { id: "t2", pickup: { x: 13, y: 0 }, delivery: { x: 11, y: 2 }, releaseTime: 0 },
+        ],
+        parkingEndpoints: [
+          { x: 1, y: 0 },
+          { x: 13, y: 2 },
+        ],
+        rules: DEFAULT_RULES,
+        seed,
+      };
+    },
+  },
+  {
+    id: "mapd-parking",
+    name: "MAPD: 退避しないと詰まる例",
+    description:
+      "配達地点が通路の途中にある。手が空いた agent をそこへ置いたままにすると後続を塞ぐ。endpoint 規律の有無で差が出る。",
+    build: (seed) => {
+      /*
+        ★ TP の Path2 / Property 2（同 p.4）が何を防いでいるかを見る形。
+
+          手が空いた agent を non-task endpoint へ退かせられる、というのが
+          Property 2 で、それがデッドロックを防いでいる。
+          ここでは通路の途中に delivery を置き、退避しない実装だと
+          そこに居座って後続のタスクを塞ぐようにしてある。
+      */
+      let map = createEmptyMap(13, 3);
+      // 通路は y=1（全部通れる）。上下は窪みだけ空ける。
+      for (let x = 0; x < 13; x += 1) {
+        map = withBlocked(map, { x, y: 0 }, true);
+        map = withBlocked(map, { x, y: 2 }, true);
+      }
+      for (const x of [1, 5, 11]) map = withBlocked(map, { x, y: 0 }, false);
+      for (const x of [1, 11]) map = withBlocked(map, { x, y: 2 }, false);
+      return {
+        id: "mapd-parking",
+        name: "MAPD: 退避しないと詰まる例",
+        kind: "mapd",
+        map,
+        agents: [
+          { id: "a1", start: { x: 1, y: 2 }, colorIndex: 0 },
+          { id: "a2", start: { x: 11, y: 2 }, colorIndex: 1 },
+        ],
+        /*
+          ★ t1 を終えた a1 は (5,0) に立つ。あとから出る t2 の delivery が
+            同じ (5,0) なので、TP は Path2 でそこを空けなければならない
+            （同 p.4「the delivery locations of all tasks in the task set are
+            different from the chosen endpoint」）。退避しない実装は居座る。
+        */
+        tasks: [
+          { id: "t1", pickup: { x: 1, y: 0 }, delivery: { x: 5, y: 0 }, releaseTime: 0 },
+          { id: "t2", pickup: { x: 11, y: 0 }, delivery: { x: 5, y: 0 }, releaseTime: 4 },
+        ],
+        parkingEndpoints: [
+          { x: 1, y: 2 },
+          { x: 11, y: 2 },
+        ],
+        rules: DEFAULT_RULES,
+        seed,
+      };
+    },
+  },
 ];
 
 export const PRESETS: readonly PresetDefinition[] = [

@@ -3,13 +3,92 @@ title: "CENTRAL"
 algorithmId: central
 originalName: "CENTRAL"
 order: 720
-summary: ""
-status: draft
+summary: "agent assignment と path planning を中央でまとめて行う MAPD の比較用 strawman。"
+status: reviewed
 primarySources:
   - paperId: mapd-tp-tpts-central-2017
 implementationReferences: []
+lastReviewed: "2026-08-02"
+simulatorSolverId: central
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="central" />
+## 概要
+
+CENTRAL は TP / TPTS と比較する中央集権の strawman です。free agent へ task endpoint または parking endpoint を割り当て、全 agent の path を再計画します<SourceCitation paperId="mapd-tp-tpts-central-2017" section="5" page={5} />。
+
+## まず何がうれしいのか
+
+全 agent の情報を一度に使えるため、局所的な token 順に縛られません。論文の実験では service time が最も小さい側に出ます。
+
+## 前提となる知識
+
+MAPD、Hungarian assignment、MAPF の衝突回避、service time / makespan が前提です。
+
+## 対象問題
+
+online MAPD。サイトでは `runMapdLoop` の一 step ごとに free agent と open task を見て中央 assignment を計算します。
+
+## 中心となるアイデア
+
+task の pickup を free agent へ割り当て、残りを non-task endpoint へ退避させます。サイト版は既存 Hungarian と MLA\* を組み合わせます。
+
+## アルゴリズムの手順
+
+1. free agent と open task を集める。
+2. agent–pickup の距離行列を作り Hungarian で候補を選ぶ。
+3. MLA\* で token に衝突しない path を計画する。
+4. task を割り当てられない agent は parking endpoint へ移す。
+5. 全 agent を一 step 進める。
+
+## 小さな例
+
+二体の free agent と一つの task なら、pickup に近い agent を task に、もう一体を non-task endpoint に割り当てます。endpoint は task delivery を塞がない候補から選びます。
+
+## データ構造
+
+Hungarian の cost matrix、明示的 token、MLA\* の label state を使います。CENTRAL の論文版は二段の CBS path planning ですが、サイト版はブラウザ向けに逐次 token planning へ簡略化しています。
+
+## 疑似コード
+
+```text
+while tasks remain:
+  free ← available agents
+  X ← feasible pickup endpoints plus non-task parking endpoints
+  assignment ← Hungarian(cost(agent, endpoint))
+  for each assigned agent:
+    token[agent] ← MLA*(current, ordered goals, token)
+  move one step
+```
+
+原論文の Agent Assignment / Path Planning の構造を短く再構成しています<SourceCitation paperId="mapd-tp-tpts-central-2017" section="5" page={5} />。
+
+## 実装上の注意
+
+<Caution title="小さい service time は保証ではありません">
+  原論文は CENTRAL について「well-formed instance をすべて解くことすら要求しない」と明記しています
+  <SourceCitation paperId="mapd-tp-tpts-central-2017" section="5" page={5} />
+  。実験の service time の順序は CENTRAL、TPTS、TP の順に小さい傾向ですが、保証の順序は TP / TPTS の
+  well-formed 条件付き保証、CENTRAL は保証なしです。
+</Caution>
+
+## よくある誤解
+
+- CENTRAL は最適 MAPD solver ではありません。
+- Hungarian が割当を最適化しても、経路と将来 task の全体最適性は得られません。
+- well-formed でも CENTRAL の解決性は保証されません。
+
+## 他手法との比較
+
+TP は token を agent が順番に更新し、TPTS は未 pickup task を交換します。CENTRAL は計算量を使って全体を見ますが、理論保証を要求していない比較対象です<SourceCitation paperId="mapd-tp-tpts-central-2017" section="7" page={8} />。
+
+## サイト上の実装との差異
+
+サイト版は Hungarian + MLA\* の教育用実装で、論文の二段 CBS、無制限の中央探索、warehouse 実験スケールは扱いません。`fidelity` も `educational` です。
+
+## 実験してみる
+
+<SimulatorLink solverId="central" />

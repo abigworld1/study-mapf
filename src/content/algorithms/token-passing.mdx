@@ -3,13 +3,99 @@ title: "TP"
 algorithmId: token-passing
 originalName: "Token Passing"
 order: 700
-summary: ""
-status: draft
+summary: "全 agent の path と task 集合を token で共有する decoupled MAPD 手法。"
+status: reviewed
 primarySources:
   - paperId: mapd-tp-tpts-central-2017
 implementationReferences: []
+lastReviewed: "2026-08-02"
+simulatorSolverId: token-passing
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="token-passing" />
+## 概要
+
+TP（Token Passing）は、全 agent の path、task 集合、assignment を共有 token に入れ、token を受け取った agent が自分の task と path を更新する MAPD 手法です<SourceCitation paperId="mapd-tp-tpts-central-2017" section="4.1" label="Algorithm 1" page={3} />。
+
+## まず何がうれしいのか
+
+agent ごとに全体の MAPD を解き直さず、token の既存 path を時空間障害物として順番に計画します。well-formed infrastructure では、Path2 が空いた agent を non-task endpoint へ退避させます。
+
+## 前提となる知識
+
+MAPD、endpoint、well-formed、A\*、vertex / edge-swap conflict が前提です。well-formed は解けるための十分条件であって必要条件ではありません<SourceCitation paperId="mapd-tp-tpts-central-2017" section="3.2" label="Definition 1" page={2} />。
+
+## 対象問題
+
+release 済み task を pickup して delivery する lifelong MAPD。サイト版は `runMapdLoop` の release → strategy → move → pickup/delivery の順序をそのまま使います。
+
+## 中心となるアイデア
+
+task を選べるときは pickup までの h 値が最小の task を選び、Path1 で pickup → delivery を計画します。選べない agent が task delivery 上にいるときは、Path2 で non-task endpoint へ退避します。
+
+## アルゴリズムの手順
+
+1. token に release 済み task を追加する。
+2. token を要求した free agent を決定的な順で処理する。
+3. 他 path の終端が pickup / delivery にない task を候補にする。
+4. h 値最小の task を選び、MLA\* で Path1 を token に書く。
+5. task を選べない agent は、必要なら Path2 で endpoint へ移す。
+6. 全 agent を path の次の 1 step だけ進める。
+
+## 小さな例
+
+中央通路の delivery endpoint に free agent が止まっていると、次の task の path を塞ぐことがあります。TP はその agent に task を割り当てられない場合、空いている non-task endpoint へ動かします。
+
+## データ構造
+
+token は `Map<agentId, TimedPath>`、`Map<taskId, agentId>`、未割当 task の集合です。予約表だけで token を代用していません。
+
+## 疑似コード
+
+```text
+while tasks remain:
+  add released tasks to T
+  for agent a requesting token:
+    T' ← tasks whose pickup/delivery are not path endpoints in token
+    if T' is not empty:
+      τ ← argmin h(a, pickup(τ))
+      assign τ; token[a] ← Path1(a, τ, token)
+    else if a is at a delivery location in T:
+      token[a] ← Path2(a, token)
+    else:
+      token[a] ← [current(a)]
+  move one step along token paths
+```
+
+原論文 Algorithm 1 の構造を短く再構成しています<SourceCitation paperId="mapd-tp-tpts-central-2017" label="Algorithm 1" page={3} />。
+
+## 実装上の注意
+
+TP の完全性は PDF p.4 Theorem 3 の well-formed 前提付きです。`mapd-not-well-formed` では loop が保証対象外の警告を出します。同じ警告を strategy から重ねて出しません。
+
+<Caution title="service time の小ささと保証は別です">
+  TP / TPTS / CENTRAL の実験では、service time の順序は概ね CENTRAL、TPTS、TP
+  の順に小さくなりますが、CENTRAL は well-formed instance
+  すら解く保証を持ちません。数値の良さを保証と混同しないでください。
+</Caution>
+
+## よくある誤解
+
+- token は単なる占有予約表ではありません。
+- well-formed でない入力が必ず解けないわけではありません。
+- TP の Theorem 3 は最適性を主張していません。
+
+## 他手法との比較
+
+TPTS は未 pickup task の交換を許し、CENTRAL は中央で assignment と path を計画します。MLA\* は TP の低レベル path planner です<SourceCitation paperId="mapd-tp-tpts-central-2017" section="4.2" page={4} />。
+
+## サイト上の実装との差異
+
+サイト版は token、Path1 / Path2、endpoint 規律を実装しますが、原論文の sequential A* を MLA* に置き換えています。通信遅延、無限 task stream、実験 warehouse の規模は扱いません。
+
+## 実験してみる
+
+<SimulatorLink solverId="token-passing" />

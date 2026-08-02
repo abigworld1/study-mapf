@@ -1,0 +1,87 @@
+---
+title: "HBH"
+algorithmId: hbh
+originalName: "Hungarian-Based / h-value-Based Heuristic"
+order: 740
+summary: "MLA* の候補を agent–task の h 値で順序付ける中央 assignment heuristic。"
+status: reviewed
+primarySources:
+  - paperId: mla-star-icaps-2019
+implementationReferences: []
+lastReviewed: "2026-08-02"
+---
+
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+
+## 概要
+
+HBH は MLA\* と組み合わせて使う task assignment heuristic です。論文本文の名称は h-value-based heuristic で、Algorithm 2 は agent–task pair を h 値の昇順に試します<SourceCitation paperId="mla-star-icaps-2019" label="Algorithm 2" page={3} />。
+
+## まず何がうれしいのか
+
+近い pickup を先に試し、MLA\* が実行可能な pair だけを採用します。中央で複数 agent をまとめて考えるため、単純な token 順より良い候補順を作れます。
+
+## 前提となる知識
+
+Hungarian method、MLA\*、MAPD の free agent / open task が前提です。
+
+## 対象問題
+
+MAPD の assignment 部分。HBH 自身は path を返す Solver ではなく、MLA\* と組み合わせる `MapdStrategy` の部品です。
+
+## 中心となるアイデア
+
+agent–task の h 値行列を作り、サイト版では Batch 7 の Hungarian 実装で deterministic な候補を作ります。各候補の path は MLA\* で検証します。
+
+## アルゴリズムの手順
+
+1. available agent と open task を集める。
+2. pickup までの距離を cost にする。
+3. Hungarian で候補を順序付ける。
+4. MLA\* が成功した候補を token に書き込む。
+
+## 小さな例
+
+二体の agent と二つの task の距離行列が `[[2,8],[4,3]]` なら、近い pair を優先し、実際に衝突しない MLA\* path が得られる割当を採用します。
+
+## データ構造
+
+rectangular cost matrix、Hungarian の assignment、token の future path を使います。
+
+## 疑似コード
+
+```text
+pairs ← all (agent, task) with h(agent, pickup(task))
+sort / assign pairs by h-value
+for (agent, task) in pairs:
+  if both are still free and MLA*(agent, task, token) succeeds:
+    assign and update token
+```
+
+論文 Algorithm 2 の pair scan を短く再構成し、サイト版では Hungarian を補助部品として使います<SourceCitation paperId="mla-star-icaps-2019" label="Algorithm 2" page={3} />。
+
+## 実装上の注意
+
+<Caution title="HBH は保証付き割当法ではありません">
+  原論文の実験は HBH+MLA* の改善を報告しますが、HBH
+  の完全性・最適性・有界準最適性を述べる定理は確認できません。保証表は `unknown` です。
+</Caution>
+
+## よくある誤解
+
+- HBH は Hungarian だけで MAPD を解く手法ではありません。
+- h 値順の良さは理論保証ではありません。
+- MLA\* の低レベルと HBH の割当順は別の役割です。
+
+## 他手法との比較
+
+TP は分散的な token 順、CENTRAL は中央の比較用 strawman、HBH はその assignment 部分を改善する heuristic です。論文は TP+MLA* と HBH+MLA* を実験比較しています<SourceCitation paperId="mla-star-icaps-2019" section="Computational Experiments" page={3} />。
+
+## サイト上の実装との差異
+
+サイト版は既存 Hungarian を呼び、MLA\* と共通 token strategy を使います。HBH 単独の Simulator 選択肢は用意せず、CENTRAL などの内部 strategy から使える部品として表示します。
+
+## 実験してみる
+
+HBH は内部ライブラリです。Simulator では CENTRAL の assignment と MLA\* の trace を通じて動作を確認できます。

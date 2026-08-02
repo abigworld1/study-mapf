@@ -59,8 +59,32 @@ export interface MapdStepInput {
 
 /** 戦略がその時刻に決めたこと。 */
 export interface MapdStepOutput {
-  /** 新しく割り当てたタスク。agentId -> taskId。 */
+  /**
+   * 割り当て。agentId -> taskId。
+   *
+   * ★ **他のエージェントが持っているタスクを奪える。** ただし持ち主が
+   *   まだ pickup へ向かっている途中（`pickedUp === false`）の場合だけ。
+   *   これは TPTS の定義そのもので（mapd-tp-tpts-central-2017 p.4 §4.2）、
+   *
+   *     「an agent with the token can assign itself not only to a task that
+   *       has no agent assigned but also to a task that is already assigned
+   *       another agent **as long as that agent is still moving to the
+   *       pickup location** of the task」
+   *
+   *   pickup 済みのタスクを奪う指定はループ側が黙って無視する。
+   *   論文が禁じている操作を戦略側の書き方次第で通してしまわないよう、
+   *   条件の判定はここ 1 箇所に置く。
+   *
+   * ★ 奪われた側は手が空く。ループは `swap-task` イベントを出すので、
+   *   戦略はそれか次ステップの `carrying` を見て、古い計画を捨てること。
+   *   ループは戦略の内部状態を知らないので、計画の破棄まではやらない。
+   */
   readonly assign?: ReadonlyMap<AgentId, TaskId>;
+  /**
+   * 割り当てを解く。ここに挙げたエージェントは手が空く。
+   * pickup 済みのタスクは解けない（運搬中のものを捨てさせないため）。
+   */
+  readonly unassign?: readonly AgentId[];
   /**
    * 各エージェントの次の 1 歩。指定が無いエージェントはその場に留まる。
    * 隣接セルか現在地のみ許す。違反はループ側が弾く。
@@ -213,9 +237,32 @@ export async function runMapdLoop(
       endpoints,
       emit,
     });
+    /*
+      ★ 割当の解除を先に処理する。順序を逆にすると、同じステップで
+        「a から外して b へ渡す」を書いたときに解除が後勝ちして消える。
+    */
+    for (const agentId of step.unassign ?? []) {
+      const held = carrying.get(agentId);
+      // 運搬中のものは捨てさせない。pickup 済みは解除できない。
+      if (!held || held.pickedUp) continue;
+      carrying.delete(agentId);
+    }
     for (const [agentId, taskId] of step.assign ?? []) {
       const task = pending.get(taskId);
       if (!task || carrying.has(agentId)) continue;
+      /*
+        ★ 他のエージェントが持っているタスクなら、TPTS の条件を満たすときだけ奪う
+          （同 p.4 §4.2「as long as that agent is still moving to the pickup
+          location」）。pickup 済みなら奪えない。ここで弾くことで、
+          戦略の書き方に関わらず論文の条件が守られる。
+      */
+      const currentOwner = [...carrying.entries()].find(([, c]) => c.task.id === taskId);
+      if (currentOwner) {
+        const [ownerId, held] = currentOwner;
+        if (held.pickedUp || ownerId === agentId) continue;
+        carrying.delete(ownerId);
+        emit({ type: "swap-task", taskId, from: ownerId, to: agentId, time });
+      }
       carrying.set(agentId, { task, pickedUp: false });
     }
 

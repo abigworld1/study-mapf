@@ -3,13 +3,96 @@ title: "TPTS"
 algorithmId: tpts
 originalName: "Token Passing with Task Swaps"
 order: 710
-summary: ""
-status: draft
+summary: "TP の token と Path1 / Path2 を保ったまま、未 pickup task の再割当を試す拡張。"
+status: reviewed
 primarySources:
   - paperId: mapd-tp-tpts-central-2017
 implementationReferences: []
+lastReviewed: "2026-08-02"
+simulatorSolverId: tpts
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="tpts" />
+## 概要
+
+TPTS（Token Passing with Task Swaps）は TP の task set を「未実行 task 全体」へ広げ、未 pickup の task を、より早く pickup できる agent が引き取れるようにします<SourceCitation paperId="mapd-tp-tpts-central-2017" section="4.2" label="Algorithm 2" page={4} />。
+
+## まず何がうれしいのか
+
+TP の早い token 順で遠い agent が task を取ったあとでも、近い agent がまだ pickup 前なら交換できます。計算量と通信量は増えます。
+
+## 前提となる知識
+
+TP、token、Path1 / Path2、MAPD の well-formed endpoint が前提です。
+
+## 対象問題
+
+online MAPD。サイトの loop が task の実行状態を管理し、TPTS strategy は token の path と未確定 assignment を更新します。
+
+## 中心となるアイデア
+
+GetTask は h 値順に候補を見ます。既に別 agent が未 pickup task を持っていて、現在 agent の pickup 到達が早ければ、一時的に元 agent の path を token から外して再計画します。
+
+## アルゴリズムの手順
+
+1. TP と同じ token を受け取る。
+2. h 値順に task を調べる。
+3. 未割当なら Path1。
+4. 未 pickup の割当済み task なら、より早い Path1 のとき swap を試す。
+5. 元 agent は別 task または Path2 を試す。
+6. path に沿って 1 step 進む。
+
+## 小さな例
+
+二体が同じ pickup を競うとき、先に token を受け取った agent が遠ければ、後の agent が task を引き取り、前者は別 task を探します。
+
+## データ構造
+
+TP と同じ明示的 token に、task assignment を追加します。交換は `swap-task` event で可視化します。
+
+## 疑似コード
+
+```text
+for task τ in increasing h(a, pickup(τ)):
+  if τ is unassigned:
+    assign a; token[a] ← Path1(a, τ, token)
+  else if τ is not picked up and a reaches pickup earlier:
+    unassign old agent; token[old] ← removed
+    assign a; token[a] ← Path1(a, τ, token)
+    ask old agent to run GetTask again
+  otherwise restore token and try next τ
+```
+
+原論文 Algorithm 2 の再帰的な token 返却を短く再構成しています<SourceCitation paperId="mapd-tp-tpts-central-2017" label="Algorithm 2" page={4} />。
+
+## 実装上の注意
+
+PDF p.5 Theorem 5 は「well-formed instance を TPTS が解く」と述べます。非 well-formed の保証対象外警告は `runMapdLoop` に任せます。
+
+<Caution title="ブラウザ版の swap 範囲">
+  サイト版は拡張された `MapdStepOutput.assign` で、前 step から carrying 中でも pickup 前の task
+  を奪えます。pickup 済みの奪い取りは loop が拒否し、`swap-task` は loop が 1 件だけ出します。候補の
+  pickup までの true distance が old owner より 厳密に短い場合だけ発火するため、論文の full path
+  到達時刻比較を教育用に簡略化しています。
+</Caution>
+
+## よくある誤解
+
+- TPTS は必ず TP より良い service time になるわけではありません。
+- Theorem 5 は最適性を保証しません。
+- swap は pickup 後の task を奪う操作ではありません。
+
+## 他手法との比較
+
+TP より assignment の柔軟性が高く、CENTRAL より分散的です。実験上の service time は CENTRAL、TPTS、TP の順に小さい傾向ですが、CENTRAL の解決性保証はありません<SourceCitation paperId="mapd-tp-tpts-central-2017" section="7" page={8} />。
+
+## サイト上の実装との差異
+
+共通 token / Path1 / Path2 と MLA\* を使います。old owner を同じ step の queue に戻す点は再帰的 GetTask の教育用再構成で、論文の通信スケジュール、full path 到達時刻比較、無限 stream は未対応です。
+
+## 実験してみる
+
+<SimulatorLink solverId="tpts" />

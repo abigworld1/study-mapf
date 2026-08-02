@@ -1495,6 +1495,56 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-02 Batch 8 レビュー後の追記（Claude Code）
+
+Codex の Batch 8 修正を受けて、こちらで 3 点手を入れた。
+
+### 1. `MapdStepOutput` を拡張した
+
+Codex の「既存 API の制約で TPTS の奪い取りができない」という報告は正しかった。
+`assign` で他エージェントのタスクを奪えるようにし、`unassign` を足した。
+
+★ **奪える条件はループ側で強制する。** 持ち主がまだ pickup へ向かっている途中
+（`pickedUp === false`）のときだけ。mapd-tp-tpts-central-2017 p.4 §4.2 の
+「as long as that agent is still moving to the pickup location」を、
+戦略の書き方に関わらず守るため。成立時の `swap-task` もループが出す。
+
+### 2. `mapd-task-swap` を well-formed な盤面へ置き換えた
+
+Codex 版は t2 の delivery を通路上（10,1）に置いたため条件 (c) を 7 組で破り、
+well-formed でなくなっていた。**TPTS の利点を見せる盤面が TP/TPTS の保証の
+対象外**では説明にならない。
+
+endpoint を alcove（y=0 / y=2）だけに置き、通路 y=1 には 1 つも置かない形へ変えた。
+これで条件 (c) が自動的に成り立つ。結果は well-formed かつ TPTS が改善する。
+
+```text
+mapd-greedy / TP / CENTRAL   svc 11.00  makespan 16  swap 0
+tpts                         svc  9.00  makespan 12  swap 1
+```
+
+論文の傾向（service time は TPTS < TP）とも向きが一致した。
+
+### 3. MLA* の回帰テストが偽陽性だった
+
+「resting tail を検出する」テストがプリセットの座標を直に使っていたため、
+プリセットを差し替えたら pickup が壁の上に来て、**resting tail と無関係な理由で
+`null` になり通り続けていた**。バグが再発しても気付けない。
+
+盤面を自前で持つ形に変え、同じ入力を「占有あり / 占有なし」の 2 通りで回して
+差が出ることを見るようにした。
+
+### 確認したこと
+
+Codex の衝突修正が本物であることを、こちらが最初に書いた
+「t1 の pickup と t2 の delivery が同じセル」という盤面で回帰確認した。
+4 手法とも衝突 0。プリセットを避けたのではなく `mla-star.ts` が直っている。
+
+最終ゲート: sources:validate errors=0/warnings=11、format check、lint、
+typecheck 0 errors、unit 273 passed、build 64 pages、E2E 44 passed。
+
+---
+
 ## 2026-08-02 MAPD の実行ループを作った（Claude Code）
 
 Batch 8（TP / TPTS / CENTRAL / MLA\*）は 4 手法とも `problem_types: [mapd]` で、
@@ -1842,3 +1892,58 @@ lacam を例に使っていたため、Batch 5 で lacam が実装された時�
 - `npm test`: 17 files / 242 tests passed
 - `npm run build`: 63 pages built
 - `npm run test:e2e`: 40 tests passed
+
+---
+
+## 2026-08-02 Batch 8（Codex）
+
+### 実装
+
+- `src/solvers/mapd/mla-star.ts` に、pickup 前後の label と token path の衝突判定を持つ MLA* を追加。
+- `src/solvers/mapd/strategies.ts` に明示的 token を持つ共通 strategy を追加。TP / TPTS / CENTRAL が Path1 / Path2 と MLA* を共有し、TPTS は未 pickup assignment を距離比較して交換する。
+- `src/solvers/mapd/solvers.ts` と registry に TP / TPTS / CENTRAL を追加。`runMapdLoop` は変更していない。
+- HBH は単独 Solver ではなく Hungarian + MLA* の内部 assignment strategy として実装。MLA* / HBH は `library` 状態にした。
+
+### 資料・保証
+
+- `mapd-tp-tpts-central-2017` の Algorithm 1/2、Theorem 3/5、CENTRAL §5、結論を PDF で再確認。
+- TP / TPTS は well-formed 前提の条件付き完全性、CENTRAL は完全性・最適性なし、MLA* / HBH は保証定理を確認できず unknown と `guarantee_evidence` に記録。
+- 数値傾向（CENTRAL < TPTS < TP の service time）と保証の有無を解説に併記し、混同しないようにした。
+
+### 解説・テスト
+
+- `src/content/algorithms/{mla-star,token-passing,tpts,central,hbh}.mdx` と各実装ノートを追加・更新。
+- `tests/unit/batch8-mapd.test.ts` に、3 Solver の well-formed 完了、非 well-formed 警告、TPTS swap、MLA* label 探索、HBH 内部 strategy を追加。
+
+### 品質ゲート
+
+- `npm run sources:validate`: errors=0 warnings=11
+- `npm run format:check`: passed
+- `npm run lint`: passed
+- `npm run typecheck`: 0 errors（既存 Astro `z` deprecation hints のみ）
+- `npm test`: 19 files / 265 tests passed
+- `npm run build`: 64 pages built
+- `npm run test:e2e`: 44 tests passed（chromium / mobile）
+
+### 未対応
+
+- TPTS は拡張された `MapdStepOutput.assign` で前 step の未 pickup task も奪う。full path 到達時刻による論文の細かな比較は true-distance 比較へ簡略化。
+- CENTRAL の論文どおりの二段 CBS、MLA* / HBH の大規模実験環境、分散通信は未対応。
+
+### 2026-08-02 Batch 8 レビュー修正（Codex）
+
+- `src/solvers/mapd/mla-star.ts` の goal 判定に resting tail の衝突検査を追加。既存 token path の終端に `goalBehavior: stay` で残る agent がいる場合、後続 path がそのセルを通る解を受理しないようにした。指摘 1 の原因は低レベル MLA* が「goal 到達後も stay する token path」を将来時刻まで照合せず、短い新規 path の終端を無限占有として扱っていなかったこと。
+- `src/solvers/mapd/strategies.ts` は TPTS の候補に前 step の未 pickup carrying task を含め、pickup までの true distance が old owner より厳密に短い場合だけ `assign` を返す。loop が `swap-task` を発火し、old owner の token path を一時的に外して同じ step に別 task / Path2 を再計画する。strategy から `swap-task` は出さない。
+- Path2 を assignment より先に評価し、delivery endpoint 上の free agent を non-task endpoint へ退避。`mapd-parking` を長い後続 task が先に割当済みになる形へ調整し、TP/TPTS/CENTRAL と greedy の経路差を固定した。
+- `tests/unit/batch8-mapd.test.ts` に全 MAPD preset × (`mapd-greedy`, TP, TPTS, CENTRAL) の solved 衝突ゼロ、`mapd-task-swap` の loop swap と TP/TPTS 差、`mapd-parking` の Path2 差を追加。TPTS の same-step テストは一意 delivery の確認へ変更した。
+- 実装ノート、TPTS MDX、solver metadata、IMPLEMENTATION_STATUS を新 API と実装動作に更新。旧記録の「過去 timestep swap 未対応」はこのレビューで解消済み。
+
+### レビュー修正後の品質ゲート
+
+- `npm run sources:validate`: errors=0 warnings=11
+- `npm run format:check`: passed
+- `npm run lint`: passed
+- `npm run typecheck`: 0 errors（既存 Astro `z` deprecation hints 22 件）
+- `npm test`: 19 files / 273 tests passed
+- `npm run build`: 64 pages built
+- `npm run test:e2e`: 44 tests passed（chromium / mobile）

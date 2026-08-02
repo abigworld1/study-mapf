@@ -943,13 +943,13 @@
   problem_types: [mapd]
   primary_paper_ids: [mapd-tp-tpts-central-2017]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: conditional
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: "mapd-tp-tpts-central-2017 アブストラクトに TP の保証に言及する記述（this guarantee in a simulated warehouse system / TP can …）があるが、抽出が途中で切れており保証の内容と前提を確定できなかった。well-formed infrastructure を前提とする条件付き保証と読めるため conditional にしてある。PDF 取得後に必ず確定すること。"
-  notes: "共有トークン（現在の経路・タスク集合）を 1 体ずつ受け渡し、空いたエージェントがタスクを取って経路を書き込む分散的な方式。PDF 本文で TP / TPTS / CENTRAL の記載を確認済み。"
+  guarantee_evidence: "mapd-tp-tpts-central-2017 PDF p.4 Theorem 3「All well-formed MAPD instances are solvable, and TP solves them.」well-formed を前提とする条件付き完全性。"
+  notes: "共有トークン（現在の経路・タスク集合）を 1 体ずつ受け渡し、空いたエージェントがタスクを取って経路を書き込む方式。PDF p.4 Theorem 3 の保証は well-formed に限る。サイト版は token を明示的に持ち、低レベルを MLA* に置き換えた教育用実装。"
 
 - id: tpts
   display_name: "TPTS (Token Passing with Task Swaps)"
@@ -958,13 +958,13 @@
   problem_types: [mapd]
   primary_paper_ids: [mapd-tp-tpts-central-2017]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
+    complete: conditional
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "既に割り当て済みで未 pickup のタスクを、より近いエージェントが奪えるようにした TP の拡張。"
+  guarantee_evidence: "mapd-tp-tpts-central-2017 PDF p.5 Theorem 5「TPTS solves all well-formed MAPD instances.」well-formed を前提とする条件付き完全性。"
+  notes: "既に割り当て済みで未 pickup のタスクを、より近いエージェントが奪えるようにした TP の拡張。PDF p.5 Theorem 5 の保証は well-formed に限る。サイト版は MapdStrategy API の制約から同一 timestep 内の未確定 assignment 交換までを実装。"
 
 - id: central
   display_name: "CENTRAL"
@@ -973,13 +973,13 @@
   problem_types: [mapd]
   primary_paper_ids: [mapd-tp-tpts-central-2017]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: false
+    optimal: false
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "割当と経路計画を集中的に解くベースライン。TP / TPTS との比較対象として使う。"
+  guarantee_evidence: "mapd-tp-tpts-central-2017 PDF p.5 §5「do not require that it is optimally effective or even solves all well-formed MAPD instances.」CENTRAL は解決性・最適性を保証しない。"
+  notes: "割当と経路計画を集中的に解く比較用 strawman。論文 p.5 §5 が well-formed instance すら全て解くことを要求しないと明記する。実験で service time が小さい傾向でも保証を意味しない。サイト版は Hungarian + MLA* の教育用簡略実装。"
 
 - id: ta-prioritized
   display_name: "TA-Prioritized"
@@ -1015,31 +1015,31 @@
   display_name: "MLA* (Multi-Label A*)"
   aliases: ["MLA*", "Multi-Label A*"]
   category: mapd
-  problem_types: [mapd, single-agent]
+  problem_types: [mapd]
   primary_paper_ids: [mla-star-icaps-2019]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: library
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "pickup → delivery のように途中で必ず経由すべき地点がある単一エージェント探索。ラベル（未 pickup / pickup 済み）で状態を分ける。"
+  guarantee_evidence: "mla-star-icaps-2019 PDF pp.2–3（誌面 pp.182–183）Algorithm 1 を確認したが、MLA* 固有の完全性・最適性・準最適性を述べる定理・補題は確認できなかった。"
+  notes: "pickup → delivery のように途中で必ず経由すべき地点がある単一エージェント探索。ラベル（未 pickup / pickup 済み）で状態を分ける。原論文に保証定理を確認できなかったため guarantees は unknown のまま。TP / TPTS / HBH の内部ライブラリで、単独 MAPD Solver ではない。"
 
 - id: hbh
   display_name: "HBH (Hungarian-Based Heuristic)"
   aliases: ["HBH", "Hungarian-Based Heuristic", "HBH+MLA*"]
   category: mapd
-  problem_types: [mapd, assignment]
+  problem_types: [mapd]
   primary_paper_ids: [mla-star-icaps-2019]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: library
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "ハンガリアン法で得た割当をタスク選択のヒューリスティクスに使う。PDF 本文で HBH 15 箇所、HBH+MLA* 6 箇所を確認済み。hungarian-method と組で説明する。"
+  guarantee_evidence: "mla-star-icaps-2019 PDF p.2–3 Algorithm 2 と p.4 の実験説明を確認したが、HBH の完全性・最適性・準最適性を主張する定理は確認できなかった。"
+  notes: "論文本文の名称は h-value-based heuristic で、Algorithm 2 は h-value の昇順 pair scan。サイトの manifest 名 Hungarian-Based は互換名として残し、Batch 7 の Hungarian を assignment 候補の部品として呼ぶ。保証を確認できないため guarantees は unknown。MLA* と組み合わせる内部 strategy で、単独 MAPD Solver ではない。"
 
 - id: rmca
   display_name: "RMCA"

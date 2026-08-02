@@ -7,6 +7,7 @@ import { checkWellFormed, endpointsOf } from "@/lib/model/mapd";
 import { createRecordingContext } from "@/solvers/context";
 import { getSolver, solversFor } from "@/solvers/registry";
 import { detectConflicts } from "@/lib/model/conflicts";
+import { runMapdLoop, type MapdStepOutput, type MapdStrategy } from "@/solvers/mapd/loop";
 
 const MAPD_PRESET_IDS = PRESETS.filter((p) => p.id.startsWith("mapd-")).map((p) => p.id);
 
@@ -218,6 +219,84 @@ describe("MAPD 実行ループ", () => {
     const second = await run(scenario);
     expect(first.result.paths).toEqual(second.result.paths);
     expect(first.result.metrics.averageServiceTime).toBe(second.result.metrics.averageServiceTime);
+  });
+});
+
+/*
+  ★ TPTS の「奪い取り」はループ側で条件を強制する。
+    mapd-tp-tpts-central-2017 p.4 §4.2 は、まだ pickup へ向かっている途中の
+    タスクだけを奪えると定めている。判定を戦略ごとに書くと条件を
+    取りこぼすので、ループ 1 箇所に置いてある。
+*/
+describe("割当の奪い取りと解除（ループ側の強制）", () => {
+  /** 指定どおりに割当だけ動かし、移動はしない検査用の戦略。 */
+  function scriptedStrategy(script: Record<number, Partial<MapdStepOutput>>): MapdStrategy {
+    return {
+      name: "scripted",
+      step: (input) => ({ moves: new Map(), ...(script[input.time] ?? {}) }),
+    };
+  }
+
+  async function runScripted(script: Record<number, Partial<MapdStepOutput>>) {
+    const scenario = corridor();
+    const recording = createRecordingContext(scenario.seed);
+    const result = await runMapdLoop(
+      scenario,
+      { ...DEFAULT_SOLVER_OPTIONS, horizon: 6 },
+      recording.context,
+      scriptedStrategy(script),
+    );
+    return { result, events: recording.events };
+  }
+
+  it("pickup 前のタスクは他のエージェントへ移せる", async () => {
+    const { events } = await runScripted({
+      0: { assign: new Map([["a1", "t1"]]) },
+      1: { assign: new Map([["a2", "t1"]]) },
+    });
+    const swap = events.find((e) => e.type === "swap-task") as
+      { taskId: string; from: string; to: string } | undefined;
+    expect(swap).toBeDefined();
+    expect(swap!.taskId).toBe("t1");
+    expect(swap!.from).toBe("a1");
+    expect(swap!.to).toBe("a2");
+  });
+
+  it("pickup 済みのタスクは奪えない", async () => {
+    // a1 は (0,1) から (1,0) の pickup へ 2 歩。到達させてから奪いにいく。
+    const toPickup = new Map([["a1", { x: 1, y: 1 }]]);
+    const ontoPickup = new Map([["a1", { x: 1, y: 0 }]]);
+    const { events } = await runScripted({
+      0: { assign: new Map([["a1", "t1"]]), moves: toPickup },
+      1: { moves: ontoPickup },
+      2: { assign: new Map([["a2", "t1"]]) },
+      3: { assign: new Map([["a2", "t1"]]) },
+    });
+    expect(events.some((e) => e.type === "pickup")).toBe(true);
+    expect(events.some((e) => e.type === "swap-task")).toBe(false);
+  });
+
+  it("pickup 済みのタスクは解除もできない", async () => {
+    const { result } = await runScripted({
+      0: { assign: new Map([["a1", "t1"]]), moves: new Map([["a1", { x: 1, y: 1 }]]) },
+      1: { moves: new Map([["a1", { x: 1, y: 0 }]]) },
+      2: { unassign: ["a1"] },
+      3: { moves: new Map([["a1", { x: 1, y: 1 }]]) },
+      4: { moves: new Map([["a1", { x: 2, y: 1 }]]) },
+      5: { moves: new Map([["a1", { x: 3, y: 1 }]]) },
+    });
+    // 解除できていれば運搬が消えて delivery に届かない。届いていれば保持されている。
+    expect(result.metrics.pendingTasks).toBe(1);
+  });
+
+  it("pickup 前なら解除できて、そのタスクは未割当へ戻る", async () => {
+    const { events } = await runScripted({
+      0: { assign: new Map([["a1", "t1"]]) },
+      1: { unassign: ["a1"] },
+      2: { assign: new Map([["a2", "t1"]]) },
+    });
+    // 解除を挟んだので奪い取りではなく、通常の割当になる。
+    expect(events.some((e) => e.type === "swap-task")).toBe(false);
   });
 });
 
