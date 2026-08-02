@@ -232,6 +232,84 @@ function blockRect(map: GridMap, x0: number, y0: number, x1: number, y1: number)
   return next;
 }
 
+/*
+  MAPD。mapd-tp-tpts-central-2017 p.2 §3.2 の well-formed 条件が
+  効いていることが見えるように、満たす例と満たさない例を並べる。
+
+  条件（同 p.2 Definition 1）:
+    a) タスクが有限
+    b) non-task endpoint がエージェント数以上
+    c) 任意の 2 endpoint 間に、他の endpoint を通らない経路がある
+*/
+const MAPD_PRESETS: readonly PresetDefinition[] = [
+  {
+    id: "mapd-well-formed",
+    name: "MAPD: well-formed",
+    description:
+      "通路の上下に pickup / delivery、左右の袋小路に parking。Definition 1 の 3 条件を満たす。",
+    build: (seed) => {
+      // 5 列の通路（y=1）に、上下から出入りする作業地点をぶら下げる。
+      let map = createEmptyMap(7, 3);
+      for (const x of [0, 2, 4, 6]) {
+        map = withBlocked(map, { x, y: 0 }, true);
+        map = withBlocked(map, { x, y: 2 }, true);
+      }
+      return {
+        id: "mapd-well-formed",
+        name: "MAPD: well-formed",
+        kind: "mapd",
+        map,
+        agents: [
+          { id: "a1", start: { x: 0, y: 1 }, colorIndex: 0 },
+          { id: "a2", start: { x: 6, y: 1 }, colorIndex: 1 },
+        ],
+        tasks: [
+          { id: "t1", pickup: { x: 1, y: 0 }, delivery: { x: 5, y: 2 }, releaseTime: 0 },
+          { id: "t2", pickup: { x: 5, y: 0 }, delivery: { x: 1, y: 2 }, releaseTime: 2 },
+          { id: "t3", pickup: { x: 3, y: 0 }, delivery: { x: 3, y: 2 }, releaseTime: 6 },
+        ],
+        // 両端の袋小路。エージェント 2 体に対し non-task endpoint も 2 個。
+        parkingEndpoints: [
+          { x: 0, y: 1 },
+          { x: 6, y: 1 },
+        ],
+        rules: DEFAULT_RULES,
+        seed,
+      };
+    },
+  },
+  {
+    id: "mapd-not-well-formed",
+    name: "MAPD: well-formed でない例",
+    description:
+      "退避できる場所がエージェント数より少ない。条件 (b) を満たさないので TP の保証の対象外。",
+    build: (seed) => {
+      let map = createEmptyMap(7, 3);
+      for (const x of [0, 2, 4, 6]) {
+        map = withBlocked(map, { x, y: 0 }, true);
+        map = withBlocked(map, { x, y: 2 }, true);
+      }
+      return {
+        id: "mapd-not-well-formed",
+        name: "MAPD: well-formed でない例",
+        kind: "mapd",
+        map,
+        agents: [
+          { id: "a1", start: { x: 1, y: 0 }, colorIndex: 0 },
+          { id: "a2", start: { x: 6, y: 1 }, colorIndex: 1 },
+        ],
+        // a1 の初期位置が pickup と同じ = task endpoint なので non-task にならない。
+        tasks: [
+          { id: "t1", pickup: { x: 1, y: 0 }, delivery: { x: 5, y: 2 }, releaseTime: 0 },
+          { id: "t2", pickup: { x: 5, y: 0 }, delivery: { x: 1, y: 2 }, releaseTime: 3 },
+        ],
+        rules: DEFAULT_RULES,
+        seed,
+      };
+    },
+  },
+];
+
 export const PRESETS: readonly PresetDefinition[] = [
   {
     id: "open-grid",
@@ -620,6 +698,7 @@ export const PRESETS: readonly PresetDefinition[] = [
         seed,
       ),
   },
+  ...MAPD_PRESETS,
 ];
 
 /**

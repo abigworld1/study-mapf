@@ -205,6 +205,34 @@ test.describe("シミュレータ", () => {
     );
   });
 
+  /*
+    MAPD。TP / TPTS の保証（mapd-tp-tpts-central-2017 p.4 Theorem 3）は
+    well-formed な入力についての主張なので、いま触っている入力がその対象か
+    どうかが画面で分かること、そして「満たさない = 解けない」と読ませないことを固定する。
+  */
+  test("MAPD プリセットは well-formed 判定と service time を表示する", async ({ page }) => {
+    await page.getByLabel("プリセット").selectOption("mapd-well-formed");
+    await expect(page.locator(".wf")).toContainText("well-formed です");
+    await expect(page.locator(".wf")).toContainText("十分条件");
+
+    await page.getByRole("button", { name: "実行" }).click();
+    const metrics = page.locator(".metrics");
+    await expect(metrics.getByText("平均 service time")).toBeVisible({ timeout: 30_000 });
+    await expect(metrics.getByText("throughput")).toBeVisible();
+    await expect(metrics.getByText("未処理タスク")).toBeVisible();
+    await expect(metrics).toContainText("解が求まりました");
+  });
+
+  test("well-formed でない MAPD 入力は、保証の対象外だと画面に出る", async ({ page }) => {
+    await page.getByLabel("プリセット").selectOption("mapd-not-well-formed");
+    await expect(page.locator(".wf")).toContainText("well-formed ではありません");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.locator(".solver-warnings")).toContainText("必要条件ではない", {
+      timeout: 30_000,
+    });
+    await expect(page.locator(".solver-warnings")).toContainText("Theorem 3");
+  });
+
   test("プリセットを TAPF から一括 MAPF に戻すと手法の一覧も戻る", async ({ page }) => {
     const solverSelect = page
       .locator("section")

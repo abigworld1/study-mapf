@@ -67,6 +67,10 @@ export interface AgentSpec {
 /**
  * MAPD のタスク。pickup へ行き、そこから delivery へ運ぶ。
  * releaseTime はタスクが系に現れる時刻。
+ *
+ * ★ service time は「タスクが task set に追加されてから実行を終えるまで」の
+ *   タイムステップ数で測る（mapd-tp-tpts-central-2017 p.2 §3.1）。
+ *   起点は releaseTime であって、割当時刻でも pickup 時刻でもない。
  */
 export interface TaskSpec {
   readonly id: TaskId;
@@ -167,6 +171,18 @@ export interface Scenario {
   readonly teams?: readonly TeamSpec[];
   /** CBS-TA の一般割当行列。teams とは同時に指定しない。 */
   readonly assignment?: AssignmentSpec;
+  /**
+   * MAPD の「追加で指定した parking 地点」。kind: "mapd" のときだけ使う。
+   *
+   * ★ endpoint 全体（V_ep）はここだけでは決まらない。
+   *   mapd-tp-tpts-central-2017 p.2 §3.2 の定義では
+   *   V_ep = エージェントの初期位置 ∪ 全タスクの pickup/delivery ∪ 追加の parking。
+   *   タスク側（V_tsk）を除いたものが non-task endpoint で、
+   *   エージェントが「永久に留まってよい」のはそこだけになる。
+   *   導出は src/lib/model/mapd.ts の endpointsOf() が行う。
+   *   ここに書くのは第 3 項だけなので、直接 V_ep として使わないこと。
+   */
+  readonly parkingEndpoints?: readonly Cell[];
   readonly rules: SimulationRules;
   /** 乱数 seed。同じ seed と同じ入力なら同じ結果になること。 */
   readonly seed: number;

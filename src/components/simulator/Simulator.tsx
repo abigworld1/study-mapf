@@ -17,6 +17,7 @@ import {
   validateScenario,
 } from "@/lib/model/scenario";
 import { positionAt } from "@/lib/model/conflicts";
+import { checkWellFormed } from "@/lib/model/mapd";
 import { runSolver } from "@/solvers/client";
 import { listSolverMetadata, listSolverMetadataFor } from "@/solvers/registry";
 import {
@@ -139,6 +140,12 @@ export default function Simulator({ initialSolverId }: Props) {
     return out;
   }, [paths, time, scenario]);
 
+  // MAPD のときだけ Definition 1 を検査する。他の kind では意味がない。
+  const wellFormed = useMemo(
+    () => (scenario.kind === "mapd" ? checkWellFormed(scenario) : null),
+    [scenario],
+  );
+
   const conflictsNow = useMemo(
     () => (result?.conflicts ?? []).filter((c) => c.time === time),
     [result, time],
@@ -149,6 +156,7 @@ export default function Simulator({ initialSolverId }: Props) {
       map: scenario.map,
       agents: scenario.agents,
       tasks: scenario.tasks,
+      nonTaskEndpoints: wellFormed?.endpoints.nonTask,
       teams: scenario.teams,
       assignment: scenario.assignment,
       targetAssignments: result?.targetAssignments,
@@ -432,16 +440,34 @@ export default function Simulator({ initialSolverId }: Props) {
         }
       }
       if (free.length < 2) return prev;
+      /*
+        ★ エージェントの初期位置は作業地点にしない。
+          mapd-tp-tpts-central-2017 p.2 §3.2 の V_ep は
+          「エージェント初期位置 ∪ 作業地点 ∪ 追加 parking」で、
+          そこから作業地点を除いたものが non-task endpoint になる。
+          初期位置を pickup / delivery にしてしまうと task endpoint 側へ
+          移ってしまい、Definition 1 の条件 (b)（退避先 >= エージェント数）
+          を自動的に壊す。生成タスクがいつも well-formed でなくなるので避ける。
+      */
+      const starts = new Set(prev.agents.map((a) => `${a.start.x},${a.start.y}`));
+      const workCells = free.filter((c) => !starts.has(`${c.x},${c.y}`));
+      if (workCells.length < 2) return prev;
       const tasks = Array.from({ length: count }, (_, i) => ({
         id: `t${i + 1}`,
-        pickup: free[randomInt(random, free.length)]!,
-        delivery: free[randomInt(random, free.length)]!,
+        pickup: workCells[randomInt(random, workCells.length)]!,
+        delivery: workCells[randomInt(random, workCells.length)]!,
         releaseTime: Math.floor(i / Math.max(0.01, arrivalRate)),
       }));
-      return { ...prev, tasks, kind: "mapd" as const };
+      return {
+        ...prev,
+        tasks,
+        kind: "mapd" as const,
+        // 初期位置を退避地点として明示する。条件 (b) の最低限を満たすため。
+        parkingEndpoints: prev.agents.map((a) => ({ ...a.start })),
+      };
     });
     setMessage(
-      "タスクを生成しました。現時点では MAPD に対応した Solver が未実装のため、実行はできません（JSON へは書き出せます）。",
+      "タスクを生成しました。MAPD の手法を選んで実行できます。well-formed かどうかは下の判定を見てください。",
     );
   }, []);
 
@@ -734,10 +760,42 @@ export default function Simulator({ initialSolverId }: Props) {
         <section>
           <h3>MAPD タスク</h3>
           <TaskGenerator onGenerate={generateTasks} />
-          <p className="hint">
-            現時点では MAPD に対応した Solver が未実装のため、生成したタスクは JSON
-            への書き出しと表示にのみ使えます。
-          </p>
+          {/*
+            ★ well-formed かどうかは必ず出す。
+              TP / TPTS の理論保証（mapd-tp-tpts-central-2017 p.4 Theorem 3）は
+              well-formed な入力についての主張なので、いま触っている入力が
+              その対象かどうかが見えないと保証の話が読めない。
+              ただし well-formed は十分条件であって必要条件ではない（同 p.2）ので、
+              「満たさない ＝ 解けない」とは書かない。
+          */}
+          {scenario.kind === "mapd" && wellFormed && (
+            <div className={wellFormed.wellFormed ? "wf ok" : "wf warn"}>
+              <p>
+                <strong>
+                  {!wellFormed.checked
+                    ? "well-formed か未判定"
+                    : wellFormed.wellFormed
+                      ? "well-formed です"
+                      : "well-formed ではありません"}
+                </strong>
+                （endpoint {wellFormed.endpoints.all.length} 個 = 作業地点{" "}
+                {wellFormed.endpoints.task.length} + 退避地点 {wellFormed.endpoints.nonTask.length}
+                、エージェント {scenario.agents.length} 体）
+              </p>
+              {wellFormed.violations.length > 0 && (
+                <ul>
+                  {wellFormed.violations.slice(0, 3).map((v) => (
+                    <li key={v}>{v}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="hint">
+                well-formed は解けるための十分条件です（mapd-tp-tpts-central-2017 p.2 Definition
+                1）。満たさなくても解ける場合はありますが、TP / TPTS
+                の理論保証は満たす入力についての主張です。
+              </p>
+            </div>
+          )}
         </section>
 
         <section>
@@ -782,6 +840,33 @@ export default function Simulator({ initialSolverId }: Props) {
                 <div>
                   <dt>最小化した量</dt>
                   <dd>{OBJECTIVE_LABEL[result.objective]}</dd>
+                </div>
+              )}
+              {/*
+                ★ MAPD は sum of costs や makespan では測らない。
+                  mapd-tp-tpts-central-2017 p.2 §3.1 は service time
+                  （タスクが task set に入ってから完了までの歩数）で評価し、
+                  「service time が有界なら解けた」と定義している。
+                  one-shot の指標と混同させないため、別行で出す。
+              */}
+              {result.metrics.averageServiceTime !== undefined && (
+                <div>
+                  <dt>平均 service time</dt>
+                  <dd>{result.metrics.averageServiceTime.toFixed(1)}</dd>
+                </div>
+              )}
+              {result.metrics.throughput !== undefined && (
+                <div>
+                  <dt>throughput</dt>
+                  <dd>{result.metrics.throughput.toFixed(3)} 件/ステップ</dd>
+                </div>
+              )}
+              {result.metrics.pendingTasks !== undefined && (
+                <div>
+                  <dt>未処理タスク</dt>
+                  <dd className={result.metrics.pendingTasks > 0 ? "bad" : ""}>
+                    {result.metrics.pendingTasks}
+                  </dd>
                 </div>
               )}
             </dl>

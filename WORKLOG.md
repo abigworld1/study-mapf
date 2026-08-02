@@ -1495,6 +1495,100 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-02 MAPD の実行ループを作った（Claude Code）
+
+Batch 8（TP / TPTS / CENTRAL / MLA\*）は 4 手法とも `problem_types: [mapd]` で、
+時間発展する実行系が無いと載らない。TAPF のときと同じ構図なので先に土台を作った。
+
+### 1. モデル: endpoint（mapd-tp-tpts-central-2017 p.2 §3.2）
+
+`Scenario.parkingEndpoints` を足し、`src/lib/model/mapd.ts` で論文の集合を導出する。
+
+- `V_ep` = エージェント初期位置 ∪ 全タスクの pickup/delivery ∪ 追加 parking
+- `V_tsk` = 全タスクの pickup/delivery
+- `V_ep \ V_tsk` = non-task endpoint（永久に留まってよい場所）
+
+`parkingEndpoints` は 3 項目のうち第 3 項だけなので、これを V_ep として
+直接使わないよう型のコメントに書いた。
+
+### 2. well-formed 判定（同 p.2 Definition 1）
+
+3 条件を `checkWellFormed` で検査する。(c)「任意の 2 endpoint 間に他の
+endpoint を通らない経路がある」は、両端以外を壁扱いした BFS で対ごとに見る。
+
+★ **well-formed は十分条件であって必要条件ではない**（同 p.2）。
+「満たさない ＝ 解けない」と書かないよう、警告も UI 文言もそう作った。
+TP / TPTS の保証（同 p.4 Theorem 3）は well-formed な入力についての主張なので、
+そうでない入力での失敗を手法の欠陥と読ませないことも同時に書いている。
+
+★ 対の数が上限を超えたら (c) を省略し `checked: false` を返す。そのとき
+`wellFormed` は必ず `false`。判定していないものを well-formed と呼ばないため。
+
+### 3. 実行ループ
+
+`runMapdLoop` は時間を進める係だけを担当し、割当も経路計画も決めない。
+決めるのは `MapdStrategy`。Batch 8 は戦略だけ書けば載る。
+
+1 ステップの順序（release → 戦略 → 移動 → pickup/delivery 判定）を固定した。
+変えると service time が 1 ずれるので、手法を差し替えても比較できるように
+ここで決め切っている。
+
+★ ループは 1 歩が隣接か現在地かだけを検査し、**衝突は直さない**。
+避けるのは戦略の仕事で、避けられなかったことは `conflicts` に出す。
+ループが黙って直すと、不完全な手法が完全に見えてしまう。
+
+★ service time は releaseTime 起点（同 p.2 §3.1）。割当時刻でも pickup 時刻でもない。
+release を 5 遅らせても値が変わらないことをテストで固定した。
+
+### 4. ベースライン `mapd-greedy`
+
+**論文手法ではない。** `algorithms.yaml` には登録せず、
+`IMPLEMENTATION_STATUS.md` にその旨を書いた。TP との違いは endpoint 規律で、
+手が空いたエージェントを退避させずその場に居座らせる。作業地点や通路の上で
+止まると後続を塞ぐので、**詰まる様子そのものが TP の Property 2（同 p.4）の
+存在理由の説明になる**。これが置いた理由。
+
+作る途中で一度、現在地しか予約しない実装にしていて、通路の正面衝突で
+両者が譲らず固まった。予約を「計画した経路全体」に変えて解消した。
+
+実測:
+
+```text
+mapd-well-formed       solved   3/3  平均 service time 9.0  throughput 0.214
+mapd-not-well-formed   timeout  1/2  平均 service time 8.0  throughput 0.015
+```
+
+### 5. UI
+
+well-formed 判定を MAPD セクションに出す（endpoint の内訳つき）。
+指標に平均 service time / throughput / 未処理タスクを足した。MAPD は
+sum of costs や makespan で測る問題ではないので、別行にしている。
+盤面では non-task endpoint を破線の円で描き、作業地点（□ pickup / △ delivery）
+と描き分けた。TaskGenerator はエージェント初期位置を作業地点にしないよう直した
+（初期位置が task endpoint 側へ移ると条件 (b) を自動的に壊すため）。
+「Solver が未実装」の注記を消した。
+
+### テスト
+
+`tests/unit/mapd.test.ts` 16 件（endpoint の分割、Definition 1 の (b)/(c)、
+上限超過、JSON 往復、service time の起点、イベント順、警告の有無、
+拒否、決定性、kind 絞り込み）。`site.spec.ts` に 2 件。
+
+`solvers.test.ts` の「すべてのプリセットが妥当」は TAPF に続いて MAPD でも
+エージェントに `goal` が無いので、タスクの pickup/delivery を見るよう直した。
+
+最終ゲート: sources:validate errors=0/warnings=8、format check、lint、
+typecheck 0 errors、unit 258 passed、build 63 pages、E2E 44 passed。
+
+### 次
+
+Batch 8 は `MapdStrategy` を実装するだけで載る。引き継ぎは
+`docs/notes/implementation/mapd-loop.md` の末尾に書いた。要点は
+token を明示的に持つこと、CENTRAL は保証を持たないこと（同 p.1 abstract）、
+MLA\* を先に実装すると TP の低レベルがきれいになること。
+
+---
+
 ## 2026-08-01 TAPF（目標割当）の入り口を作った（Claude Code）
 
 Batch 7（Hungarian / MCMF / Gale-Shapley / CBM / CBS-TA）は割当問題の

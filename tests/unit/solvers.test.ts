@@ -363,16 +363,30 @@ describe("プリセット", () => {
         );
       }
       /*
-        ★ goal の在り処は kind で変わる。
+        ★ 「どこへ行くのか」の在り処は kind で変わる。
+
           TAPF ではエージェントに固定 goal が無く、target はチームが持つ
-          （cbm-tapf-aamas-2016 p.2）。割当自体が解の一部なので、
-          ここで agent.goal を要求すると「もう割り当て済み」を前提にしてしまう。
+          （cbm-tapf-aamas-2016 p.2）。MAPD にも固定 goal は無く、
+          行き先はタスクの pickup / delivery として後から現れる
+          （mapd-tp-tpts-central-2017 p.2 §3.1）。
+          どちらも agent.goal を要求すると「もう決まっている」を前提にしてしまう。
       */
       if (scenario.kind === "tapf") {
         for (const team of scenario.teams ?? []) {
           for (const goal of team.goals) {
             expect(isWalkable(scenario.map, goal), `${preset.id}/${team.id} の target`).toBe(true);
           }
+        }
+      } else if (scenario.kind === "mapd") {
+        expect(scenario.tasks?.length ?? 0, `${preset.id} のタスク`).toBeGreaterThan(0);
+        for (const task of scenario.tasks ?? []) {
+          expect(isWalkable(scenario.map, task.pickup), `${preset.id}/${task.id} の pickup`).toBe(
+            true,
+          );
+          expect(
+            isWalkable(scenario.map, task.delivery),
+            `${preset.id}/${task.id} の delivery`,
+          ).toBe(true);
         }
       } else {
         for (const agent of scenario.agents) {

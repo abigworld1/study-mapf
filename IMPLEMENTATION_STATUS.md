@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-08-01（Codex / Batch 7）
+最終更新: 2026-08-02（Claude Code / MAPD 実行ループ）
 
 ---
 
@@ -59,6 +59,7 @@
 | `mapf-lns2`            | MAPF-LNS2        | runnable | paper-faithful      | collision-pair repair、failure/random neighborhood、CP 非増加受理。[ノート](docs/notes/implementation/mapf-lns2.md)                                               |
 | `rhcr`                 | RHCR             | runnable | educational         | planning window `w` / replanning period `h`、goal queue、throughput。Multi-Label A* と online task assigner は未対応。[ノート](docs/notes/implementation/rhcr.md) |
 | `tapf-baseline`        | 全探索割当 + CBS | runnable | educational         | **サイト独自の参照実装で、論文手法ではない。** TAPF の入り口と Batch 7 の最適性検証用。[ノート](docs/notes/implementation/tapf-baseline.md)                       |
+| `mapd-greedy`          | 貪欲割当（MAPD） | runnable | educational         | **サイト独自で、論文手法ではない。** MAPD 実行ループの土台と Batch 8 の対照用。[ノート](docs/notes/implementation/mapd-loop.md)                                   |
 | `min-cost-max-flow`    | 最小費用最大流   | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
 | `cbm`                  | CBM              | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
 | `cbs-ta`               | CBS-TA           | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |

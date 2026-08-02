@@ -317,6 +317,38 @@ const solvers = listSolverMetadata();
       color: var(--warn);
     }
 
+    /*
+      MAPD の well-formed 判定。
+      TP / TPTS の保証はこの条件を満たす入力についての主張なので、
+      満たすかどうかを指標表と同じ強さで見せる。
+    */
+    .sim-controls .wf {
+      margin-top: var(--space-3);
+      border-left: 4px solid var(--fg-muted);
+      border-radius: var(--radius-sm);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-sm);
+      line-height: 1.6;
+    }
+    .sim-controls .wf.ok {
+      border-left-color: var(--ok, var(--accent));
+      background: var(--ok-subtle, transparent);
+    }
+    .sim-controls .wf.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-subtle);
+    }
+    .sim-controls .wf p {
+      margin: 0;
+    }
+    .sim-controls .wf ul {
+      margin: var(--space-2) 0 0;
+      padding-left: 1.2em;
+    }
+    .sim-controls .wf .hint {
+      margin-top: var(--space-2);
+    }
+
     /* TAPF の目標割当。どのエージェントがどの target を取ったかを一覧で出す。 */
     .sim-controls .assignments {
       margin-top: var(--space-3);

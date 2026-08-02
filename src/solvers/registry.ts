@@ -20,6 +20,7 @@ import { tapfBaselineSolver } from "./tapf/baseline.js";
 import { cbmSolver } from "./tapf/cbm.js";
 import { cbsTaSolver } from "./tapf/cbs-ta.js";
 import { minCostMaxFlowSolver } from "./tapf/mcmf-solver.js";
+import { mapdGreedySolver } from "./mapd/greedy.js";
 
 /**
  * Solver の登録所。
@@ -67,6 +68,7 @@ const SOLVERS: readonly MapfSolver[] = [
   cbmSolver,
   cbsTaSolver,
   minCostMaxFlowSolver,
+  mapdGreedySolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

@@ -97,6 +97,8 @@ export interface RenderState {
   readonly map: GridMap;
   readonly agents: readonly AgentSpec[];
   readonly tasks?: readonly TaskSpec[];
+  /** MAPD の non-task endpoint（退避してよい場所）。作業地点とは描き分ける。 */
+  readonly nonTaskEndpoints?: readonly Cell[];
   /** TAPF のチーム。target は割当前なのでエージェントの goal とは別に描く。 */
   readonly teams?: readonly TeamSpec[];
   readonly assignment?: AssignmentSpec;
@@ -168,6 +170,27 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
         }
       }
     }
+  }
+
+  /*
+    --- MAPD の non-task endpoint（退避地点）
+    ★ 作業地点（pickup / delivery）とは別物なので描き分ける。
+      mapd-tp-tpts-central-2017 p.2 §3.2 では、エージェントが永久に留まって
+      よいのは endpoint だけで、そのうち作業地点でないものが退避先になる。
+      TP の Path2 が使うのはこちらなので、どこが退避できる場所なのかが
+      見えないと手法の説明が読めない。
+  */
+  if (state.layers.tasks && state.nonTaskEndpoints) {
+    ctx.save();
+    ctx.strokeStyle = theme.goalRing;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 2]);
+    for (const cell of state.nonTaskEndpoints) {
+      ctx.beginPath();
+      ctx.arc(px(cell.x) + s / 2, py(cell.y) + s / 2, s * 0.42, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // --- tasks（MAPD の pickup / delivery）
