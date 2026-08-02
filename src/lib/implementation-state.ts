@@ -14,9 +14,10 @@ import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
  *   Solver）が唯一の真値。algorithms.yaml の宣言だけを信用しない。
  *   宣言が registry より前に出ている場合は registry 側へ引き下げる。
  */
-export type ImplementationState = "runnable" | "partial" | "explanation-only" | "planned";
+export type ImplementationState =
+  "runnable" | "partial" | "library" | "explanation-only" | "planned";
 
-export type DeclaredStatus = "runnable" | "partial" | "explanation-only" | "planned";
+export type DeclaredStatus = "runnable" | "partial" | "library" | "explanation-only" | "planned";
 
 /**
  * 規則そのもの。マニフェストにも registry にも触らない純関数。
@@ -32,6 +33,7 @@ export function resolveImplementationState(
   declared: DeclaredStatus,
   registered: boolean,
 ): ImplementationState {
+  if (declared === "library") return "library";
   if (registered) {
     // 動きはするが原論文の全機能ではない、という宣言は格上げしない。
     return declared === "partial" ? "partial" : "runnable";

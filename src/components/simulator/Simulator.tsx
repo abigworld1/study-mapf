@@ -18,7 +18,7 @@ import {
 } from "@/lib/model/scenario";
 import { positionAt } from "@/lib/model/conflicts";
 import { runSolver } from "@/solvers/client";
-import { listSolverMetadata } from "@/solvers/registry";
+import { listSolverMetadata, listSolverMetadataFor } from "@/solvers/registry";
 import {
   cellFromPoint,
   computeViewport,
@@ -90,10 +90,7 @@ export default function Simulator({ initialSolverId }: Props) {
       「対応していません」エラーになる状態が一度できている。
       TAPF や MAPD を足すと同じことがまた起きるので、ここで塞ぐ。
   */
-  const solvers = useMemo(
-    () => allSolvers.filter((s) => s.supports.includes(scenario.kind)),
-    [allSolvers, scenario.kind],
-  );
+  const solvers = useMemo(() => listSolverMetadataFor(scenario), [scenario]);
 
   // 絞り込みの結果いま選んでいる手法が消えたら、先頭へ移す。
   useEffect(() => {
@@ -153,6 +150,7 @@ export default function Simulator({ initialSolverId }: Props) {
       agents: scenario.agents,
       tasks: scenario.tasks,
       teams: scenario.teams,
+      assignment: scenario.assignment,
       targetAssignments: result?.targetAssignments,
       positions,
       paths: layers["planned-paths"] ? paths : undefined,
@@ -796,8 +794,10 @@ export default function Simulator({ initialSolverId }: Props) {
               <ul>
                 {result.targetAssignments.map((assignment) => (
                   <li key={assignment.agentId}>
-                    <span className="team">{assignment.teamId}</span> {assignment.agentId} →（
+                    {assignment.teamId && <span className="team">{assignment.teamId}</span>}{" "}
+                    {assignment.agentId} →（
                     {assignment.goal.x}, {assignment.goal.y}）
+                    {assignment.targetId && <span className="hint"> [{assignment.targetId}]</span>}
                   </li>
                 ))}
               </ul>

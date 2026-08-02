@@ -20,9 +20,9 @@
 #   push-and-rotate-aamas-2013 p.1 脚注と §3（pp.2-4）が同じ条件内の反例と
 #   agent 処理順依存を示している。解説ページでも両論文を併記すること。
 #
-# 2026-07-26 に PDF 52 本が揃い、本文から定理・補題を抽出して 17 手法の保証を確定させた。
+# 2026-08-01 現在、PDF 本文から定理・補題を確認して 35 手法の保証を確定させた。
 # 確定済みのものは guarantee_evidence に原文（英語）とページ番号を入れてある。
-# 残り 60 手法は未確認のまま unknown。PDF 本文に該当する記述を見つけられなかったもので、
+# 残り 55 手法は未確認のまま unknown。PDF 本文に該当する記述を見つけられなかったもので、
 # 推測で埋めてはならない。
 #
 # 抽出コマンドの例:
@@ -1112,7 +1112,7 @@
   problem_types: [tapf]
   primary_paper_ids: [cbm-tapf-aamas-2016]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: true
@@ -1127,13 +1127,13 @@
   problem_types: [tapf]
   primary_paper_ids: [cbs-ta-aamas-2018]
   implementation_repository_ids: [libmultirobotplanning]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: true
     optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: "cbs-ta-aamas-2018 p.1「We show that our new algorithm, CBS-TA, is complete and optimal.」/ Theorem 4.1「CBS-TA is complete.」/ Theorem 4.2「CBS-TA computes a solution that minimizes the sum of individual costs of all agents if one exists.」なお同 p.5 に有界準最適版 ECBS-TA への言及がある。"
-  notes: "K-best 割当を根ノード群として CT を張る。ECBS-TA を別エントリにするかは、実装段階で扱いを決めてから判断する。"
+  guarantee_evidence: "cbs-ta-aamas-2018 p.1「We show that our new algorithm, CBS-TA, is complete and optimal.」/ p.3 Theorem 4.1「CBS-TA is complete.」/ p.3 Theorem 4.2「CBS-TA computes a solution that minimizes the sum of individual costs of all agents if one exists.」なお同 p.5 に有界準最適版 ECBS-TA への言及がある。"
+  notes: "論文の key idea は search forest と on-demand K-best assignment 生成。サイト版はそれらを実装せず、assignment 行列の feasible 候補を上限内で全列挙して既存 CBS へ渡す教育用実装である。Hungarian は候補順序付けだけなので全候補評価時の結果には影響しない。候補上限・timeout 中は論文の最適性を主張しない。N>M では論文定義外の余剰 agent を独自の parking 規則で退避させ、その到達時刻を SOC に含める。MIT の libmultirobotplanning は固定ケース照合用に参照したが、yaml-cpp 不足で cbs_ta 実行ファイルのビルドは未完了。"
 
 - id: ita-cbs
   display_name: "ITA-CBS"
@@ -1176,13 +1176,13 @@
   problem_types: [assignment]
   primary_paper_ids: [hungarian-method-1955]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: library
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: true
+    optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "線形割当問題を多項式時間で最適に解く。MAPF 文脈では CBS-TA・HBH・ITA-CBS の割当部分で使う。原論文が購読制で未取得のため guarantees は unknown。"
+  guarantee_evidence: "hungarian-method-1955 pp.89-90 Theorem 7 と結論「The largest possible rating sum for any assignment is equal to ... solving a finite sequence of associated Simple Assignment Problems.」"
+  notes: "線形割当問題を多項式時間で最適に解く。MAPF 文脈では CBS-TA・HBH・ITA-CBS の割当部分で使う。サイトでは内部ライブラリとして実装し、単体 Solver には登録しない。"
 
 - id: gale-shapley
   display_name: "Gale-Shapley 法 (安定マッチング)"
@@ -1191,13 +1191,13 @@
   problem_types: [assignment]
   primary_paper_ids: [gale-shapley-1962]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: library
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: true
+    optimal: conditional
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "コスト最小化ではなく安定性（ブロッキングペアが存在しないこと）を保証する点で、ハンガリアン法とは目的関数が異なる。この違いをサイト上で明示すること。原論文が購読制で未取得のため guarantees は unknown。"
+  guarantee_evidence: "gale-shapley-1962 p.5 Theorem 1「There always exists a stable set of marriages.」/ p.7 Theorem 2「Every applicant is at least as well off ... under any other stable assignment.」"
+  notes: "コスト最小化ではなく安定性（ブロッキングペアが存在しないこと）を保証する点で、ハンガリアン法とは目的関数が異なる。この違いをサイト上で明示する。proposer 側の安定マッチング最適性は conditional として記録する。サイトでは内部ライブラリとして実装し、単体 Solver には登録しない。"
 
 - id: auction-algorithm
   display_name: "オークションアルゴリズム (Auction Algorithm)"
@@ -1221,13 +1221,13 @@
   problem_types: [flow, tapf]
   primary_paper_ids: [network-flow-mapf-2012, cbm-tapf-aamas-2016]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: conditional
+    optimal: conditional
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "時空間グラフ上のフローとして MAPF（特に匿名エージェント版）を定式化する。CBM の低レベルがこれ。flow アルゴリズム自体の原典（Ford-Fulkerson 等）は未調査。要調査。"
+  guarantee_evidence: "network-flow-mapf-2012 p.9 Corollary 23（time-expanded network で Objective 21 の optimal solution が存在）/ p.9 Corollary 25（minimum cost maximum flow で Objective 24 の optimal solution が存在）。適用条件は permutation-invariant MAPF と十分な time horizon。"
+  notes: "時空間グラフ上のフローとして MAPF（特に匿名エージェント版）を定式化する。CBM の低レベルがこれ。flow アルゴリズム自体の原典（Ford-Fulkerson 等）は未調査のまま。network-flow-mapf-2012 p.9 の条件付き保証だけを記録し、原典を推測していない。"
 
 # =============================================================================
 # learning-based

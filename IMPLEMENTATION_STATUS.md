@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-08-01（Codex / Batch 6 レビュー修正）
+最終更新: 2026-08-01（Codex / Batch 7）
 
 ---
 
@@ -10,16 +10,17 @@
 
 2 つの軸を分けて記録する。混同しない。
 
-| 軸                    | 値                    | 意味                             |
-| --------------------- | --------------------- | -------------------------------- |
-| **実装状態** `status` | `runnable`            | シミュレータで動く               |
-|                       | `partial`             | 動くが原論文の一部のみ           |
-|                       | `explanation-only`    | 実装なし。解説と出典だけ         |
-|                       | `planned`             | 骨格だけ                         |
-| **再現度** `fidelity` | `educational`         | 原理を学ぶための簡略実装         |
-|                       | `paper-faithful`      | 原論文の主要処理を実装した       |
-|                       | `reference-validated` | 公開実装または既知結果と照合済み |
-|                       | `explanation-only`    | 実行可能な再現実装なし           |
+| 軸                    | 値                    | 意味                                       |
+| --------------------- | --------------------- | ------------------------------------------ |
+| **実装状態** `status` | `runnable`            | シミュレータで動く                         |
+|                       | `partial`             | 動くが原論文の一部のみ                     |
+|                       | `library`             | 内部実装あり。単体 Solver では実行しない   |
+|                       | `explanation-only`    | コードによる再現実装はない。解説と出典だけ |
+|                       | `planned`             | 骨格だけ                                   |
+| **再現度** `fidelity` | `educational`         | 原理を学ぶための簡略実装                   |
+|                       | `paper-faithful`      | 原論文の主要処理を実装した                 |
+|                       | `reference-validated` | 公開実装または既知結果と照合済み           |
+|                       | `explanation-only`    | 実行可能な再現実装なし                     |
 
 **一部だけ実装した状態を `reference-validated` にしない。**
 照合したのが「何を」なのかを `validatedAgainst` と `implementationNote` に書く。
@@ -58,31 +59,44 @@
 | `mapf-lns2`            | MAPF-LNS2        | runnable | paper-faithful      | collision-pair repair、failure/random neighborhood、CP 非増加受理。[ノート](docs/notes/implementation/mapf-lns2.md)                                               |
 | `rhcr`                 | RHCR             | runnable | educational         | planning window `w` / replanning period `h`、goal queue、throughput。Multi-Label A* と online task assigner は未対応。[ノート](docs/notes/implementation/rhcr.md) |
 | `tapf-baseline`        | 全探索割当 + CBS | runnable | educational         | **サイト独自の参照実装で、論文手法ではない。** TAPF の入り口と Batch 7 の最適性検証用。[ノート](docs/notes/implementation/tapf-baseline.md)                       |
+| `min-cost-max-flow`    | 最小費用最大流   | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
+| `cbm`                  | CBM              | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
+| `cbs-ta`               | CBS-TA           | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |
 
 ---
 
 ## 未実装（解説ページのみ存在）
 
-以下 14 手法はページの骨格だけがあり、`status: planned` または `explanation-only`。
+以下の手法はページの骨格だけ、または単体 Solver ではない内部ライブラリで、`status: planned` / `library` / `explanation-only`。
 実装状況は `docs/sources/algorithms.yaml` の `implementation_status` を参照。
 
-| バッチ  | 対象                                                                     |
-| ------- | ------------------------------------------------------------------------ |
-| Batch 7 | `hungarian-method`, `min-cost-max-flow`, `gale-shapley`, `cbm`, `cbs-ta` |
-| Batch 8 | `token-passing`, `tpts`, `central`, `mla-star`                           |
-| Batch 9 | `rmca`, `lns-pbs`, `lns-wpbs`                                            |
-| 最後    | `primal`, `primal2`                                                      |
+| バッチ  | 対象                                                               |
+| ------- | ------------------------------------------------------------------ |
+| Batch 7 | `hungarian-method`, `gale-shapley`（library。CBS-TA などから利用） |
+| Batch 8 | `token-passing`, `tpts`, `central`, `mla-star`                     |
+| Batch 9 | `rmca`, `lns-pbs`, `lns-wpbs`                                      |
+| 最後    | `primal`, `primal2`                                                |
 
 `primal` / `primal2` は学習済みモデルとライセンスを確認できない限り
 **`explanation-only` のまま**にすること。
+
+## 内部ライブラリ（単体では実行不可）
+
+| algorithm-id       | 実装                                 | 利用先                        |
+| ------------------ | ------------------------------------ | ----------------------------- |
+| `hungarian-method` | `src/lib/assignment/hungarian.ts`    | CBS-TA の assignment 候補順序 |
+| `gale-shapley`     | `src/lib/assignment/gale-shapley.ts` | 安定マッチングの教材用純関数  |
+
+これらは実装が無いという意味ではない。シミュレータから直接動かせないため、UI では
+「内部実装あり（単体では実行不可）」と表示する。
 
 ---
 
 ## 理論保証の確定状況
 
-`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **58 / 77**。
+`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **55 / 77**。
 
-根拠つきで確定済みなのは 29 手法（`guarantee_evidence` が入っているもの）。
+根拠つきで確定済みなのは 35 手法（`guarantee_evidence` が入っているもの）。
 主なもの:
 
 | algorithm-id           | 完全性   | 最適性             | 根拠                                                                    |
@@ -93,6 +107,9 @@
 | `ccbs`                 | あり     | 最適               | ccbs-ijcai-2019 アブストラクト                                          |
 | `cbm`                  | あり     | 最適               | cbm-tapf-aamas-2016 p.6                                                 |
 | `cbs-ta`               | あり     | 最適               | cbs-ta-aamas-2018 Theorem 4.1 / 4.2                                     |
+| `hungarian-method`     | あり     | 最適               | hungarian-method-1955 pp.89–90 Theorem 7 / Routine I                    |
+| `gale-shapley`         | あり     | 条件付き           | gale-shapley-1962 pp.5, 7 Theorem 1 / 2                                 |
+| `min-cost-max-flow`    | 条件付き | 条件付き           | network-flow-mapf-2012 p.9 Corollary 23 / 25                            |
 | `bcbs` `ecbs`          | あり     | なし（有界準最適） | bcbs-ecbs-socs-2014 p.6                                                 |
 | `eecbs`                | 不明     | なし（有界準最適） | eecbs-aaai-2021 p.5 式 (2)                                              |
 | `pibt`                 | 条件付き | なし               | pibt-aij-2022 p.3「neither complete nor optimal for MAPF」              |

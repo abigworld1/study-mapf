@@ -65,8 +65,8 @@
       "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
     },
     "implementation_status": {
-      "enum": ["planned", "partial", "runnable", "explanation-only"],
-      "description": "本サイトでの実装計画。今フェーズでは全て planned または explanation-only。"
+      "enum": ["planned", "partial", "library", "runnable", "explanation-only"],
+      "description": "本サイトでの実装状態。library は内部実装があり、単体 Solver としては実行しない。"
     },
     "guarantees": {
       "type": "object",

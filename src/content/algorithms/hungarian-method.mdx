@@ -3,13 +3,81 @@ title: "ハンガリアン法"
 algorithmId: hungarian-method
 originalName: "Hungarian Method"
 order: 820
-summary: ""
-status: draft
+summary: "線形割当問題を多項式時間で解く、CBS-TA の割当部品。"
+status: reviewed
 primarySources:
   - paperId: hungarian-method-1955
 implementationReferences: []
+lastReviewed: "2026-08-01"
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
 
-<PreparingNotice algorithmId="hungarian-method" />
+## 概要
+
+Hungarian Method は、agent（行）と target（列）のコスト行列から、各行・各列を高々 1 回使う最小コスト割当を求めます。原論文は rating 最大化として説明しますが、符号を反転すれば最小化になります<SourceCitation paperId="hungarian-method-1955" section="3" page={87} />。
+
+## まず何がうれしいのか
+
+CBS-TA は path conflict だけでなく「誰がどの target を取るか」も探索します。Hungarian 法で最初の割当を素早く作ると、候補探索の順序を決められます。
+
+## 前提となる知識
+
+二部グラフ、双対ラベル、augmenting path、コスト行列を使います。
+
+## 対象問題
+
+これは MAPF Solver ではありません。`src/lib/assignment/hungarian.ts` の純関数で、CBS-TA から利用されます。
+
+## 中心となるアイデア
+
+dual の値を更新して reduced cost が 0 の辺を増やし、zero-cost の alternating path で matching を拡張します。完全割当ができた時点で primal と dual の値が一致します<SourceCitation paperId="hungarian-method-1955" section="3" page={89} />。
+
+## アルゴリズムの手順
+
+1. 行ごとに未割当の列を探す。
+2. dual slack の最小値でラベルを更新する。
+3. zero reduced-cost 辺を alternating path として辿る。
+4. 行列が矩形なら、余剰側を未割当として返す。
+
+## 小さな例
+
+`[[4,1,3],[2,0,5]]` では、1 行目を列 1、2 行目を列 0 に割り当て、合計 3 になります。
+
+## データ構造
+
+`u / v` の dual、列が保持する row、alternating path の predecessor。`Infinity` は forbidden pair です。
+
+## 疑似コード
+
+```text
+for each row i:
+  grow an alternating tree from i
+  update labels by the smallest slack
+  augment along a zero reduced-cost path
+return matching
+```
+
+原論文の Simple Assignment から General Assignment への還元を、矩形行列 API に合わせて短く再構成しています<SourceCitation paperId="hungarian-method-1955" section="3" page={89} />。
+
+## 実装上の注意
+
+安定マッチングとは違い、目的はコストです。禁止辺だけで完全割当が無い場合は `null` を返します。
+
+## よくある誤解
+
+- Hungarian 法は path conflict を解消しません。
+- 最小コスト割当は stable matching ではありません。
+- 同値解の順序は原論文が固定していないため、サイトでは行・列順にします。
+
+## 他手法との比較
+
+Gale-Shapley は安定性を目的にし、Hungarian 法は総コストを目的にします。CBS-TA は Hungarian 型の assignment を CBS と組み合わせます。
+
+## サイト上の実装との差異
+
+原論文の正方行列を矩形行列へ拡張し、forbidden pair と deterministic tie-break を追加しています。サイトでは `library` 状態で、シミュレータから単体実行はできません。
+
+## 実験してみる
+
+単体 Solver ではないためシミュレータリンクはありません。CBS-TA の target assignment 表示で利用結果を確認できます。

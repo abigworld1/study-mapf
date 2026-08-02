@@ -7,6 +7,8 @@ import {
 } from "@/lib/implementation-state";
 import { algorithms, getAlgorithm } from "@/lib/manifest";
 import { RUNNABLE_ALGORITHM_IDS } from "@/solvers/registry";
+import { galeShapley } from "@/lib/assignment/gale-shapley";
+import { hungarianMethod } from "@/lib/assignment/hungarian";
 
 /*
   ★ この判定は AlgorithmCard / AlgorithmStatus / compare / roadmap の 4 箇所に
@@ -29,6 +31,13 @@ describe("実装状態の判定", () => {
     expect(isRunnable("cbs")).toBe(true);
   });
 
+  it("library 状態の宣言には対応する内部実装がある", () => {
+    expect(getAlgorithm("hungarian-method")?.implementation_status).toBe("library");
+    expect(getAlgorithm("gale-shapley")?.implementation_status).toBe("library");
+    expect(hungarianMethod).toBeTypeOf("function");
+    expect(galeShapley).toBeTypeOf("function");
+  });
+
   /*
     ★ 規則そのものを、どの手法が実装済みかに依存しない形で固定する。
       以前は「registry に無い lacam は planned へ落ちる」と書いていたが、
@@ -47,6 +56,7 @@ describe("実装状態の判定", () => {
       ["runnable", false, "planned"],
       ["partial", false, "planned"],
       ["explanation-only", false, "explanation-only"],
+      ["library", false, "library"],
       ["planned", false, "planned"],
     ];
     for (const [declared, registered, expected] of cases) {
@@ -70,7 +80,7 @@ describe("実装状態の判定", () => {
     for (const algo of algorithms) {
       if (RUNNABLE_ALGORITHM_IDS.includes(algo.id)) continue;
       const state = implementationStateOf(algo.id);
-      expect(["planned", "explanation-only"], `${algo.id} が ${state}`).toContain(state);
+      expect(["planned", "library", "explanation-only"], `${algo.id} が ${state}`).toContain(state);
       expect(isRunnable(algo.id), `${algo.id}`).toBe(false);
     }
   });

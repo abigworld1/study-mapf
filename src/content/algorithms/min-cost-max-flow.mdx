@@ -1,0 +1,91 @@
+---
+title: "最小費用最大流"
+algorithmId: min-cost-max-flow
+originalName: "Min-Cost Max-Flow"
+order: 840
+summary: "時空間ネットワークへ匿名エージェントを流し、到達時刻と移動距離を最適化する。"
+status: reviewed
+primarySources:
+  - paperId: network-flow-mapf-2012
+    sections: ["II", "V"]
+    pages: [4, 9]
+  - paperId: cbm-tapf-aamas-2016
+implementationReferences: []
+lastReviewed: "2026-08-01"
+---
+
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+Min-Cost Max-Flow（MCMF）は、グラフ上の複数の供給点から需要点へ、容量制約を守りながら最大量の flow を送り、その中で総費用が最小のものを求めます。MAPF では cell を時刻ごとに複製した time-expanded network に変換します<SourceCitation paperId="network-flow-mapf-2012" section="II.A" page={4} />。
+
+## まず何がうれしいのか
+
+同じチームの agent は goal の交換が可能です。個体ごとに path を固定せず、start の flow と target の flow をまとめて扱えるので、匿名 MAPF の割当を別に列挙せずに済みます。
+
+## 前提となる知識
+
+最大流、残余グラフ、augmenting path、vertex capacity、TAPF のチームモデルを使います。
+
+## 対象問題
+
+サイト版は 4 近傍、離散時間、move / wait、vertex conflict 禁止、edge-swap 禁止を使う 1 チーム TAPF です。CBM ではチームごとの low-level として呼びます。複数チームを 1 本の単一 commodity flow に混ぜることはしません。
+
+## 中心となるアイデア
+
+時刻 `t` の cell を `in(t)` と `out(t)` に分け、容量 1 の辺でつなぎます。これが vertex occupancy を表します。`out(t)` から隣接 cell の `in(t+1)` へ move 辺、同じ cell へ wait 辺を張り、start から source、target から sink へつなぎます。
+
+## アルゴリズムの手順
+
+1. horizon 分の時空間ノードを作る。
+2. start ごとに source 辺、target ごとに sink 辺を張る。
+3. 残余グラフで最短 augmenting path を繰り返す。
+4. flow が agent 数に達したら、使用辺を path へ復元する。
+5. サイト版 Solver は horizon を下界から増やし、最初に flow が通った値を makespan とする。
+
+## 小さな例
+
+2 体の start と 2 個の target が横一列にあるとします。各 target を別々の sink 辺にすることで、どちらの agent がどちらへ行くかを flow 自身が決めます。中央 cell の容量 1 により同時占有は起きません。
+
+## データ構造
+
+- residual edge: capacity / cost / reverse edge
+- time-expanded vertex: `(cell,time,in|out)`
+- tagged used edge: start / transition / target
+
+## 疑似コード
+
+```text
+for horizon = lowerBound, lowerBound + 1, ...:
+  G ← buildTimeExpandedNetwork(horizon)
+  (flow, cost) ← successiveShortestAugmentingPath(G, source, sink)
+  if flow == numberOfAgents:
+    return reconstruct(flow)
+return failure
+```
+
+この短い形は network-flow-mapf-2012 の time-expanded network と、min-cost maximum flow の定義をサイト用に再構成したものです<SourceCitation paperId="network-flow-mapf-2012" section="II.A" page={4} /><SourceCitation paperId="network-flow-mapf-2012" section="V" page={9} />。
+
+## 実装上の注意
+
+flow は匿名なので、復元時に start 辺から時刻順へ辿って agent ID を戻します。MCMF の費用最小と makespan 最小は同じ目的ではありません。サイト版は horizon を外側で最小化し、その horizon で move cost を最小化します。
+
+## よくある誤解
+
+- 単一 commodity flow は複数チームの TAPF そのものではありません。
+- flow が最大でも、time-expanded network の衝突容量を正しく張らなければ MAPF の解にはなりません。
+- SOC と makespan は別の目的です。
+
+## 他手法との比較
+
+CBM は MCMF をチームごとの low-level として使い、チーム間 conflict を high-level CBS で解消します。CBS-TA は assignment matrix と SOC を扱い、MCMF だけでは表さない割当制約を持ちます。
+
+## サイト上の実装との差異
+
+論文の一般 network-flow 定式化を、ブラウザの有限 horizon と 4 近傍 grid に限定しています。残余最短路は Bellman–Ford、同値辺はノード番号順です。`library` 部品ではなく、単一チーム形状に限った Solver として実行できます。
+
+## 実験してみる
+
+<SimulatorLink solverId="min-cost-max-flow" />

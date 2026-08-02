@@ -15,7 +15,13 @@ const explanationOnly = entries.filter((e) => {
     a?.implementation_status === "explanation-only"
   );
 });
-const planned = entries.length - runnable.length - explanationOnly.length;
+const library = entries.filter((e) => {
+  const a = getAlgorithm(e.data.algorithmId);
+  return (
+    !RUNNABLE_ALGORITHM_IDS.includes(e.data.algorithmId) && a?.implementation_status === "library"
+  );
+});
+const planned = entries.length - runnable.length - explanationOnly.length - library.length;
 
 const categoryCounts = SITE_CATEGORIES.map((c) => ({
   ...c,
@@ -133,9 +139,14 @@ const ROADMAP = [
         <p class="small">ブラウザ内で実際に動かせます。</p>
       </div>
       <div class="card">
+        <p class="big muted">{library.length}</p>
+        <p><strong>内部実装あり</strong></p>
+        <p class="small">他の手法から使われる部品で、単体では実行しません。</p>
+      </div>
+      <div class="card">
         <p class="big muted">{explanationOnly.length}</p>
         <p><strong>解説のみ</strong></p>
-        <p class="small">実装はありません。出典と説明だけです。</p>
+        <p class="small">コードによる再現実装はまだありません。</p>
       </div>
       <div class="card">
         <p class="big muted">{planned}</p>

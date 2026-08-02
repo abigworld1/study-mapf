@@ -28,6 +28,11 @@ const IMPL: Record<string, { label: string; tone: string; help: string }> = {
     tone: "warn",
     help: "動きますが、原論文の全機能を再現してはいません。",
   },
+  library: {
+    label: "内部実装あり（単体では実行不可）",
+    tone: "info",
+    help: "実装はありますが、シミュレータから直接は動かせません。他の手法の内部で使われています。",
+  },
   "explanation-only": {
     label: "解説のみ",
     tone: "muted",

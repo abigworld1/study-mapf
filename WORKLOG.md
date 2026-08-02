@@ -1696,3 +1696,55 @@ lacam を例に使っていたため、Batch 5 で lacam が実装された時�
 規則を純関数 `resolveImplementationState(declared, registered)` として切り出し、
 4 状態 × 2 の全 8 組合せを固定した。どの手法が実装済みかに依存しないので、
 以後のバッチで同じことは起きない。
+
+---
+
+## 2026-08-01 Batch 7（Codex）
+
+### 実装
+
+- `ImplementationStatus` に `library` を追加し、「内部実装あり（単体では実行不可）」と表示する状態を AlgorithmStatus / Card / compare / roadmap / manifest / index へ反映。
+- `MapfSolver.canSolve(scenario)` と registry/UI の形状フィルタを追加。CBM は teams 形状、MCMF は 1 チーム、CBS-TA は teams または assignment 行列だけを受ける。
+- `AssignmentSpec`（target ID + rectangular allowed matrix）を Scenario と JSON 往復へ追加。既存 `TeamSpec` の equal-count invariant は維持。
+- `src/lib/flow/min-cost-max-flow.ts`、`src/lib/assignment/hungarian.ts`、`src/lib/assignment/gale-shapley.ts` を独立実装。
+- `src/solvers/tapf/team-flow.ts`、`cbm.ts`、`cbs-ta.ts`、`mcmf-solver.ts` を追加。CBM は makespan、CBS-TA は sum of costs を `objective` に設定。
+- `targetAssignments.teamId` を optional、`targetId` を追加し、renderer / simulator に generic assignment の fallback を実装。
+
+### 資料・検証
+
+- 5 本の PDF を再確認し、`algorithms.yaml` の 5 手法から `unknown` を除去。Hungarian / Gale-Shapley は内部 library 状態。
+- `libMultiRobotPlanning` は MIT を確認し、assignment 固定行列の cost/割当（275, `[t3,t2,t1,t0]`）を実行ファイルと一致確認。`cbs_ta` は yaml-cpp 不足でビルドできず、固定 YAML は TypeScript 側で再構成して期待 SOC 6/6/5 を照合。
+- `docs/notes/implementation/{min-cost-max-flow,hungarian-method,gale-shapley,cbm,cbs-ta}.md` と 5 ページの MDX を追加。CBS-TA の N≠M では余剰 agent を parking goal へ、余剰 target を未割当として明記。
+
+### 未解決
+
+論文どおりの遅延 K-best search forest、ECBS-TA、MCMF の flow 原典（Ford-Fulkerson 等）は未調査のまま。参照実装の CBS-TA executable は yaml-cpp 導入なしでは再実行できない。
+
+### 最終品質ゲート
+
+- `npm run sources:validate`: errors=0 warnings=8
+- `npm run format:check`: passed
+- `npm run lint`: passed
+- `npm run typecheck`: 0 errors（Astro の既存 z deprecation warning のみ）
+- `npm test`: 17 files / 240 tests passed
+- `npm run build`: 63 pages built
+- `npm run test:e2e`: 40 tests passed（chromium / mobile）
+
+---
+
+## 2026-08-01 Batch 7 レビュー修正（Codex）
+
+- CBS-TA の N>M で、実装どおり余剰 agent を parking cell へ退避する説明へ修正。論文 p.2 の条件 (2) には goal-less agent が存在しないこと、著者参照実装の `potentialGoals: []` ケースに倣うサイト拡張であることを公開ページ・実装ノート・コードコメントへ記載。
+- 退避時に agent 数、target 側 SOC、退避側 SOC、合計を示す `simplified-behavior` warning を追加。6×3 固定ケースで `5 + 7 = 12` をテスト固定。
+- CBS-TA の `fidelity` を `educational` へ変更。search forest と on-demand K-best assignment は未実装で、全候補列挙であることを manifest / status / MDX / note に反映。
+- `canSolve` の XOR を変数化して可読性を改善。library 状態と Hungarian / Gale-Shapley 実体の対応テストを追加。Gale-Shapley のページ番号体系（PDF 物理ページ）も明記。
+
+### 修正後の品質ゲート
+
+- `npm run sources:validate`: errors=0 warnings=8
+- `npm run format:check`: passed
+- `npm run lint`: passed
+- `npm run typecheck`: 0 errors（既存 Astro `z` deprecation warning のみ）
+- `npm test`: 17 files / 242 tests passed
+- `npm run build`: 63 pages built
+- `npm run test:e2e`: 40 tests passed

@@ -1,4 +1,4 @@
-import type { MapfSolver, ProblemKind, SolverMetadata } from "@/lib/model/types.js";
+import type { MapfSolver, ProblemKind, Scenario, SolverMetadata } from "@/lib/model/types.js";
 import { aStarSolver, bfsSolver } from "./basic/individual-search.js";
 import {
   prioritizedPlanningSolver,
@@ -17,6 +17,9 @@ import { pushAndRotateSolver, pushAndSwapSolver } from "./push/solvers.js";
 import { lacamSolver, lacamStarSolver } from "./lacam/solvers.js";
 import { mapfLnsSolver, mapfLns2Solver, rhcrSolver } from "./lns/solvers.js";
 import { tapfBaselineSolver } from "./tapf/baseline.js";
+import { cbmSolver } from "./tapf/cbm.js";
+import { cbsTaSolver } from "./tapf/cbs-ta.js";
+import { minCostMaxFlowSolver } from "./tapf/mcmf-solver.js";
 
 /**
  * Solver の登録所。
@@ -61,6 +64,9 @@ const SOLVERS: readonly MapfSolver[] = [
   mapfLns2Solver,
   rhcrSolver,
   tapfBaselineSolver,
+  cbmSolver,
+  cbsTaSolver,
+  minCostMaxFlowSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));
@@ -81,8 +87,16 @@ export function hasSolver(id: string): boolean {
   return byId.has(id);
 }
 
-export function solversFor(kind: ProblemKind): readonly MapfSolver[] {
-  return SOLVERS.filter((s) => s.metadata.supports.includes(kind));
+export function solversFor(kind: ProblemKind, scenario?: Scenario): readonly MapfSolver[] {
+  return SOLVERS.filter(
+    (s) =>
+      s.metadata.supports.includes(kind) &&
+      (scenario === undefined || s.canSolve === undefined || s.canSolve(scenario)),
+  );
+}
+
+export function listSolverMetadataFor(scenario: Scenario): readonly SolverMetadata[] {
+  return solversFor(scenario.kind, scenario).map((s) => s.metadata);
 }
 
 /** algorithms.yaml の algorithm-id のうち、実際に動く実装があるもの。 */

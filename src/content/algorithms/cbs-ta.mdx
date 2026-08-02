@@ -3,14 +3,86 @@ title: "CBS-TA"
 algorithmId: cbs-ta
 originalName: "CBS with Task Assignment"
 order: 810
-summary: ""
-status: draft
+summary: "割当行列と CBS を組み合わせ、sum of costs を最小化する TAPF Solver。"
+status: reviewed
 primarySources:
   - paperId: cbs-ta-aamas-2018
 implementationReferences:
   - repositoryId: libmultirobotplanning
+lastReviewed: "2026-08-01"
+simulatorSolverId: cbs-ta
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="cbs-ta" />
+## 概要
+
+CBS-TA は、agent と target の割当行列 `A` を path conflict と同時に扱う Conflict-Based Search です。`A` は長方形でもよく、agent ごとの forbidden target を表せます<SourceCitation paperId="cbs-ta-aamas-2018" section="2" page={2} />。
+
+## まず何がうれしいのか
+
+固定の target assignment を先に決めると、assignment のせいで path cost が悪くなることがあります。CBS-TA は assignment 候補を比較しながら、実際の衝突を含む path の SOC を最小化します。
+
+## 前提となる知識
+
+CBS、Hungarian 法、K-best assignment、sum of costs、TAPF を使います。
+
+## 対象問題
+
+TeamSpec は block-diagonal な特殊形として受け付けます。一般形では `Scenario.assignment` を使い、agent 数と target 数の不一致を許可します。余剰 target は未割当として表示し、割当の無い agent は target と start を避けた空きセルへ退避させます。退避先は次数の小さいセルを優先するサイト独自の規則です。
+
+## 中心となるアイデア
+
+原論文の high-level は assignment ごとの root を持つ search forest で、K-best assignment を on demand に生成します<SourceCitation paperId="cbs-ta-aamas-2018" section="3" page={3} />。サイト版はこの 2 つの key idea（forest と遅延生成）を実装していません。全 feasible assignment を先に列挙し、各候補を CBS で評価します。
+
+## アルゴリズムの手順
+
+1. 割当行列から feasible assignment を作る。
+2. 各 assignment を固定した one-shot MAPF に変換する。
+3. CBS で collision-free path を求める。
+4. SOC が最小の候補を incumbent とする。
+5. 候補列挙が終わったら解を返す。
+
+## 小さな例
+
+`a1` は `g1/g2`、`a2` は `g1` だけへ行ける場合、行列の `false` を無視して全順列を試すことはできません。CBS-TA は `a2→g1` を先に確保し、`a1→g2` の CBS を評価します。
+
+## データ構造
+
+`AssignmentSpec.targets`、`allowed` matrix、assignment candidate、固定割当後の CBS CT node。結果には `targetId` を添えます。
+
+## 疑似コード
+
+```text
+for assignment in enumerateFeasibleAssignments(A):
+  paths ← CBS(fixTargets(assignment))
+  if paths solved:
+    incumbent ← min_SOC(incumbent, paths)
+return incumbent
+```
+
+原論文の K-best search forest を説明用に短く再構成した疑似コードです<SourceCitation paperId="cbs-ta-aamas-2018" label="Theorem 4.1" page={3} /><SourceCitation paperId="cbs-ta-aamas-2018" label="Theorem 4.2" page={3} />。実装は全候補列挙へ簡略化しているため、Hungarian による順序付けは評価順を変えるだけで、最終的な最小 SOC には影響しません。
+
+## 実装上の注意
+
+CBS-TA の目的関数は **sum of costs** です。CBM と tapf-baseline は makespan を最小化するので、両者の SOC を並べて優劣を決めません。
+また、論文 p.2 の条件 (2) は全 agent が許された goal で終わることを要求します。goal を持たない余剰 agent は論文の定義の外ですが、サイト版は著者の `libmultirobotplanning`（`test_cbs_ta.py` の終端検査）に倣って退避させます。退避の移動歩数と退避 agent の到達時刻（SOC 寄与）を、実行時 warning の target 側 / 退避側内訳に表示します。
+
+## よくある誤解
+
+- TeamSpec の equal-count invariant を CBS-TA のために緩めてはいけません。
+- assignment が最適でも、path conflict が無いとは限りません。
+- stable matching は SOC 最小ではありません。
+
+## 他手法との比較
+
+CBM はチーム別 MCMF＋CBS で makespan、CBS-TA は一般割当＋CBS で SOC、Hungarian 法は割当だけ、Gale-Shapley は安定性だけを扱います。
+
+## サイト上の実装との差異
+
+サイト版は候補数上限内で assignment をすべて決定的に列挙し、各候補を既存 CBS へ渡します。論文の search forest、on-demand K-best 生成、ECBS-TA は未実装です。Hungarian は候補順序付けだけに使うため、全候補を評価する限り結果を改善するものではありません。`canSolve` で TeamSpec 形状と一般 assignment 形状を区別し、CBM が一般行列を誤って受けないようにしています。
+
+## 実験してみる
+
+<SimulatorLink solverId="cbs-ta" />

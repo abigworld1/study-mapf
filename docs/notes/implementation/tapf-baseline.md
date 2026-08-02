@@ -141,7 +141,11 @@ CBM や CBS-TA はまさにここを避けるための手法なので、
 - TAPF 以外の Scenario と上限超過の拒否
 - `Scenario.kind` による Solver 絞り込み（全 kind で supports と一致すること）
 
+## Batch 7 実装後の状態
+
+CBM は `src/solvers/tapf/cbm.ts`、CBS-TA は `src/solvers/tapf/cbs-ta.ts` に実装済み。
+CBS-TA の SOC 検証にはこの makespan baseline を使わず、候補列挙＋CBS の SOC 選択をテスト専用オラクルとして使う。
+
 ## 未対応機能
 
-CBM 本体（最小費用流の低レベル、CBS 高レベルのチーム単位 constraint）、
-CBS-TA の割当行列と search forest、ECBS-TA、エージェント数 ≠ goal 数の場合。
+ECBS-TA と、論文どおりの遅延 K-best search forest。CBS-TA の矩形行列では、エージェント数が target 数より多い場合は余剰 agent を start に留め、target 数が多い場合は余剰 target を未割当として扱う（解説ページで明示）。

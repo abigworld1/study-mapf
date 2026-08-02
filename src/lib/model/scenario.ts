@@ -6,6 +6,7 @@ import type {
   SimulationRules,
   TaskSpec,
   TeamSpec,
+  AssignmentSpec,
 } from "./types.js";
 import { DEFAULT_RULES } from "./types.js";
 import { createEmptyMap, isWalkable, withBlocked } from "./grid.js";
@@ -40,6 +41,10 @@ export interface ScenarioJson {
     goals: readonly [number, number][];
     colorIndex?: number;
   }[];
+  readonly assignment?: {
+    readonly targets: readonly { id: string; cell: [number, number] }[];
+    readonly allowed: readonly (readonly boolean[])[];
+  };
   readonly rules: SimulationRules;
   readonly seed: number;
   readonly attribution?: string;
@@ -86,6 +91,17 @@ export function scenarioToJson(scenario: Scenario): ScenarioJson {
             goals: team.goals.map((g) => [g.x, g.y] as [number, number]),
             ...(team.colorIndex !== undefined ? { colorIndex: team.colorIndex } : {}),
           })),
+        }
+      : {}),
+    ...(scenario.assignment
+      ? {
+          assignment: {
+            targets: scenario.assignment.targets.map((target) => ({
+              id: target.id,
+              cell: [target.cell.x, target.cell.y] as [number, number],
+            })),
+            allowed: scenario.assignment.allowed.map((row) => [...row]),
+          },
         }
       : {}),
     rules: scenario.rules,
@@ -157,6 +173,16 @@ export function scenarioFromJson(input: unknown): Scenario {
     colorIndex: t.colorIndex ?? i,
   }));
 
+  const assignment: AssignmentSpec | undefined = json.assignment
+    ? {
+        targets: (json.assignment.targets ?? []).map((target, i) => ({
+          id: target.id || `target${i + 1}`,
+          cell: toCell(target.cell, `assignment.targets[${i}].cell`),
+        })),
+        allowed: (json.assignment.allowed ?? []).map((row) => [...row]),
+      }
+    : undefined;
+
   return {
     id: json.id ?? "imported",
     name: json.name ?? "読み込んだシナリオ",
@@ -165,6 +191,7 @@ export function scenarioFromJson(input: unknown): Scenario {
     agents,
     ...(tasks.length > 0 ? { tasks } : {}),
     ...(teams.length > 0 ? { teams } : {}),
+    ...(assignment ? { assignment } : {}),
     rules: { ...DEFAULT_RULES, ...(json.rules ?? {}) },
     seed: json.seed ?? 1,
     ...(json.attribution ? { attribution: json.attribution } : {}),
@@ -660,7 +687,46 @@ export function validateScenario(scenario: Scenario): string[] {
       problems.push(`目標が未設定のエージェントがあります: ${missing.map((a) => a.id).join(", ")}`);
     }
   }
-  if (scenario.kind === "tapf") problems.push(...validateTeams(scenario));
+  if (scenario.kind === "tapf") {
+    if (scenario.teams && scenario.assignment) {
+      problems.push("TAPF の teams と assignment は同時に指定できません");
+    } else if (scenario.assignment) {
+      problems.push(...validateAssignment(scenario));
+    } else {
+      problems.push(...validateTeams(scenario));
+    }
+  }
+  return problems;
+}
+
+function validateAssignment(scenario: Scenario): string[] {
+  const problems: string[] = [];
+  const spec = scenario.assignment;
+  if (!spec) return ["assignment がありません"];
+  if (spec.targets.length === 0) problems.push("assignment の target が 1 個もありません");
+  const ids = new Set<string>();
+  for (const target of spec.targets) {
+    if (!target.id) problems.push("assignment target の id が空です");
+    if (ids.has(target.id)) problems.push(`assignment target ${target.id} が重複しています`);
+    ids.add(target.id);
+    if (!isWalkable(scenario.map, target.cell)) {
+      problems.push(
+        `${target.id}: target (${target.cell.x},${target.cell.y}) が壁または範囲外です`,
+      );
+    }
+  }
+  if (spec.allowed.length !== scenario.agents.length) {
+    problems.push(
+      `assignment の行数 ${spec.allowed.length} がエージェント数 ${scenario.agents.length} と一致しません`,
+    );
+  }
+  for (const [rowIndex, row] of spec.allowed.entries()) {
+    if (row.length !== spec.targets.length) {
+      problems.push(
+        `assignment の ${rowIndex} 行目の列数 ${row.length} が target 数 ${spec.targets.length} と一致しません`,
+      );
+    }
+  }
   return problems;
 }
 

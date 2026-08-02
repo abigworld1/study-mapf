@@ -5,6 +5,7 @@ import type {
   GridMap,
   TaskSpec,
   TeamSpec,
+  AssignmentSpec,
   Time,
   TimedPath,
 } from "@/lib/model/types.js";
@@ -98,10 +99,12 @@ export interface RenderState {
   readonly tasks?: readonly TaskSpec[];
   /** TAPF のチーム。target は割当前なのでエージェントの goal とは別に描く。 */
   readonly teams?: readonly TeamSpec[];
+  readonly assignment?: AssignmentSpec;
   /** 解けたあとの目標割当。描画では target にエージェント名を添えるのに使う。 */
   readonly targetAssignments?: readonly {
     readonly agentId: string;
-    readonly teamId: string;
+    readonly teamId?: string;
+    readonly targetId?: string;
     readonly goal: Cell;
   }[];
   /** 現在時刻におけるエージェント位置。 */
@@ -220,9 +223,9 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
       未割当は破線の四角、割当済みはそこへ実線を重ねる。
       色だけに頼らないよう、割当済みにはエージェント番号も添える。
   */
-  if (state.teams && state.teams.length > 0) {
+  if ((state.teams && state.teams.length > 0) || state.assignment) {
     ctx.lineWidth = 2;
-    state.teams.forEach((team, teamIndex) => {
+    (state.teams ?? []).forEach((team, teamIndex) => {
       const color =
         theme.agents[(team.colorIndex ?? teamIndex) % theme.agents.length] ?? theme.goalRing;
       for (const goal of team.goals) {
@@ -232,11 +235,26 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
         ctx.setLineDash([]);
       }
     });
+    const genericTargets = state.assignment?.targets ?? [];
+    for (const target of genericTargets) {
+      ctx.strokeStyle = theme.goalRing;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(px(target.cell.x) + 5, py(target.cell.y) + 5, s - 10, s - 10);
+      ctx.setLineDash([]);
+    }
     for (const assignment of state.targetAssignments ?? []) {
-      const teamIndex = state.teams.findIndex((t) => t.id === assignment.teamId);
-      const team = state.teams[teamIndex];
+      const teamIndex = assignment.teamId
+        ? (state.teams ?? []).findIndex((t) => t.id === assignment.teamId)
+        : -1;
+      const team = teamIndex >= 0 ? state.teams?.[teamIndex] : undefined;
       const color =
-        theme.agents[(team?.colorIndex ?? teamIndex) % theme.agents.length] ?? theme.goalRing;
+        theme.agents[
+          (team?.colorIndex ??
+            Math.max(
+              0,
+              state.agents.findIndex((a) => a.id === assignment.agentId),
+            )) % theme.agents.length
+        ] ?? theme.goalRing;
       ctx.strokeStyle = color;
       ctx.strokeRect(px(assignment.goal.x) + 5, py(assignment.goal.y) + 5, s - 10, s - 10);
       if (state.layers.labels) {

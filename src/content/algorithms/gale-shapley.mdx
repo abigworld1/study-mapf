@@ -3,13 +3,83 @@ title: "Gale-Shapley"
 algorithmId: gale-shapley
 originalName: "Gale-Shapley / Deferred Acceptance"
 order: 830
-summary: ""
-status: draft
+summary: "blocking pair のない安定マッチングを作る deferred acceptance。"
+status: reviewed
 primarySources:
   - paperId: gale-shapley-1962
 implementationReferences: []
+lastReviewed: "2026-08-01"
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
 
-<PreparingNotice algorithmId="gale-shapley" />
+## 概要
+
+Gale-Shapley 法（Deferred Acceptance）は、proposer が順に申し込み、receiver が最も好む相手を保持することで stable matching を作ります<SourceCitation paperId="gale-shapley-1962" section="3" page={5} />。
+
+## まず何がうれしいのか
+
+全員が同時に自己都合の相手を選ぶと、互いに交換したい blocking pair が残ることがあります。deferred acceptance は、その不安定な組を最終的に残しません。
+
+## 前提となる知識
+
+preference list、matching、blocking pair、安定性を使います。
+
+## 対象問題
+
+MAPF Solver ではありません。割当の純関数ライブラリとして提供し、シミュレータの手法一覧には出しません。
+
+## 中心となるアイデア
+
+receiver は一時的な相手を保持し、より好みの proposer が来たら以前の相手を free にします。proposer は拒否された相手を二度と訪ねないので有限回で終わります。
+
+## アルゴリズムの手順
+
+1. 全 proposer を free にする。
+2. free proposer が次の receiver に申し込む。
+3. receiver は現在の保持相手と比較して一方を保持する。
+4. 全 proposer の候補が尽きたら matching を返す。
+
+## 小さな例
+
+proposer `a` が `A` を好み、`A` は `b` を `a` より好む場合、`a` の申込みは一旦保持されても `b` が来た時点で置き換えられます。最終的に両者が互いに交換したい組は残りません<SourceCitation paperId="gale-shapley-1962" section="3" page={5} />。
+
+## データ構造
+
+receiver ごとの現在の proposer、proposer の次の候補 index、receiver preference の順位表。
+
+## 疑似コード
+
+```text
+while a proposer is free and has an untried receiver:
+  receiver ← next preference
+  if receiver prefers proposer to its held partner:
+    reject the old partner
+    hold proposer
+  else:
+    reject proposer
+return matching
+```
+
+## 実装上の注意
+
+Gale-Shapley が最小化するのはコストではありません。proposer-oriented 実行なら、proposer にとって他の stable matching より悪くないという意味で optimal です<SourceCitation paperId="gale-shapley-1962" section="5" page={7} />。
+
+## よくある誤解
+
+- stable は globally minimum cost という意味ではありません。
+- proposer と receiver を逆にすると、別の stable matching になります。
+- MAPF の vertex conflict を直接解消するアルゴリズムではありません。
+
+## 他手法との比較
+
+Hungarian 法は総コスト最小、Gale-Shapley は blocking pair の不存在です。両者の結果を「どちらが安いか」だけで比較してはいけません。
+
+## サイト上の実装との差異
+
+原論文の strict preference を入力順で表し、欠落相手は unmatched とします。同順位・容量付き college は扱いません。サイトでは `library` 状態です。
+出典のページ番号は誌面ページではなく、確認に使用した PDF の物理ページ番号です。
+
+## 実験してみる
+
+単体 Solver ではないためシミュレータリンクはありません。単体テストで stability と proposer-optimal 性を確認できます。

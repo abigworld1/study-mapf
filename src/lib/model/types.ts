@@ -108,6 +108,18 @@ export interface TeamSpec {
   readonly colorIndex?: number;
 }
 
+/** CBS-TA の一般的な agent×target 割当行列。 */
+export interface TargetSpec {
+  readonly id: string;
+  readonly cell: Cell;
+}
+
+export interface AssignmentSpec {
+  readonly targets: readonly TargetSpec[];
+  /** 行は Scenario.agents の順、列は targets の順。true が割当可能。 */
+  readonly allowed: readonly (readonly boolean[])[];
+}
+
 // ---------------------------------------------------------------- シナリオ
 
 /** ゴール到達後の扱い。保証の議論が変わるため必ず明示する。 */
@@ -153,6 +165,8 @@ export interface Scenario {
    * このとき agents[].goal は割当前なので未設定でよい。
    */
   readonly teams?: readonly TeamSpec[];
+  /** CBS-TA の一般割当行列。teams とは同時に指定しない。 */
+  readonly assignment?: AssignmentSpec;
   readonly rules: SimulationRules;
   /** 乱数 seed。同じ seed と同じ入力なら同じ結果になること。 */
   readonly seed: number;
@@ -326,7 +340,10 @@ export interface SolverResult {
    */
   readonly targetAssignments?: readonly {
     readonly agentId: AgentId;
-    readonly teamId: TeamId;
+    /** CBM / TeamSpec の割当では存在する。CBS-TA の一般行列では省略可。 */
+    readonly teamId?: TeamId;
+    /** 一般割当行列の target 識別子。 */
+    readonly targetId?: string;
     readonly goal: Cell;
   }[];
   /**
@@ -655,7 +672,8 @@ export type SolverCategory =
   | "learning";
 
 /** サイト上の実装状態。誤認を避けるため UI で必ず表示する。 */
-export type ImplementationStatus = "runnable" | "partial" | "explanation-only" | "planned";
+export type ImplementationStatus =
+  "runnable" | "partial" | "library" | "explanation-only" | "planned";
 
 /**
  * 実装が原論文をどこまで再現しているか。
@@ -717,5 +735,7 @@ export interface SolverContext {
 
 export interface MapfSolver {
   readonly metadata: SolverMetadata;
+  /** kind だけでは表せない入力形状の制約。未指定なら supports だけで判定する。 */
+  readonly canSolve?: (scenario: Scenario) => boolean;
   solve(scenario: Scenario, options: SolverOptions, context: SolverContext): Promise<SolverResult>;
 }

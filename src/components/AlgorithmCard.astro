@@ -13,12 +13,14 @@ const effective = implementationStateOf(fm.algorithmId);
 const LABEL: Record<string, string> = {
   runnable: "実行可",
   partial: "一部実装",
+  library: "内部実装あり（単体では実行不可）",
   "explanation-only": "解説のみ",
   planned: "準備中",
 };
 const TONE: Record<string, string> = {
   runnable: "ok",
   partial: "warn",
+  library: "info",
   "explanation-only": "muted",
   planned: "muted",
 };
@@ -76,6 +78,11 @@ const TONE: Record<string, string> = {
     color: var(--warn);
     border-color: var(--warn);
     background: var(--warn-subtle);
+  }
+  .tone-info {
+    color: var(--info);
+    border-color: var(--info);
+    background: var(--info-subtle);
   }
   .tone-muted {
     color: var(--fg-muted);

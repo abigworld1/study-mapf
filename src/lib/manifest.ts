@@ -104,7 +104,7 @@ export interface AlgorithmEntry {
   problem_types: string[];
   primary_paper_ids: string[];
   implementation_repository_ids: string[];
-  implementation_status: "planned" | "partial" | "runnable" | "explanation-only";
+  implementation_status: "planned" | "partial" | "runnable" | "library" | "explanation-only";
   guarantees: {
     complete: GuaranteeValue;
     optimal: GuaranteeValue;

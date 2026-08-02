@@ -3,13 +3,87 @@ title: "CBM"
 algorithmId: cbm
 originalName: "Conflict-Based Min-Cost-Flow"
 order: 800
-summary: ""
-status: draft
+summary: "チーム内の匿名経路を最小費用流、チーム間の衝突を CBS で解消する TAPF Solver。"
+status: reviewed
 primarySources:
   - paperId: cbm-tapf-aamas-2016
 implementationReferences: []
+lastReviewed: "2026-08-01"
+simulatorSolverId: cbm
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
 
-<PreparingNotice algorithmId="cbm" />
+## 概要
+
+CBM（Conflict-Based Min-Cost-Flow）は、TAPF の low-level をチームごとの min-cost max-flow に置き換え、high-level でチーム間 conflict を CBS 型に分岐します<SourceCitation paperId="cbm-tapf-aamas-2016" section="2.1" page={2} />。
+
+## まず何がうれしいのか
+
+チーム内の agent を別々の個体として割当列挙しません。匿名な flow として一度に扱い、複数チームの相互作用だけを high-level で調整します。
+
+## 前提となる知識
+
+TAPF、time-expanded network、maximum flow、CBS、makespan を使います。
+
+## 対象問題
+
+各 TeamSpec の agent 数と target 数は同じでなければなりません。サイトでは 4 近傍、離散時間、vertex/edge-swap conflict 禁止です。一般割当行列は CBS-TA の対象で、CBM には渡せません。
+
+## 中心となるアイデア
+
+チーム内では誰がどの target へ行くかを flow が決めます。異なるチームの path に衝突がある場合、関係するチームへ cell/time または edge/time constraint を追加して low-level を再実行します。
+
+## アルゴリズムの手順
+
+1. 全チームを独立に time-expanded flow で計画する。
+2. path 集合から最初の conflict を検出する。
+3. 関係するチームごとに constraint child を作る。
+4. team flow を再計画し、衝突のない node を探す。
+5. horizon を下界から増やし、最初に解けた値を返す。
+
+## 小さな例
+
+2 チームが中央 cell を同時に使おうとすると、CBM は一方の team の中央 cell/time を禁止した child を作ります。別 child ではもう一方を禁止します。最初の衝突の解消によって、チーム内の匿名割当も flow が選び直します。
+
+## データ構造
+
+high-level node は team constraints と path 集合、low-level は residual flow graph。返却値の `objective` は `makespan` です。
+
+## 疑似コード
+
+```text
+for horizon = lowerBound, ...:
+  root.paths ← minCostFlow(team, horizon) for every team
+  OPEN ← {root}
+  while OPEN not empty:
+    node ← FIFO(OPEN)
+    if node has no conflict: return node.paths
+    for team in teamsIn(firstConflict(node)):
+      child ← node + team constraint
+      child.path[team] ← minCostFlow(child constraints)
+      if feasible: OPEN.push(child)
+```
+
+## 実装上の注意
+
+CBM は makespan を最小化します。表示される sum of costs が最小とは限らず、SOC 最小を主張する CBS-TA と数値を直接比較しません。
+
+## よくある誤解
+
+- チーム内の target 数不一致は CBM の TAPF 定義外です。
+- MCMF だけでは複数チームの衝突は解消されません。
+- `no-solution` は timeout / node limit とは別です。
+
+## 他手法との比較
+
+tapf-baseline は全割当＋CBS、CBM は team flow＋CBS、CBS-TA は一般割当＋SOC 最小です。
+
+## サイト上の実装との差異
+
+論文の high-level / low-level 構造を保ちつつ、low-level は依存ゼロの Bellman–Ford MCMF、high-level は決定的 FIFO、有限 horizon と expansion limit を使います。TeamSpec の invariant は変更していません<SourceCitation paperId="cbm-tapf-aamas-2016" section="2.1" page={2} />。
+
+## 実験してみる
+
+<SimulatorLink solverId="cbm" />
