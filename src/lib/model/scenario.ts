@@ -27,11 +27,13 @@ export interface ScenarioJson {
     start: [number, number];
     goal?: [number, number];
     colorIndex?: number;
+    capacity?: number;
   }[];
   readonly tasks?: readonly {
     id: string;
     pickup: [number, number];
     delivery: [number, number];
+    goals?: readonly [number, number][];
     releaseTime: number;
   }[];
   /** TAPF のチーム。agentIds と goals は同数（cbm-tapf-aamas-2016 p.2）。 */
@@ -72,6 +74,7 @@ export function scenarioToJson(scenario: Scenario): ScenarioJson {
       start: [a.start.x, a.start.y] as [number, number],
       ...(a.goal ? { goal: [a.goal.x, a.goal.y] as [number, number] } : {}),
       ...(a.colorIndex !== undefined ? { colorIndex: a.colorIndex } : {}),
+      ...(a.capacity !== undefined ? { capacity: a.capacity } : {}),
     })),
     ...(scenario.tasks && scenario.tasks.length > 0
       ? {
@@ -79,6 +82,7 @@ export function scenarioToJson(scenario: Scenario): ScenarioJson {
             id: t.id,
             pickup: [t.pickup.x, t.pickup.y] as [number, number],
             delivery: [t.delivery.x, t.delivery.y] as [number, number],
+            ...(t.goals ? { goals: t.goals.map((g) => [g.x, g.y] as [number, number]) } : {}),
             releaseTime: t.releaseTime,
           })),
         }
@@ -157,12 +161,16 @@ export function scenarioFromJson(input: unknown): Scenario {
     start: toCell(a.start, `agents[${i}].start`),
     ...(a.goal ? { goal: toCell(a.goal, `agents[${i}].goal`) } : {}),
     colorIndex: a.colorIndex ?? i,
+    ...(a.capacity !== undefined ? { capacity: a.capacity } : {}),
   }));
 
   const tasks: TaskSpec[] = (json.tasks ?? []).map((t, i) => ({
     id: t.id || `t${i}`,
     pickup: toCell(t.pickup, `tasks[${i}].pickup`),
     delivery: toCell(t.delivery, `tasks[${i}].delivery`),
+    ...(t.goals && t.goals.length > 0
+      ? { goals: t.goals.map((g, j) => toCell(g, `tasks[${i}].goals[${j}]`)) }
+      : {}),
     releaseTime: t.releaseTime ?? 0,
   }));
 
@@ -409,6 +417,56 @@ const MAPD_PRESETS: readonly PresetDefinition[] = [
         seed,
       };
     },
+  },
+  {
+    id: "mapd-capacity",
+    name: "MAPD: capacity 2",
+    description:
+      "1 体の agent が同時に 2 件まで運べる。capacity を 1 に戻したコピーと経路・TTD を比較できる。",
+    build: (seed) => ({
+      id: "mapd-capacity",
+      name: "MAPD: capacity 2",
+      kind: "mapd",
+      map: createEmptyMap(9, 5),
+      agents: [{ id: "a1", start: { x: 1, y: 2 }, capacity: 2, colorIndex: 0 }],
+      tasks: [
+        { id: "t1", pickup: { x: 2, y: 1 }, delivery: { x: 7, y: 1 }, releaseTime: 0 },
+        { id: "t2", pickup: { x: 2, y: 3 }, delivery: { x: 7, y: 3 }, releaseTime: 0 },
+      ],
+      parkingEndpoints: [
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+      ],
+      rules: DEFAULT_RULES,
+      seed,
+    }),
+  },
+  {
+    id: "mapd-multi-goal",
+    name: "MG-MAPD: multi-goal",
+    description: "1 件の task が pickup 後に 2 つの delivery goal を順に訪れる。",
+    build: (seed) => ({
+      id: "mapd-multi-goal",
+      name: "MG-MAPD: multi-goal",
+      kind: "mapd",
+      map: createEmptyMap(9, 5),
+      agents: [{ id: "a1", start: { x: 1, y: 2 }, colorIndex: 0 }],
+      tasks: [
+        {
+          id: "t1",
+          pickup: { x: 2, y: 2 },
+          delivery: { x: 7, y: 2 },
+          goals: [
+            { x: 7, y: 2 },
+            { x: 7, y: 4 },
+          ],
+          releaseTime: 0,
+        },
+      ],
+      parkingEndpoints: [{ x: 0, y: 0 }],
+      rules: DEFAULT_RULES,
+      seed,
+    }),
   },
 ];
 
@@ -861,6 +919,18 @@ export function validateScenario(scenario: Scenario): string[] {
     if (seenStart.has(key))
       problems.push(`${agent.id}: 開始位置が他のエージェントと重複しています`);
     seenStart.add(key);
+    if (agent.capacity !== undefined && (!Number.isInteger(agent.capacity) || agent.capacity < 1)) {
+      problems.push(`${agent.id}: capacity は 1 以上の整数で指定してください`);
+    }
+  }
+  for (const task of scenario.tasks ?? []) {
+    const goals = task.goals ?? [task.delivery];
+    if (goals.length === 0) problems.push(`${task.id}: goal が 1 個もありません`);
+    for (const [index, goal] of goals.entries()) {
+      if (!isWalkable(scenario.map, goal)) {
+        problems.push(`${task.id}: goals[${index}] が壁または範囲外です`);
+      }
+    }
   }
   if (scenario.kind === "one-shot-mapf") {
     const missing = scenario.agents.filter((a) => !a.goal);

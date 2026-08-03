@@ -3,13 +3,42 @@ title: "LNS-wPBS"
 algorithmId: lns-wpbs
 originalName: "LNS-wPBS"
 order: 760
-summary: ""
-status: draft
+summary: "LNS-PBS の windowed 版。効率を重視するが完全性保証はない。"
+status: reviewed
 primarySources:
   - paperId: mg-mapd-iros-2022
 implementationReferences: []
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
 
-<PreparingNotice algorithmId="lns-wpbs" />
+## 概要
+
+LNS-wPBS は task sequence を LNS で組み替え、windowed PBS で短い先読みを行う手法です。論文は LNS-PBS より効率・安定性を重視する一方、完全性の保証を明示していません<SourceCitation paperId="mg-mapd-iros-2022" section="Abstract" page={1} />。
+
+## 中心となるアイデア
+
+次に進む window だけを衝突解消の対象にします。goal までの探索を `w` で打ち切るのではなく、
+full path を求めたうえで最初の `w` step だけを予約し、`w` step 実行後に再計画します。
+`w` は `extra.windowSize`（無ければ `planningWindow`、既定 10）で指定します。
+sequence assignment と multi-goal の表現は LNS-PBS と同じです。
+
+## アルゴリズムの手順
+
+1. release 済み task を sequence に挿入する。
+2. window の衝突を避ける path を PBS で作る。
+3. window 分だけ実行し、必要なら再計画する。
+
+## よくある誤解
+
+速い、または average service time が小さいことは「必ず解ける」ことを意味しません。LNS-wPBS の `guarantees.complete` は false です。
+
+<Caution title="サイト版の簡略化">
+  ブラウザ版は共通 sequence planner と時空間 A* に RHCR 型の窓内予約を接続しています。 論文の
+  priority search 全体・経験的な大規模評価は含みません。
+</Caution>
+
+## 実験してみる
+
+`mapd-well-formed` と `MG-MAPD: multi-goal` を LNS-PBS と並べ、残存衝突が 0 でも完全性保証が無いことを保証表と一緒に確認してください。

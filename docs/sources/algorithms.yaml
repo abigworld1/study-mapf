@@ -65,7 +65,7 @@
     complete: unknown
     optimal: unknown
     bounded_suboptimal: unknown
-  guarantee_evidence: null
+  guarantee_evidence: "rmca-ral-2021 PDF pp.3–4（式 (1)、Algorithm 1–2）の regret-based marginal-cost ordering を確認したが、regret insertion 固有の完全性・最適性・準最適性を述べる定理・補題は確認できなかった。"
   notes: "アルゴリズムではなく問題定義。頂点衝突・辺衝突・follow・cycle・swap の区別、makespan と sum-of-costs の区別、ゴール到達後の扱い（stay at target / disappear at target）はすべてこの論文の定義に統一する。"
 
 - id: movingai-benchmarks
@@ -114,7 +114,7 @@
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "rmca-ral-2021 PDF pp.1–4（Problem Formulation、式 (1)、Algorithm 1–2）を確認したが、RMCA の完全性・最適性を述べる保証定理・補題は確認できなかった。p.3 の TTD は目的関数の定義であり、保証ではない。"
   notes: "しばしば引用される Moore (1959) The shortest path through a maze の書誌情報を CrossRef で確認できなかったため primary_paper_ids は空。捏造を避けて空のままにしてある。要調査。単位コストグラフでの最短性・有限グラフでの完全性は教科書的事実だが、原典を特定できるまで guarantees は unknown のままにする。"
 
 - id: dijkstra
@@ -875,13 +875,13 @@
   problem_types: [mapd]
   primary_paper_ids: [rmca-ral-2021]
   implementation_repository_ids: []
-  implementation_status: explanation-only
+  implementation_status: library
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: unknown
-  guarantee_evidence: null
-  notes: "調査対象リストの「Regret insertion」に対応させたエントリ。MAPF 文脈では rmca-ral-2021 が regret-based の割当・挿入を用いており（PDF 本文で regret 13 箇所、regret-based を確認）、これを一次出典としている。ただし regret 挿入法自体は車両配送問題（VRP）由来の古典的ヒューリスティクスであり、その原典（Potvin & Rousseau 1993 等とされる）は未確認。要調査。"
+  guarantee_evidence: "rmca-ral-2021 PDF pp.3–4（式 (1)、Algorithm 1–2）の regret-based marginal-cost ordering を確認したが、regret insertion 固有の完全性・最適性・準最適性を述べる定理・補題は確認できなかった。"
+  notes: "RMCA の内部部品として src/lib/assignment/regret-insertion.ts に実装。単体 Solver ではない。rmca-ral-2021 は regret-based marginal-cost heuristic を用いるが、古典的 regret insertion の原典までは本プロジェクトで確認していない。"
 
 # =============================================================================
 # lifelong-mapf
@@ -1048,13 +1048,13 @@
   problem_types: [mapd]
   primary_paper_ids: [rmca-ral-2021]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "1 エージェントが複数タスクを同時に運べる容量制約付き MAPD。regret ベースの割当と経路計画を統合。公開実装は未特定。要調査。"
+  guarantee_evidence: "rmca-ral-2021 PDF pp.1–4（Problem Formulation、式 (1)、Algorithm 1–2）を確認したが、RMCA の完全性・最適性を述べる保証定理・補題は確認できなかった。p.3 の TTD は目的関数の定義であり、保証ではない。"
+  notes: "1 エージェントが複数タスクを同時に運べる容量制約付き MAPD。regret ベースの割当と経路計画を統合。サイト版は教育用で、目的は service time ではなく TTD。PDF で完全性・最適性を保証する定理を確認できなかったため guarantees は unknown。公開実装は未特定。"
 
 - id: lns-pbs
   display_name: "LNS-PBS"
@@ -1063,13 +1063,13 @@
   problem_types: [mapd]
   primary_paper_ids: [mg-mapd-iros-2022]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
+    complete: conditional
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "多目的地 MAPD 向け。LNS で割当を改善し PBS で経路を解く。PDF 本文で 39 箇所確認済み。"
+  guarantee_evidence: "mg-mapd-iros-2022 p.5 Theorem 1: Given a well-formed MG-MAPD instance with a finite number of tasks, LNS-PBS is guaranteed to find collision-free paths in finite time that allow each agent to execute all tasks assigned to it."
+  notes: "多目的地 MAPD 向け。論文の完全性は well-formed MG-MAPD と dummy path の前提に限られる。サイト版は task sequence と順序付き時空間 A* を示す教育用骨格で、論文の全 anytime LNS 近傍と dummy-path 証明を再現していない。"
 
 - id: lns-wpbs
   display_name: "LNS-wPBS"
@@ -1078,13 +1078,13 @@
   problem_types: [mapd]
   primary_paper_ids: [mg-mapd-iros-2022]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
-    complete: unknown
+    complete: false
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "LNS-PBS の windowed 版。PDF 本文で 46 箇所確認済み。"
+  guarantee_evidence: "mg-mapd-iros-2022 p.1 abstract: LNS-wPBS provides no completeness guarantee."
+  notes: "LNS-PBS の windowed 版。論文が明示するように完全性保証は無く、良い service time は保証を意味しない。サイト版は windowed planning の教育用骨格である。"
 
 # =============================================================================
 # tapf-and-task-assignment

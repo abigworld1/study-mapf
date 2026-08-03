@@ -223,6 +223,41 @@ test.describe("シミュレータ", () => {
     await expect(metrics).toContainText("解が求まりました");
   });
 
+  /*
+    LNS-wPBS は w が十分大きいと LNS-PBS と同じ結果になり、画面上は区別が付かない。
+    w を小さくすると LNS-wPBS だけが shortsighted になって詰まる。
+    それが mg-mapd-iros-2022 p.5 の言う非完全性の理由なので、
+    画面から w を動かせること自体が説明の一部になる。
+  */
+  test("LNS-wPBS の時間窓を狭めると LNS-PBS と違う結果になる", async ({ page }) => {
+    await page.getByLabel("プリセット").selectOption("mapd-well-formed");
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    const metrics = page.locator(".metrics");
+
+    // LNS-PBS には窓が無い。
+    await solverSelect.selectOption("lns-pbs");
+    await expect(page.getByLabel("時間窓 w")).toHaveCount(0);
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(metrics.getByText("平均 service time")).toBeVisible({ timeout: 30_000 });
+    await expect(metrics).toContainText("解が求まりました");
+
+    // LNS-wPBS は既定 w=10（論文 p.6 の実験設定）。
+    await solverSelect.selectOption("lns-wpbs");
+    await expect(page.getByLabel("時間窓 w")).toHaveValue("10");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(metrics.getByText("平均 service time")).toBeVisible({ timeout: 30_000 });
+    await expect(metrics).toContainText("解が求まりました");
+
+    // w=2 まで狭めると先が見えなくなって処理しきれない。
+    await page.getByLabel("時間窓 w").fill("2");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(metrics.getByText("未処理タスク")).toBeVisible({ timeout: 30_000 });
+    await expect(metrics).not.toContainText("解が求まりました");
+  });
+
   test("well-formed でない MAPD 入力は、保証の対象外だと画面に出る", async ({ page }) => {
     await page.getByLabel("プリセット").selectOption("mapd-not-well-formed");
     await expect(page.locator(".wf")).toContainText("well-formed ではありません");

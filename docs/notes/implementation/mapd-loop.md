@@ -84,7 +84,7 @@ pickup / delivery を移動の後に見るのは、時刻 t の位置が確定�
 
 ## 貪欲ベースラインが TP と違うところ
 
-|                | TP（論文、Batch 8 で実装予定）             | `mapd-greedy`（サイト独自）                     |
+|                | TP（論文、Batch 8 実装）                   | `mapd-greedy`（サイト独自）                     |
 | -------------- | ------------------------------------------ | ----------------------------------------------- |
 | 割当           | token を 1 体ずつ回して各自が選ぶ          | 中央で距離最小を貪欲に選ぶ                      |
 | 手が空いたとき | non-task endpoint へ退避（同 p.3-4 Path2） | **その場に居座る**                              |
@@ -117,7 +117,7 @@ pickup / delivery を移動の後に見るのは、時刻 t の位置が確定�
 
 ## Batch 8 への引き継ぎ
 
-- **TP / TPTS は `MapdStrategy` を実装するだけで載る。** ループは触らなくてよい。
+- **TP / TPTS は `MapdStrategy` を実装するだけで載る。** Batch 8 で実装済みで、旧ループ分岐は変えていない。
   `MapdStepInput.endpoints` に `nonTask` が入っているので、Path2 相当は
   そこから選べる。
 - **token を明示的に持つこと。** TP の token は「全エージェントの経路と
@@ -144,8 +144,14 @@ pickup / delivery を移動の後に見るのは、時刻 t の位置が確定�
 - 同じ seed で同じ結果
 - `Scenario.kind` による Solver 絞り込み
 
+## Batch 9 で追加された拡張
+
+`TaskSpec.goals`（multi-goal）、`AgentSpec.capacity`（capacity）と
+`MapdStepInput.carryingTasks` / `MapdStepOutput.assignSequence` を後方互換で追加した。
+旧 strategy は従来の `carrying` 投影を受け取り、capacity 1・単一 goal の結果は変わらない。
+実行順序 release → strategy → move → pickup / delivery は維持している。
+
 ## 未対応
 
-TP / TPTS / CENTRAL / MLA* 本体、token の明示的な保持、
 タスクの動的追加（実行中に releaseTime が未知のまま増える形）、
-容量制約つき MAPD、エージェントの充電・故障。
+エージェントの充電・故障。

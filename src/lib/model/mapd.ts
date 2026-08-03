@@ -1,4 +1,4 @@
-import type { Cell, Scenario } from "./types.js";
+import type { Cell, Scenario, TaskSpec } from "./types.js";
 import { cellKey, isWalkable, neighbors } from "./grid.js";
 
 /**
@@ -28,11 +28,16 @@ export interface MapdEndpoints {
   readonly nonTask: readonly Cell[];
 }
 
+/** 旧 MAPD の delivery と MG-MAPD の goal 列を同じ形で扱う。 */
+export function taskGoals(task: TaskSpec): readonly Cell[] {
+  return task.goals && task.goals.length > 0 ? task.goals : [task.delivery];
+}
+
 export function endpointsOf(scenario: Scenario): MapdEndpoints {
   const task = new Map<string, Cell>();
   for (const spec of scenario.tasks ?? []) {
     task.set(cellKey(spec.pickup), spec.pickup);
-    task.set(cellKey(spec.delivery), spec.delivery);
+    for (const goal of taskGoals(spec)) task.set(cellKey(goal), goal);
   }
   const all = new Map<string, Cell>(task);
   for (const agent of scenario.agents) all.set(cellKey(agent.start), agent.start);

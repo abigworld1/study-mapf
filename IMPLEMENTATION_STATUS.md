@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-08-02（Codex / Batch 8 MAPD）
+最終更新: 2026-08-03（Codex / Batch 9 レビュー修正）
 
 ---
 
@@ -66,6 +66,9 @@
 | `min-cost-max-flow`    | 最小費用最大流   | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
 | `cbm`                  | CBM              | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
 | `cbs-ta`               | CBS-TA           | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |
+| `lns-pbs`              | LNS-PBS          | runnable | educational         | MG-MAPD の task sequence / multi-goal 教育骨格。well-formed 条件付き。[ノート](docs/notes/implementation/lns-pbs.md)                                              |
+| `lns-wpbs`             | LNS-wPBS         | runnable | educational         | w=10（extra で変更可）の rolling-window sequence planner。探索は goal まで、予約は窓内。完全性保証なし。[ノート](docs/notes/implementation/lns-wpbs.md)           |
+| `rmca`                 | RMCA             | runnable | educational         | capacity / TTD / regret insertion。[ノート](docs/notes/implementation/rmca.md)                                                                                    |
 
 ---
 
@@ -78,7 +81,7 @@
 | ------- | ---------------------------------------------------------------------------- |
 | Batch 7 | `hungarian-method`, `gale-shapley`（library。CBS-TA などから利用）           |
 | Batch 8 | `mla-star`, `hbh`（library）、`token-passing`, `tpts`, `central`（runnable） |
-| Batch 9 | `rmca`, `lns-pbs`, `lns-wpbs`                                                |
+| Batch 9 | `regret-insertion`（library。RMCA の内部部品）                               |
 | 最後    | `primal`, `primal2`                                                          |
 
 `primal` / `primal2` は学習済みモデルとライセンスを確認できない限り
@@ -86,12 +89,13 @@
 
 ## 内部ライブラリ（単体では実行不可）
 
-| algorithm-id       | 実装                                 | 利用先                                   |
-| ------------------ | ------------------------------------ | ---------------------------------------- |
-| `hungarian-method` | `src/lib/assignment/hungarian.ts`    | CBS-TA の assignment 候補順序            |
-| `gale-shapley`     | `src/lib/assignment/gale-shapley.ts` | 安定マッチングの教材用純関数             |
-| `mla-star`         | `src/solvers/mapd/mla-star.ts`       | TP / TPTS / CENTRAL / HBH の低レベル探索 |
-| `hbh`              | `src/solvers/mapd/strategies.ts`     | 中央 assignment の内部 heuristic         |
+| algorithm-id       | 実装                                     | 利用先                                   |
+| ------------------ | ---------------------------------------- | ---------------------------------------- |
+| `hungarian-method` | `src/lib/assignment/hungarian.ts`        | CBS-TA の assignment 候補順序            |
+| `gale-shapley`     | `src/lib/assignment/gale-shapley.ts`     | 安定マッチングの教材用純関数             |
+| `mla-star`         | `src/solvers/mapd/mla-star.ts`           | TP / TPTS / CENTRAL / HBH の低レベル探索 |
+| `hbh`              | `src/solvers/mapd/strategies.ts`         | 中央 assignment の内部 heuristic         |
+| `regret-insertion` | `src/lib/assignment/regret-insertion.ts` | RMCA の task ordering                    |
 
 これらは実装が無いという意味ではない。シミュレータから直接動かせないため、UI では
 「内部実装あり（単体では実行不可）」と表示する。
@@ -137,6 +141,9 @@
 | `mapf-lns`             | 不明     | なし               | mapf-lns-ijcai-2021 p.1 の “with no guarantee”                          |
 | `mapf-lns2`            | なし     | なし               | mapf-lns2-aaai-2022 p.1 abstract の “lacks theoretical guarantees”      |
 | `rhcr`                 | なし     | なし               | rhcr-aaai-2021 §4.4 p.6、結論 p.8                                       |
+| `lns-pbs`              | 条件付き | 不明               | mg-mapd-iros-2022 p.5 Theorem 1（well-formed MG-MAPD、有限 task 前提）  |
+| `lns-wpbs`             | なし     | 不明               | mg-mapd-iros-2022 p.1 abstract（completeness guarantee なし）           |
+| `rmca`                 | 不明     | 不明               | rmca-ral-2021 p.3 の TTD 定式化は確認したが、保証定理は確認できず       |
 
 **PDF を読んで新たに確定した保証は、実装ノートに書くだけでなく
 `algorithms.yaml` の `guarantees` と `guarantee_evidence` へ必ず書き戻すこと。**

@@ -3,13 +3,41 @@ title: "RMCA"
 algorithmId: rmca
 originalName: "RMCA"
 order: 740
-summary: ""
-status: draft
+summary: "容量制約を持つ agent の task assignment と path planning を同時に扱う MAPD 手法。"
+status: reviewed
 primarySources:
   - paperId: rmca-ral-2021
 implementationReferences: []
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
 
-<PreparingNotice algorithmId="rmca" />
+## 概要
+
+RMCA は agent が複数 task を同時に運べる容量制約を導入し、割当と path planning を同時に更新します。従来手法が capacity 1 を仮定することとの差が出発点です<SourceCitation paperId="rmca-ral-2021" section="Problem Formulation" page={2} />。
+
+## まず何がうれしいのか
+
+pickup のたびに delivery へ戻る必要がないため、近い task をまとめて運べます。割当の marginal cost を実際の path planning に反映できます。
+
+## 中心となるアイデア
+
+potential assignment heap を作り、regret の大きい task から sequence へ挿入します。経路は pickup / delivery の順序を守り、容量と vertex / edge-swap conflict を同時に検査します<SourceCitation paperId="rmca-ral-2021" label="Algorithm 1" page={4} />。
+
+## 目的関数
+
+RMCA が最小化するのは average service time ではなく total travel delay (TTD) です<SourceCitation paperId="rmca-ral-2021" section="Formula Definition As An Optimisation Problem" page={3} />。サイトの `objective` は `total-travel-delay`、service time は別の表示指標です。
+
+## 実装上の注意
+
+`AgentSpec.capacity` の既定値は 1 で、既存 MAPD と互換です。`TaskSpec.goals` を指定すると複数 goal を順に訪れます。regret insertion は単体 Solver ではなく RMCA 内部の純関数です。
+
+<Caution title="サイト版の範囲">
+  論文の priority heap の top-v collision repair と、優先順位付き計画の完全性は簡略化しています。TTD
+  の値と service time を他手法と直接比較しないでください。
+</Caution>
+
+## 実験してみる
+
+`MAPD: capacity 2` と容量を 1 にしたコピーを比較し、`total travel delay`、capacity、平均 service time を別々に確認してください。

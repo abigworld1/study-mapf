@@ -199,12 +199,15 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
     for (const task of state.tasks) {
       ctx.strokeStyle = theme.goalRing;
       ctx.strokeRect(px(task.pickup.x) + 3, py(task.pickup.y) + 3, s - 6, s - 6);
-      ctx.beginPath();
-      ctx.moveTo(px(task.delivery.x) + s / 2, py(task.delivery.y) + 4);
-      ctx.lineTo(px(task.delivery.x) + s - 4, py(task.delivery.y) + s - 4);
-      ctx.lineTo(px(task.delivery.x) + 4, py(task.delivery.y) + s - 4);
-      ctx.closePath();
-      ctx.stroke();
+      const goals = task.goals && task.goals.length > 0 ? task.goals : [task.delivery];
+      for (const goal of goals) {
+        ctx.beginPath();
+        ctx.moveTo(px(goal.x) + s / 2, py(goal.y) + 4);
+        ctx.lineTo(px(goal.x) + s - 4, py(goal.y) + s - 4);
+        ctx.lineTo(px(goal.x) + 4, py(goal.y) + s - 4);
+        ctx.closePath();
+        ctx.stroke();
+      }
     }
   }
 

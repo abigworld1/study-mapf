@@ -1495,6 +1495,47 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-03 LNS-wPBS の時間窓をシミュレータから触れるようにした（Claude Code）
+
+Codex が Batch 9 のレビュー修正で LNS-wPBS に rolling window を実装した。
+検証したところ窓は正しく動いていた（探索は goal まで伸び、予約と衝突解消だけが
+窓の内側。24 step 先の goal も既定 w=10 で解ける）。
+
+ただし**既定 w=10 では 6 プリセット全部で LNS-PBS と結果が同じ**で、
+差が出るのは w=2〜4 のときだけだった。そこへはユニットテストからしか
+到達できず、サイト上では相変わらず「同じ挙動の 2 手法」に見えていた。
+
+シミュレータに `時間窓 w` の入力を足した。既定 10 は論文の実験設定
+（mg-mapd-iros-2022 p.6「We set the time window of LNS-wPBS to w = 10
+timesteps.」）。LNS-PBS 側には出さない（窓を使わないため）。
+
+実画面での確認（`mapd-well-formed`）:
+
+```text
+LNS-PBS          解が求まりました  svc 11.0  未処理 0   （窓の入力は出ない）
+LNS-wPBS w=10    解が求まりました  svc 11.0  未処理 0
+LNS-wPBS w= 4    時間切れ          svc 10.5  未処理 1
+LNS-wPBS w= 2    時間切れ          svc  9.5  未処理 1
+```
+
+w を狭めると LNS-wPBS だけが詰まる。同 p.5 が言う
+「incomplete because there is no guarantee that the agents can reach their
+goal locations in a finite number of timesteps」の理由が、画面で確かめられる
+ようになった。動かせないと 2 手法の違いを説明しようがないので、
+つまみ自体が説明の一部になっている。
+
+`site.spec.ts` に 1 件追加（LNS-PBS に窓の入力が無いこと、既定が 10 であること、
+w=2 にすると解が求まらなくなること）。
+
+なお Codex の報告表で `mapd-not-well-formed` の throughput が `.0045` に
+なっていたが、実測は `.0149`（Batch 9 前と同値）だった。コードは正しく、
+報告の転記ミス。既存 4 手法に退行は無い。
+
+最終ゲート: sources:validate errors=0/warnings=14、format check、lint、
+typecheck 0 errors、unit 288 passed、build 65 pages、E2E 46 passed。
+
+---
+
 ## 2026-08-02 Batch 8 レビュー後の追記（Claude Code）
 
 Codex の Batch 8 修正を受けて、こちらで 3 点手を入れた。
@@ -1947,3 +1988,45 @@ lacam を例に使っていたため、Batch 5 で lacam が実装された時�
 - `npm test`: 19 files / 273 tests passed
 - `npm run build`: 64 pages built
 - `npm run test:e2e`: 44 tests passed（chromium / mobile）
+
+---
+
+## 2026-08-02 Batch 9（Codex）
+
+### 実装
+
+- `TaskSpec.goals`、`AgentSpec.capacity`、`MapdStepInput.carryingTasks`、`MapdStepOutput.assignSequence` を後方互換で追加。既存 capacity 1 / 単一 goal のループ分岐と時刻順序は維持。
+- `src/solvers/mapd/batch9.ts` に LNS-PBS / LNS-wPBS / RMCA の共通 task-sequence planner、`src/lib/assignment/regret-insertion.ts` に RMCA 内部部品を追加。
+- `SolverMetrics.totalTravelDelay` と `objective: total-travel-delay` を追加し、RMCA は service time と TTD を分離して返す。
+- `mapd-capacity` と `mapd-multi-goal` プリセット、Batch 9 の単体テストを追加。
+
+### 資料・保証
+
+- `mg-mapd-iros-2022` p.1 abstract、p.3 Algorithm 1、p.5 Theorem 1 を PDF で確認。LNS-PBS は well-formed MG-MAPD 条件付き complete、LNS-wPBS は no completeness guarantee と manifest へ反映。
+- `rmca-ral-2021` p.2–4 を確認。RMCA の目的は TTD。完全性・最適性の保証は確認できないため unknown のまま。
+- regret insertion の古典的原典は確認できず、保証は unknown。単体 Solver ではなく library 状態。
+
+### 未対応
+
+- 論文の全 anytime LNS 近傍、PBS priority-tree、LNS-PBS dummy-path 完全性、RMCA の potential-assignment heap / top-v collision repair は教育用に簡略化。
+- 公開実装は未特定のため固定ケース照合なし。
+
+### 品質ゲート
+
+- `npm run sources:validate`: errors=0 warnings=14
+- `npm run format:check`: passed
+- `npm run lint`: passed
+- `npm run typecheck`: 0 errors（既存 Astro `z` deprecation hints 22 件）
+- `npm test`: 20 files / 283 tests passed
+- `npm run build`: 65 pages built
+- `npm run test:e2e`: 44 passed
+- 最終確認で Batch 9 の予約登録を `reservePathForRules` に統一し、vertex だけでなく edge-swap / goal behavior も低レベル探索と同じ規則で検査するよう修正。再度 format / lint / typecheck / unit / build / e2e を通過。
+- Batch 9 の展開数を Solver 全体で集計し、`timeout` / `node-limit` / `aborted` を構造化結果へ伝える制限処理を追加。
+
+### 2026-08-03 Batch 9 レビュー修正
+
+- LNS-wPBS に `extra.windowSize`（別名 `planningWindow`、既定 `w=10`。`mg-mapd-iros-2022` p.6 の実験設定）を接続した。`spaceTimeAStar.maxTime` はゴール到達まで残し、`reservationHorizon` と予約経路の切断だけを窓内に限定するため、`w` を探索上限として誤用していない。窓境界ごとに再計画し、窓内の stale な vertex / edge-swap 提案は次ステップで再計画する。
+- `windowSize: 2` の `mapd-well-formed` で LNS-PBS は solved（average service time 11、makespan 20）だが LNS-wPBS は timeout（pending 1、conflicts 0）となるテストを追加。窓の shortsightedness による非完全性を固定した。単一 agent の multi-goal では goal が窓幅より遠くても solved になるテストも追加し、LNS-PBS の実装は変更していない。
+- `rmca` と `regret-insertion` について `rmca-ral-2021` PDF の該当範囲を再確認し、完全性・最適性・準最適性の保証定理・補題を確認できなかった旨を `guarantee_evidence` に記録した。TTD は目的関数であり保証ではない。
+- multi-goal の効果を単一 goal の対照と固定し、LNS-PBS / LNS-wPBS / RMCA の average service time が 6（単一 goal）から 8（2 goal）へ増えることを確認した。
+- 品質ゲート再実行: `sources:validate` errors=0 warnings=14、format / lint / typecheck（0 errors）/ unit 20 files・288 tests。build 65 pages、E2E 44 tests もこの修正後に通過した。

@@ -11,9 +11,9 @@ import type {
   TaskSpec,
   TimedPath,
 } from "@/lib/model/types.js";
-import { cellEquals, neighbors } from "@/lib/model/grid.js";
+import { cellEquals, lookupDistance, neighbors, trueDistanceFrom } from "@/lib/model/grid.js";
 import { detectConflicts, makespanOf, sumOfCosts } from "@/lib/model/conflicts.js";
-import { checkWellFormed, endpointsOf, type MapdEndpoints } from "@/lib/model/mapd.js";
+import { checkWellFormed, endpointsOf, taskGoals, type MapdEndpoints } from "@/lib/model/mapd.js";
 import { checkLimits } from "../limits.js";
 import { createTraceRecorder } from "../context.js";
 import { checkAbort } from "../shared.js";
@@ -42,6 +42,13 @@ import { checkAbort } from "../shared.js";
  *   起点は releaseTime。割当時刻でも pickup 時刻でもない。
  */
 
+/** 容量制約付き MAPD の一つの carrying 状態。 */
+export interface CarryingTaskState {
+  readonly task: TaskSpec;
+  readonly pickedUp: boolean;
+  readonly goalIndex: number;
+}
+
 /** 実行ループが戦略へ渡す、その時刻のスナップショット。 */
 export interface MapdStepInput {
   readonly scenario: Scenario;
@@ -52,6 +59,8 @@ export interface MapdStepInput {
   readonly openTasks: readonly TaskSpec[];
   /** 実行中のタスク。agentId -> タスクと、pickup を終えたかどうか。 */
   readonly carrying: ReadonlyMap<AgentId, { readonly task: TaskSpec; readonly pickedUp: boolean }>;
+  /** 容量制約付き MAPD 用の完全な carrying 状態。旧戦略では未設定。 */
+  readonly carryingTasks?: ReadonlyMap<AgentId, readonly CarryingTaskState[]>;
   /** 論文 §3.2 の endpoint 集合。TP の Path2 が non-task endpoint を要る。 */
   readonly endpoints: MapdEndpoints;
   readonly emit: (event: SolverEvent) => void;
@@ -80,6 +89,8 @@ export interface MapdStepOutput {
    *   ループは戦略の内部状態を知らないので、計画の破棄まではやらない。
    */
   readonly assign?: ReadonlyMap<AgentId, TaskId>;
+  /** MG-MAPD / 容量制約向けの task 列。 */
+  readonly assignSequence?: ReadonlyMap<AgentId, readonly TaskId[]>;
   /**
    * 割り当てを解く。ここに挙げたエージェントは手が空く。
    * pickup 済みのタスクは解けない（運搬中のものを捨てさせないため）。
@@ -94,6 +105,12 @@ export interface MapdStepOutput {
 
 export interface MapdStrategy {
   readonly name: string;
+  /** 複数 task / goal 列を扱う戦略だけ true にする。 */
+  readonly extendedModel?: boolean;
+  /** 戦略内部で実測した展開数。 */
+  readonly expandedNodes?: number;
+  /** 戦略側で探索を止めた理由。 */
+  readonly stopReason?: "timeout" | "node-limit" | "aborted";
   /** 実行前の準備。失敗したら理由を返す。 */
   init?(scenario: Scenario, endpoints: MapdEndpoints): string | null;
   step(input: MapdStepInput): MapdStepOutput;
@@ -194,6 +211,23 @@ export async function runMapdLoop(
     options.maxHorizon,
     loopOptions.horizon ?? options.horizon ?? defaultMapdHorizon(scenario),
   );
+
+  if (
+    strategy.extendedModel === true ||
+    scenario.agents.some((agent) => (agent.capacity ?? 1) > 1) ||
+    tasks.some((task) => (task.goals?.length ?? 0) > 0)
+  ) {
+    return runExtendedMapdLoop(
+      scenario,
+      options,
+      context,
+      strategy,
+      startedAt,
+      horizon,
+      emit,
+      finish,
+    );
+  }
 
   const positions = new Map<AgentId, Cell>(scenario.agents.map((a) => [a.id, { ...a.start }]));
   const histories = new Map<AgentId, { time: number; cell: Cell }[]>(
@@ -359,6 +393,215 @@ function defaultMapdHorizon(scenario: Scenario): number {
 function isStepValid(scenario: Scenario, from: Cell, to: Cell): boolean {
   if (cellEquals(from, to)) return true;
   return neighbors(scenario.map, from, scenario.rules).some((cell) => cellEquals(cell, to));
+}
+
+/**
+ * MG-MAPD / capacity 拡張用の実行ループ。
+ * 既存モデルの分岐には入らないため、容量 1・単一 goal の旧手法の挙動を
+ * 変更しない。時刻順序は通常ループと同じ release → strategy → move → service。
+ */
+async function runExtendedMapdLoop(
+  scenario: Scenario,
+  options: SolverOptions,
+  context: SolverContext,
+  strategy: MapdStrategy,
+  startedAt: number,
+  horizon: number,
+  emit: (event: SolverEvent) => void,
+  finish: (result: SolverResult) => SolverResult,
+): Promise<SolverResult> {
+  const tasks = scenario.tasks ?? [];
+  const byRelease = [...tasks].sort(
+    (a, b) => a.releaseTime - b.releaseTime || (a.id < b.id ? -1 : 1),
+  );
+  const pending = new Map<TaskId, TaskSpec>();
+  const positions = new Map<AgentId, Cell>(scenario.agents.map((a) => [a.id, { ...a.start }]));
+  const histories = new Map<AgentId, { time: number; cell: Cell }[]>(
+    scenario.agents.map((a) => [a.id, [{ time: 0, cell: { ...a.start } }]]),
+  );
+  const carrying = new Map<AgentId, CarryingTaskState[]>();
+  const serviceTimes: number[] = [];
+  const completionTimes = new Map<TaskId, number>();
+  let released = 0;
+  let completed = 0;
+  let outcome: SolverResult["outcome"] = "solved";
+
+  for (let time = 1; time <= horizon; time += 1) {
+    const abort = checkAbort(startedAt, context.now, options.timeoutMs, context.signal);
+    if (abort !== "ok") {
+      outcome = abort;
+      break;
+    }
+    while (released < byRelease.length && byRelease[released]!.releaseTime <= time - 1) {
+      const task = byRelease[released]!;
+      pending.set(task.id, task);
+      emit({ type: "release-task", taskId: task.id, time: task.releaseTime });
+      released += 1;
+    }
+
+    const legacy = new Map<AgentId, { task: TaskSpec; pickedUp: boolean }>();
+    for (const [agentId, states] of carrying) {
+      const first = states[0];
+      if (first) legacy.set(agentId, { task: first.task, pickedUp: first.pickedUp });
+    }
+    const assignedIds = new Set<TaskId>();
+    for (const states of carrying.values())
+      for (const state of states) assignedIds.add(state.task.id);
+    const openTasks = [...pending.values()].filter((task) => !assignedIds.has(task.id));
+    const step = strategy.step({
+      scenario,
+      time: time - 1,
+      positions,
+      openTasks,
+      carrying: legacy,
+      carryingTasks: carrying,
+      endpoints: endpointsOf(scenario),
+      emit,
+    });
+    if (strategy.stopReason) {
+      outcome = strategy.stopReason;
+      break;
+    }
+
+    for (const agentId of step.unassign ?? []) {
+      const states = carrying.get(agentId);
+      if (!states) continue;
+      const kept = states.filter((state) => state.pickedUp);
+      if (kept.length) carrying.set(agentId, kept);
+      else carrying.delete(agentId);
+    }
+    const ownerOf = (taskId: TaskId): [AgentId, CarryingTaskState] | undefined => {
+      for (const [agentId, states] of carrying) {
+        const state = states.find((candidate) => candidate.task.id === taskId);
+        if (state) return [agentId, state];
+      }
+      return undefined;
+    };
+    const addTask = (agentId: AgentId, taskId: TaskId): void => {
+      const task = pending.get(taskId);
+      if (!task) return;
+      const current = carrying.get(agentId) ?? [];
+      if (current.some((state) => state.task.id === taskId)) return;
+      const owner = ownerOf(taskId);
+      if (owner) {
+        if (owner[1].pickedUp || owner[0] === agentId) return;
+        const old = carrying.get(owner[0]) ?? [];
+        carrying.set(
+          owner[0],
+          old.filter((state) => state.task.id !== taskId),
+        );
+        if ((carrying.get(owner[0]) ?? []).length === 0) carrying.delete(owner[0]);
+        emit({ type: "swap-task", taskId, from: owner[0], to: agentId, time });
+      }
+      carrying.set(agentId, [...current, { task, pickedUp: false, goalIndex: 0 }]);
+      emit({ type: "assign-task", taskId, agentId });
+    };
+    for (const [agentId, sequence] of step.assignSequence ?? []) {
+      for (const taskId of sequence) addTask(agentId, taskId);
+    }
+    for (const [agentId, taskId] of step.assign ?? []) addTask(agentId, taskId);
+
+    const moved: Record<string, Cell> = {};
+    for (const agent of scenario.agents) {
+      const current = positions.get(agent.id)!;
+      const requested = step.moves.get(agent.id);
+      const next = requested && isStepValid(scenario, current, requested) ? requested : current;
+      positions.set(agent.id, { ...next });
+      histories.get(agent.id)!.push({ time, cell: { ...next } });
+      moved[agent.id] = { ...next };
+    }
+    emit({ type: "move", time, positions: moved });
+
+    for (const agent of scenario.agents) {
+      const states = carrying.get(agent.id);
+      if (!states || states.length === 0) continue;
+      const at = positions.get(agent.id)!;
+      const capacity = Math.max(1, agent.capacity ?? 1);
+      let picked = states.filter((state) => state.pickedUp).length;
+      const nextStates = states.map((state) => ({ ...state }));
+      for (let index = 0; index < nextStates.length; index += 1) {
+        const state = nextStates[index]!;
+        if (state.pickedUp || picked >= capacity) continue;
+        if (index !== 0 && !nextStates[index - 1]!.pickedUp) break;
+        if (!cellEquals(at, state.task.pickup)) break;
+        nextStates[index] = { ...state, pickedUp: true, goalIndex: 0 };
+        picked += 1;
+        emit({ type: "pickup", taskId: state.task.id, agentId: agent.id, time });
+      }
+      const remaining: CarryingTaskState[] = [];
+      for (const state of nextStates) {
+        if (!state.pickedUp) {
+          remaining.push(state);
+          continue;
+        }
+        const goals = taskGoals(state.task);
+        const goal = goals[state.goalIndex] ?? goals[goals.length - 1]!;
+        if (!cellEquals(at, goal)) {
+          remaining.push(state);
+          continue;
+        }
+        if (state.goalIndex < goals.length - 1) {
+          remaining.push({ ...state, goalIndex: state.goalIndex + 1 });
+          continue;
+        }
+        pending.delete(state.task.id);
+        completed += 1;
+        completionTimes.set(state.task.id, time);
+        serviceTimes.push(time - state.task.releaseTime);
+        emit({ type: "delivery", taskId: state.task.id, agentId: agent.id, time });
+        emit({
+          type: "progress",
+          ratio: completed / tasks.length,
+          label: `${completed}/${tasks.length} 件を配達`,
+        });
+      }
+      if (remaining.length) carrying.set(agent.id, remaining);
+      else carrying.delete(agent.id);
+    }
+    if (completed === tasks.length) break;
+  }
+
+  const paths: TimedPath[] = scenario.agents.map((agent) => ({
+    agentId: agent.id,
+    positions: histories.get(agent.id)!.map((p) => ({ time: p.time, cell: p.cell })),
+  }));
+  const remaining = tasks.length - completed;
+  if (remaining > 0 && outcome === "solved") outcome = "timeout";
+  const conflicts = detectConflicts(paths, scenario.rules);
+  const runtimeMs = context.now() - startedAt;
+  const span = Math.max(1, makespanOf(paths));
+  let totalTravelDelay = 0;
+  for (const task of tasks) {
+    const done = completionTimes.get(task.id);
+    if (done === undefined) continue;
+    const goals = taskGoals(task);
+    let ideal = 0;
+    let from = task.pickup;
+    for (const goal of goals) {
+      const field = trueDistanceFrom(scenario.map, goal);
+      ideal += lookupDistance(scenario.map, field, from);
+      from = goal;
+    }
+    if (Number.isFinite(ideal)) totalTravelDelay += done - (task.releaseTime + ideal);
+  }
+  return finish({
+    outcome,
+    paths,
+    metrics: {
+      sumOfCosts: sumOfCosts(paths),
+      makespan: makespanOf(paths),
+      runtimeMs,
+      ...(strategy.expandedNodes !== undefined ? { expandedNodes: strategy.expandedNodes } : {}),
+      ...(serviceTimes.length
+        ? { averageServiceTime: serviceTimes.reduce((s, v) => s + v, 0) / serviceTimes.length }
+        : {}),
+      throughput: completed / span,
+      pendingTasks: remaining,
+      totalTravelDelay,
+    },
+    conflicts,
+    ...(remaining > 0 ? { failureReason: "limit-exceeded" as const } : {}),
+  });
 }
 
 function errorResult(

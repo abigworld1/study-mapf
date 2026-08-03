@@ -62,6 +62,8 @@ export interface AgentSpec {
   readonly goal?: Cell;
   /** 表示用の色 index。色だけに依存しないよう、UI では形と記号も併用する。 */
   readonly colorIndex?: number;
+  /** MAPD の積載容量。未指定時は従来どおり 1。 */
+  readonly capacity?: number;
 }
 
 /**
@@ -76,6 +78,8 @@ export interface TaskSpec {
   readonly id: TaskId;
   readonly pickup: Cell;
   readonly delivery: Cell;
+  /** MG-MAPD の goal 列。未指定時は delivery 1 点を使う。 */
+  readonly goals?: readonly Cell[];
   readonly releaseTime: Time;
 }
 
@@ -314,6 +318,8 @@ export interface SolverMetrics {
   readonly throughput?: number;
   /** MAPD: 未処理タスク数。 */
   readonly pendingTasks?: number;
+  /** RMCA の total travel delay。service time や sum of costs とは別の量。 */
+  readonly totalTravelDelay?: number;
 }
 
 export type SolverOutcome =
@@ -374,7 +380,8 @@ export interface SolverResult {
    *   画面は両方の値を出すので、どちらを最適化したのか言わないと
    *   「表示されている数値がどれも最適」と読まれる。
    */
-  readonly objective?: "makespan" | "sum-of-costs" | "sum-of-loss";
+  readonly objective?:
+    "makespan" | "sum-of-costs" | "sum-of-loss" | "average-service-time" | "total-travel-delay";
   /** outcome が error のときの構造化情報。 */
   readonly error?: SolverErrorInfo;
   /** outcome が solved 以外のときの分類。error より粗いが outcome より細かい。 */

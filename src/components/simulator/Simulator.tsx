@@ -33,10 +33,15 @@ import { createRandom, randomInt } from "@/lib/model/random";
 
 type EditMode = "wall" | "agent" | "start" | "goal" | "pickup" | "delivery";
 
-const OBJECTIVE_LABEL: Record<"makespan" | "sum-of-costs" | "sum-of-loss", string> = {
+const OBJECTIVE_LABEL: Record<
+  "makespan" | "sum-of-costs" | "sum-of-loss" | "average-service-time" | "total-travel-delay",
+  string
+> = {
   makespan: "makespan（他の指標は最適値ではありません）",
   "sum-of-costs": "sum of costs（他の指標は最適値ではありません）",
   "sum-of-loss": "sum of loss（画面の sum of costs とは別の量です）",
+  "average-service-time": "average service time（保証された最適値ではありません）",
+  "total-travel-delay": "total travel delay（service time とは別の量です）",
 };
 
 const PROBLEM_KIND_LABEL: Record<Scenario["kind"], string> = {
@@ -80,6 +85,17 @@ export default function Simulator({ initialSolverId }: Props) {
   const [rhcrReplanningPeriod, setRhcrReplanningPeriod] = useState(2);
   // 空欄 = 自動。w から導くと、無関係なつまみで運転時間が決まってしまう。
   const [rhcrHorizon, setRhcrHorizon] = useState("");
+  /*
+    LNS-wPBS の時間窓。既定 10 は論文の実験設定（mg-mapd-iros-2022 p.6
+    「We set the time window of LNS-wPBS to w = 10 timesteps.」）に合わせる。
+
+    ★ ここを動かせるようにしておく意味は大きい。LNS-PBS と LNS-wPBS は
+      w が十分大きいと同じ結果になり、画面上は区別が付かない。
+      w を小さくすると LNS-wPBS だけが shortsighted になって詰まる。
+      それが論文 p.5 の言う非完全性の理由そのものなので、
+      動かして確かめられないと 2 手法の違いを説明できない。
+  */
+  const [wpbsWindow, setWpbsWindow] = useState(10);
   const [scenario, setScenario] = useState<Scenario>(() => buildPreset("open-grid", 1));
 
   /*
@@ -366,7 +382,9 @@ export default function Simulator({ initialSolverId }: Props) {
                 replanningPeriod: rhcrReplanningPeriod,
               },
             }
-          : undefined;
+          : solverId === "lns-wpbs"
+            ? { extra: { windowSize: wpbsWindow } }
+            : undefined;
       const res = await runSolver({
         solverId,
         scenario,
@@ -389,7 +407,7 @@ export default function Simulator({ initialSolverId }: Props) {
       setRunning(false);
       setProgress("");
     }
-  }, [rhcrHorizon, rhcrPlanningWindow, rhcrReplanningPeriod, scenario, seed, solverId]);
+  }, [rhcrHorizon, rhcrPlanningWindow, rhcrReplanningPeriod, scenario, seed, solverId, wpbsWindow]);
 
   const onStop = useCallback(() => {
     abortRef.current?.abort();
@@ -557,6 +575,30 @@ export default function Simulator({ initialSolverId }: Props) {
               <p className="hint">
                 RHCR は w ≥ h を要求します。w は衝突解消の先読み、h は実行周期、horizon は何 step
                 運転するかです。horizon を空欄にするとマップと goal の距離から自動で決めます。
+              </p>
+            </div>
+          )}
+
+          {solverId === "lns-wpbs" && (
+            <div>
+              <div className="row">
+                <label>
+                  時間窓 w
+                  <input
+                    type="number"
+                    min={1}
+                    max={2000}
+                    value={wpbsWindow}
+                    onChange={(event) => setWpbsWindow(Number(event.target.value) || 1)}
+                  />
+                </label>
+              </div>
+              <p className="hint">
+                LNS-wPBS は最初の w step 分だけ衝突を解消し、w step 進んだら計画し直します。w
+                を小さくすると先が見えなくなって詰まることがあります。これが LNS-PBS
+                との違いで、完全性の保証が無い理由でもあります（mg-mapd-iros-2022 p.5）。w
+                を十分大きくすると LNS-PBS と同じ結果になります。既定の 10 は論文の実験設定です（同
+                p.6）。
               </p>
             </div>
           )}
@@ -867,6 +909,12 @@ export default function Simulator({ initialSolverId }: Props) {
                   <dd className={result.metrics.pendingTasks > 0 ? "bad" : ""}>
                     {result.metrics.pendingTasks}
                   </dd>
+                </div>
+              )}
+              {result.metrics.totalTravelDelay !== undefined && (
+                <div>
+                  <dt>total travel delay</dt>
+                  <dd>{result.metrics.totalTravelDelay.toFixed(1)}</dd>
                 </div>
               )}
             </dl>

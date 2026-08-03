@@ -1,0 +1,28 @@
+---
+title: "Regret 挿入法"
+algorithmId: regret-insertion
+originalName: "Regret insertion"
+order: 745
+summary: "RMCA の task sequence を作る内部割当ヒューリスティクス。"
+status: reviewed
+primarySources:
+  - paperId: rmca-ral-2021
+implementationReferences: []
+lastReviewed: "2026-08-02"
+---
+
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
+
+## 概要
+
+Regret 挿入法は、task を最良の agent へ入れた場合と次善の agent へ入れた場合の差（regret）が大きい task から sequence へ挿入するヒューリスティクスです。RMCA は regret-based marginal-cost heuristic を使います<SourceCitation paperId="rmca-ral-2021" section="Task Assignment Framework" page={4} />。
+
+## サイト上の実装
+
+`src/lib/assignment/regret-insertion.ts` の純関数として実装し、RMCA から呼び出します。単体 Solver ではないため、シミュレータの Solver 一覧には出ません。
+
+<Caution title="保証と出典">
+  このページは RMCA 内部部品の説明です。RMCA 論文はこの ordering を使いますが、古典的な regret
+  insertion の原典と、この部品自体の完全性・最適性は本プロジェクトで確定していません。
+</Caution>

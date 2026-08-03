@@ -22,6 +22,7 @@ import { cbsTaSolver } from "./tapf/cbs-ta.js";
 import { minCostMaxFlowSolver } from "./tapf/mcmf-solver.js";
 import { mapdGreedySolver } from "./mapd/greedy.js";
 import { centralSolver, tokenPassingSolver, tptsSolver } from "./mapd/solvers.js";
+import { lnsPbsSolver, lnsWpbsSolver, rmcaSolver } from "./mapd/batch9-solvers.js";
 
 /**
  * Solver の登録所。
@@ -73,6 +74,9 @@ const SOLVERS: readonly MapfSolver[] = [
   tokenPassingSolver,
   tptsSolver,
   centralSolver,
+  lnsPbsSolver,
+  lnsWpbsSolver,
+  rmcaSolver,
 ];
 
 const byId = new Map(SOLVERS.map((s) => [s.metadata.id, s]));

@@ -3,13 +3,51 @@ title: "LNS-PBS"
 algorithmId: lns-pbs
 originalName: "LNS-PBS"
 order: 750
-summary: ""
-status: draft
+summary: "LNS で task sequence を組み替え、PBS で multi-goal path を計画する MAPD 手法。"
+status: reviewed
 primarySources:
   - paperId: mg-mapd-iros-2022
 implementationReferences: []
 ---
 
-import PreparingNotice from "@/components/PreparingNotice.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import Caution from "@/components/sources/Caution.astro";
 
-<PreparingNotice algorithmId="lns-pbs" />
+## 概要
+
+LNS-PBS は、エージェントへ task の列を割り当て、列に含まれる複数 goal を順に訪れる path を PBS で求める MAPD 手法です。多目的地を扱う MG-MAPD にも拡張されます<SourceCitation paperId="mg-mapd-iros-2022" section="Abstract" page={1} />。
+
+## まず何がうれしいのか
+
+次の task まで見て割り当てるため、一件ずつ割り当てる方法より将来の移動を考慮できます。well-formed MG-MAPD では完全性が定理として述べられています<SourceCitation paperId="mg-mapd-iros-2022" label="Theorem 1" page={5} />。
+
+## 中心となるアイデア
+
+task sequence を初期化し、近傍の task を一度外して別の agent・位置へ再挿入します。各列には dummy endpoint を末尾に置き、PBS の優先順に従って他 agent の path と衝突しないように計画します。
+
+## アルゴリズムの手順
+
+1. release 済み task を決定的な初期 sequence に入れる。
+2. 各 agent の pickup と goal 列を順序付き時空間 A\* で計画する。
+3. 近傍を破壊・修復し、改善した sequence を採用する。
+4. 1 timestep 進め、完了した task を sequence から外す。
+
+## データ構造
+
+サイト版は `assignSequence`、`carryingTasks`、token path と reservation table を使います。`TaskSpec.goals` が未指定なら旧 MAPD の `delivery` 1 点です。
+
+## よくある誤解
+
+- LNS-PBS の完全性は well-formed と finite task set の条件付きです。
+- PBS 単体が完全になった、という意味ではありません。dummy path との組合せが前提です。
+- `objective` として表示する average service time が小さい実験結果は、最適性の保証ではありません。
+
+<Caution title="サイト版の範囲">
+  論文の anytime LNS、全 priority-tree 探索、dummy path
+  による証明をブラウザへそのまま移植したものではありません。サイト版は task sequence
+  と衝突回避を学ぶ教育用骨格です。
+</Caution>
+
+## 実験してみる
+
+`MG-MAPD: multi-goal` を選び、LNS-PBS の `assign-task`、`expand-node`、`update-token` と、平均 service time / throughput を確認してください。
