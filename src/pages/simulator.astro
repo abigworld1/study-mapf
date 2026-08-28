@@ -146,8 +146,16 @@ const solvers = listSolverMetadata();
       background: var(--canvas-bg);
       border: var(--border-width) solid var(--border);
       border-radius: var(--radius-md);
-      touch-action: manipulation;
+      /*
+        ★ none にする。manipulation のままだと、タッチでドラッグしたときに
+          ブラウザのスクロールへ持っていかれて盤上のものを動かせない。
+      */
+      touch-action: none;
       cursor: crosshair;
+    }
+    /* 掴んでいる間はカーソルを変える。掴めたことが分かるように。 */
+    .sim-canvas.dragging {
+      cursor: grabbing;
     }
 
     .sim-desc {

@@ -30,6 +30,13 @@ import {
   type RenderState,
 } from "@/lib/render/renderer";
 import { createRandom, randomInt } from "@/lib/model/random";
+import {
+  canPaintWall,
+  describeDragTarget,
+  findDragTarget,
+  moveDragTarget,
+  type DragTarget,
+} from "./drag";
 
 type EditMode = "wall" | "agent" | "start" | "goal" | "pickup" | "delivery";
 
@@ -116,6 +123,14 @@ export default function Simulator({ initialSolverId }: Props) {
     }
   }, [solvers, solverId]);
   const [mode, setMode] = useState<EditMode>("wall");
+  /** いま掴んでいるもの。null なら掴んでいない。 */
+  const [drag, setDrag] = useState<DragTarget | null>(null);
+  /** 壁塗りの向き。true なら塗る、false なら消す、null なら塗っていない。 */
+  const paintRef = useRef<boolean | null>(null);
+  /** キーボードで掴んだときの元の位置。Escape で戻すのに使う。 */
+  const dragOriginRef = useRef<Cell | null>(null);
+  /** 最後に触れたエージェント。「開始」「目標」モードの対象になる。 */
+  const activeAgentRef = useRef<string | null>(null);
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [selected, setSelected] = useState<Cell | null>(null);
 
@@ -275,7 +290,18 @@ export default function Simulator({ initialSolverId }: Props) {
             setMessage("壁の上には設定できません。");
             return prev;
           }
-          const idx = prev.agents.length - 1;
+          /*
+            ★ 対象は「最後に追加したエージェント」ではなく、選んでいるエージェント。
+
+              以前は末尾固定だったので、途中のエージェントの開始・目標を
+              触る手段が無かった。いまは盤上のものを掴んで動かせるので
+              このモードは補助だが、直前に選んだエージェントへ効くほうが
+              素直なので揃えておく。選んでいなければ末尾に戻す。
+          */
+          const activeIndex = activeAgentRef.current
+            ? prev.agents.findIndex((a) => a.id === activeAgentRef.current)
+            : -1;
+          const idx = activeIndex >= 0 ? activeIndex : prev.agents.length - 1;
           const agents = prev.agents.map((a, i) =>
             i === idx ? { ...a, [mode]: cell } : a,
           ) as AgentSpec[];
@@ -307,45 +333,153 @@ export default function Simulator({ initialSolverId }: Props) {
     [mode],
   );
 
-  const onCanvasClick = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const cellAt = useCallback(
+    (clientX: number, clientY: number): Cell | null => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       const vp = computeViewport(canvas, scenario.map);
-      const cell = cellFromPoint(
-        vp,
-        scenario.map,
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-      );
-      if (cell) applyEdit(cell);
+      return cellFromPoint(vp, scenario.map, clientX - rect.left, clientY - rect.top);
     },
-    [applyEdit, scenario.map],
+    [scenario.map],
   );
 
+  /** 掴んでいるものを cell へ動かす。置けないセルは黙って無視する。 */
+  const dropAt = useCallback((target: DragTarget, cell: Cell) => {
+    setScenario((prev) => moveDragTarget(prev, target, cell) ?? prev);
+    setSelected(cell);
+    setResult(null);
+    setTime(0);
+  }, []);
+
+  /*
+    ★ 盤上のものは掴んで動かせる。モードを切り替える必要は無い。
+
+      以前は「開始」「目標」モードで**最後に追加したエージェント**にしか
+      設定できず、途中のエージェントを動かす手段が無かった。
+      掴んで動かす方式ならどれでも直接触れる。
+      モードは「新しく置く」ときだけの意味に変えた。
+
+    ★ 壁は押したまま引きずって塗れる。最初に押したセルの状態で
+      塗るか消すかを決め、以後は同じ操作を続ける。1 セルずつ
+      クリックし直すのは、細い通路を作るときに現実的でない。
+  */
+  const onCanvasPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (event.button !== 0) return;
+      const cell = cellAt(event.clientX, event.clientY);
+      if (!cell) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setSelected(cell);
+
+      const target = findDragTarget(scenario, cell);
+      if (target) {
+        if (target.kind === "agent-start" || target.kind === "agent-goal") {
+          activeAgentRef.current = target.agentId;
+        }
+        dragOriginRef.current = cell;
+        setDrag(target);
+        setMessage(`${describeDragTarget(target)} を掴みました。動かして離すと確定します。`);
+        return;
+      }
+      if (mode === "wall" && canPaintWall(scenario, cell)) {
+        paintRef.current = isWalkable(scenario.map, cell);
+        setScenario((prev) => ({ ...prev, map: withBlocked(prev.map, cell, paintRef.current!) }));
+        setResult(null);
+        setTime(0);
+        return;
+      }
+      applyEdit(cell);
+    },
+    [applyEdit, cellAt, mode, scenario],
+  );
+
+  const onCanvasPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!drag && paintRef.current === null) return;
+      const cell = cellAt(event.clientX, event.clientY);
+      if (!cell) return;
+      if (drag) {
+        dropAt(drag, cell);
+        return;
+      }
+      // 壁塗り。乗り物がある場所は飛ばす。
+      setScenario((prev) =>
+        canPaintWall(prev, cell)
+          ? { ...prev, map: withBlocked(prev.map, cell, paintRef.current!) }
+          : prev,
+      );
+      setSelected(cell);
+    },
+    [cellAt, drag, dropAt],
+  );
+
+  /*
+    ★ フォーカスした時点で選択セルを出す。
+      以前は選択が空のままだったので、キーボード利用者は最初の 1 打が
+      「どこを選んでいるか分からないまま (0,0) から 1 つずれる」動きになり、
+      (0,0) 自体を選べなかった。入り口を見えるようにする。
+  */
+  const onCanvasFocus = useCallback(() => {
+    setSelected((prev) => prev ?? { x: 0, y: 0 });
+  }, []);
+
+  const onCanvasPointerUp = useCallback(() => {
+    if (drag) setMessage("");
+    setDrag(null);
+    paintRef.current = null;
+  }, [drag]);
+
+  /*
+    ★ キーボードでも掴んで動かせるようにする。
+      ドラッグをポインタ専用にすると、支援技術の利用者だけが
+      「最後に追加したエージェントにしか設定できない」古い操作に
+      取り残される。矢印で選び、Enter で掴み、矢印で運び、Enter で置く。
+      Escape で元へ戻す。
+  */
   const onCanvasKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLCanvasElement>) => {
       const step = (dx: number, dy: number) => {
         event.preventDefault();
-        setSelected((prev) => {
-          const base = prev ?? { x: 0, y: 0 };
-          return {
-            x: Math.max(0, Math.min(scenario.map.width - 1, base.x + dx)),
-            y: Math.max(0, Math.min(scenario.map.height - 1, base.y + dy)),
-          };
-        });
+        const base = selected ?? { x: 0, y: 0 };
+        const next = {
+          x: Math.max(0, Math.min(scenario.map.width - 1, base.x + dx)),
+          y: Math.max(0, Math.min(scenario.map.height - 1, base.y + dy)),
+        };
+        // 掴んでいるなら本体ごと運ぶ。置けないセルなら選択だけ動かす。
+        if (drag) dropAt(drag, next);
+        else setSelected(next);
       };
       if (event.key === "ArrowLeft") step(-1, 0);
       else if (event.key === "ArrowRight") step(1, 0);
       else if (event.key === "ArrowUp") step(0, -1);
       else if (event.key === "ArrowDown") step(0, 1);
-      else if (event.key === "Enter" || event.key === " ") {
+      else if (event.key === "Escape" && drag) {
         event.preventDefault();
-        if (selected) applyEdit(selected);
+        if (dragOriginRef.current) dropAt(drag, dragOriginRef.current);
+        setDrag(null);
+        setMessage("");
+      } else if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        if (!selected) return;
+        if (drag) {
+          setDrag(null);
+          setMessage("");
+          return;
+        }
+        const target = findDragTarget(scenario, selected);
+        if (target) {
+          dragOriginRef.current = selected;
+          setDrag(target);
+          setMessage(
+            `${describeDragTarget(target)} を掴みました。矢印キーで動かし、Enter で置きます。Escape で戻します。`,
+          );
+          return;
+        }
+        applyEdit(selected);
       }
     },
-    [applyEdit, selected, scenario.map],
+    [applyEdit, drag, dropAt, selected, scenario],
   );
 
   // ------------------------------------------------------------ 実行
@@ -505,11 +639,15 @@ export default function Simulator({ initialSolverId }: Props) {
         */}
         <canvas
           ref={canvasRef}
-          className="sim-canvas"
-          onClick={onCanvasClick}
+          className={drag ? "sim-canvas dragging" : "sim-canvas"}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
           onKeyDown={onCanvasKeyDown}
+          onFocus={onCanvasFocus}
           tabIndex={0}
-          aria-label="MAPF シミュレータのグリッド。矢印キーでセルを選択し、Enter で編集します。盤面の状態はこの下に文章で表示しています。"
+          aria-label="MAPF シミュレータのグリッド。エージェント・目標・タスク地点はドラッグで動かせます。キーボードでは矢印キーでセルを選び、Enter で掴んで動かし、もう一度 Enter で置きます。Escape で元に戻します。盤面の状態はこの下に文章で表示しています。"
         />
         <p className="sim-desc" aria-live="polite">
           {description}
@@ -713,7 +851,10 @@ export default function Simulator({ initialSolverId }: Props) {
             ))}
           </div>
           <p className="hint">
-            グリッドをクリックすると編集できます。「開始」「目標」は最後に追加したエージェントに適用します。
+            エージェント・目標・タスク地点は<strong>ドラッグで動かせます</strong>。壁は押したまま
+            なぞると続けて塗れます。上のモードは「何も無いセルを押したとき何を置くか」の指定です。
+            キーボードでは矢印キーでセルを選び、Enter で掴んで矢印キーで動かし、もう一度 Enter
+            で置きます（Escape で元に戻ります）。
           </p>
         </section>
 

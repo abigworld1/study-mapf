@@ -138,6 +138,58 @@ test.describe("シミュレータ", () => {
     await expect(page.locator(".sim-desc")).toContainText("グリッド");
   });
 
+  /*
+    ドラッグでエージェントを動かせること。
+    以前は「開始」「目標」モードが最後に追加したエージェントにしか効かず、
+    途中のエージェントを動かす手段が無かった。
+  */
+  test("エージェントをドラッグで動かせる", async ({ page }) => {
+    const canvas = page.locator("canvas.sim-canvas");
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    const desc = page.locator(".sim-desc");
+
+    /*
+      ★ 盤面は canvas いっぱいには描かれない。renderer.computeViewport が
+        セルを正方形に保ったまま中央へ寄せるので、余白を計算に入れないと
+        別のセルを掴んでしまう。ここは同じ式をなぞる。
+    */
+    const size = 12;
+    const cell = Math.max(4, Math.floor(Math.min(box!.width / size, box!.height / size)));
+    const offsetX = Math.floor((box!.width - cell * size) / 2);
+    const offsetY = Math.floor((box!.height - cell * size) / 2);
+    const at = (cx: number, cy: number) => ({
+      x: box!.x + offsetX + (cx + 0.5) * cell,
+      y: box!.y + offsetY + (cy + 0.5) * cell,
+    });
+
+    await expect(desc).toContainText("(0, 0)");
+    const from = at(0, 0);
+    const to = at(3, 2);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 8 });
+    await page.mouse.up();
+
+    // 動かした先が説明文に出る。元の位置には居ない。
+    await expect(desc).toContainText("(3, 2)");
+  });
+
+  test("キーボードでも掴んで動かせる", async ({ page }) => {
+    const canvas = page.locator("canvas.sim-canvas");
+    await canvas.focus();
+    const desc = page.locator(".sim-desc");
+    await expect(desc).toContainText("(0, 0)");
+
+    // (0,0) には a1 が居る。Enter で掴み、右へ 2 つ動かして Enter で置く。
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".sim-controls .message")).toContainText("掴みました");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Enter");
+    await expect(desc).toContainText("(2, 0)");
+  });
+
   test("アルゴリズムを切り替えられる。未実装の手法は選択肢に出ない", async ({ page }) => {
     const solverSelect = page
       .locator("section")
