@@ -442,16 +442,31 @@ async function solveRhcr(
     const table = new SimpleReservationTable();
     const episodePaths: TimedPath[] = [];
     let episodeFailure: SolverResult | undefined;
+    /*
+      ★ 動かないものを先に予約する。
+
+        goal queue が空になった agent はその場から動けない。これを
+        rank 順に混ぜて処理すると、先に計画した agent が「まだ予約されて
+        いない停止中の agent」の上を通る経路を引いてしまう。
+        ランダム 60 盤面の検証で、goal に着いて止まった agent の上を
+        別の agent が通り抜ける衝突が実際に出ていた。
+
+        本来の RHCR は lifelong なので「もう goal が無い agent」が
+        存在せず、この順序問題は起きない。one-shot へ持ち込んだ
+        こちら側の都合なので、こちら側で閉じる。
+    */
     const order = agents.map((_, index) => index).sort((a, b) => ranks[a]! - ranks[b]! || a - b);
+    const idle = order.filter((index) => !goalQueues[index]![0]);
+    for (const index of idle) {
+      const agent = agents[index]!;
+      const waitPath = waitPathFor(agent.id, current[index]!, currentTime, episodeEnd);
+      episodePaths.push(waitPath);
+      reservePathForRules(table, waitPath, episodeEnd, scenario.rules);
+    }
     for (const index of order) {
       const agent = agents[index]!;
       const target = goalQueues[index]![0];
-      if (!target) {
-        const waitPath = waitPathFor(agent.id, current[index]!, currentTime, episodeEnd);
-        episodePaths.push(waitPath);
-        reservePathForRules(table, waitPath, episodeEnd, scenario.rules);
-        continue;
-      }
+      if (!target) continue;
       // RHCR の w は path 全体の長さではなく、衝突を解消する先読み範囲である。
       // したがって低レベル探索は goal まで続け、予約表だけを最初の w step に切る。
       const searchEnd = rhcrSearchEnd(scenario, currentTime, planningWindow, options.maxHorizon);
@@ -505,9 +520,26 @@ async function solveRhcr(
     for (let index = 0; index < agents.length; index += 1) {
       const target = goalQueues[index]![0];
       const path = episodePaths.find((candidate) => candidate.agentId === agents[index]!.id);
+      /*
+        ★ 「到達した」の意味は問題設定で変わる。
+
+          lifelong / MAPD では goal を通りがかった時点で用が済むので、
+          窓の中で一度でもそのセルに居れば到達（firstArrivalTime）。
+
+          one-shot MAPF は違う。解けたと言うには**最後にそこに留まって
+          いる**必要がある。通過しただけで queue から外すと、
+          その後の episode で agent は現在地に park してしまい、
+          goal から離れた場所で止まったまま「解が求まりました」になる。
+          実際 60 盤面のランダム検証で、goal 未到達のまま solved を返す例と
+          衝突を残したまま solved を返す例が出ていた。
+      */
       const arrivalTime =
         target && path
-          ? firstArrivalTime(path, target.cell, currentTime, currentTime + commit, scenario.rules)
+          ? oneShotScenario
+            ? cellEquals(current[index]!, target.cell)
+              ? currentTime + commit
+              : undefined
+            : firstArrivalTime(path, target.cell, currentTime, currentTime + commit, scenario.rules)
           : undefined;
       if (target && arrivalTime !== undefined) {
         goalQueues[index]!.shift();

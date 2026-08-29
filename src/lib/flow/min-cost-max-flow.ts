@@ -92,11 +92,21 @@ export class MinCostMaxFlow {
           for (const edge of this.graph[node] ?? []) {
             if (edge.capacity <= 0) continue;
             const candidate = distance[node]! + edge.cost;
-            if (
-              candidate < distance[edge.to]! - 1e-9 ||
-              (Math.abs(candidate - distance[edge.to]!) <= 1e-9 &&
-                (previous[edge.to] === null || edge.from < previous[edge.to]!.from))
-            ) {
+            /*
+              ★ 距離が実際に縮んだときだけ predecessor を張り替える。
+
+                以前は「等コストなら from の小さいほうを採る」というタイブレークが
+                あり、距離が変わらないのに previous を差し替えていた。これで
+                previous に閉路ができる（A の親が B、B の親が A）。下の
+                経路を遡るループは source に着くまで回るので、閉路に入ると
+                永久に返らない。6×4 の空きマップ・2 体という極小の入力で
+                実際に固まっていた。timeoutMs も効かない（ループの外でしか
+                見ていないため）。
+
+                決定性は「node を昇順、辺を挿入順」で走る反復順序で足りる。
+                タイブレークは要らない。
+            */
+            if (candidate < distance[edge.to]! - 1e-9) {
               distance[edge.to] = candidate;
               previous[edge.to] = edge;
               changed = true;
@@ -106,17 +116,29 @@ export class MinCostMaxFlow {
         if (!changed) break;
       }
       if (!Number.isFinite(distance[sink])) break;
+      /*
+        ★ 経路を遡るループには必ず番人を置く。
+
+          previous が万一閉路を含むと、source に着かないまま永久に回る。
+          上の relax を厳密改善だけにしたので閉路はできないはずだが、
+          ここが無限ループになるとタブごと固まり timeoutMs も効かない。
+          代償が大きすぎるので、辺の数を超えたら諦めて打ち切る。
+      */
+      const limit = this.graph.length + 1;
       let augment = requestedFlow - flow;
+      let steps = 0;
       for (let node = sink; node !== source;) {
         const edge = previous[node];
-        if (!edge) {
+        if (!edge || steps > limit) {
           augment = 0;
           break;
         }
         augment = Math.min(augment, edge.capacity);
         node = edge.from;
+        steps += 1;
       }
       if (augment <= 0) break;
+      steps = 0;
       for (let node = sink; node !== source;) {
         const edge = previous[node]!;
         edge.capacity -= augment;
@@ -124,6 +146,8 @@ export class MinCostMaxFlow {
         edge.flow += augment;
         edge.reverse!.flow -= augment;
         node = edge.from;
+        steps += 1;
+        if (steps > limit) break;
       }
       flow += augment;
       cost += augment * distance[sink]!;
