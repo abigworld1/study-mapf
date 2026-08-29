@@ -224,6 +224,141 @@ describe("one-shot MAPF の最適性と完全性", () => {
   }, 120_000);
 });
 
+describe("有界準最適の保証", () => {
+  /*
+    ★ 有界準最適は「係数 w 以内に収まる」という約束。
+      約束が守られているかは、参照実装の最適値と突き合わせないと分からない。
+
+      3 つ見る。
+        1. 解のコストが w × 最適 以内か（約束そのもの）
+        2. 報告した lowerBound が本当に下界か（最適値を上回っていないか）
+        3. 報告した suboptimalityBound が w 以内か（型の説明どおりか）
+
+      2 が要るのは、下界を大きく見せれば「比」はいくらでも小さく見えるため。
+      下界が偽なら 3 は無意味になる。
+  */
+  const BOUNDED = ["bcbs", "ecbs", "eecbs"];
+  const FACTORS = [1.1, 2, 3];
+
+  it.each(BOUNDED)(
+    "%s は係数どおりに収まる",
+    async (id) => {
+      const bad: string[] = [];
+      let checked = 0;
+      for (const factor of FACTORS) {
+        for (const scenario of ONE_SHOT) {
+          const oracle = jointStateOptimalSumOfCosts(scenario, 10);
+          if (!oracle.solved || !oracle.sumOfCostsCertified) continue;
+          const result = await getSolver(id)!.solve(
+            scenario,
+            { ...DEFAULT_SOLVER_OPTIONS, suboptimalityFactor: factor },
+            ctx(),
+          );
+          if (result.outcome !== "solved") continue;
+          checked += 1;
+          const { sumOfCosts: soc, lowerBound, suboptimalityBound } = result.metrics;
+          if (soc > factor * oracle.sumOfCosts + 1e-9) {
+            bad.push(`w=${factor}/${scenario.id}: SOC ${soc} > ${factor}×${oracle.sumOfCosts}`);
+          }
+          if (lowerBound !== undefined && lowerBound > oracle.sumOfCosts + 1e-9) {
+            bad.push(
+              `w=${factor}/${scenario.id}: lowerBound ${lowerBound} が最適 ${oracle.sumOfCosts} を超える`,
+            );
+          }
+          if (suboptimalityBound !== undefined && suboptimalityBound > factor + 1e-9) {
+            bad.push(`w=${factor}/${scenario.id}: 報告比 ${suboptimalityBound} > w=${factor}`);
+          }
+        }
+      }
+      expect(checked).toBeGreaterThan(30);
+      expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+    },
+    120_000,
+  );
+
+  /*
+    ★ 上の検査は「w を完全に無視して毎回最適解を返す実装」でも通る。
+      w が本当に高レベル探索へ渡っているかは別に見ないと分からない。
+
+      直接の証拠は展開ノード数。focal を広げれば早く打ち切れるので、
+      w を広げたときに展開が減っていなければ w は使われていない。
+      余裕は大きい（この盤面集合で 450 → 307 前後）。
+
+      「最適から離れた解を実際に返したか」も数えるが、こちらは
+      盤面が小さいと 25 例中 1〜2 例しか出ない。手法ごとに 1 件以上を
+      要求すると、盤面生成をいじっただけで落ちる。全体で 1 件以上に
+      とどめ、主たる判定は展開数に置く。
+  */
+  const expandedTotal = async (id: string, factor: number) => {
+    let expanded = 0;
+    let relaxed = 0;
+    for (const scenario of ONE_SHOT) {
+      const oracle = jointStateOptimalSumOfCosts(scenario, 10);
+      if (!oracle.solved || !oracle.sumOfCostsCertified) continue;
+      const result = await getSolver(id)!.solve(
+        scenario,
+        { ...DEFAULT_SOLVER_OPTIONS, suboptimalityFactor: factor },
+        ctx(),
+      );
+      if (result.outcome !== "solved") continue;
+      expanded += result.metrics.expandedNodes ?? 0;
+      if (result.metrics.sumOfCosts > oracle.sumOfCosts) relaxed += 1;
+    }
+    return { expanded, relaxed };
+  };
+
+  it("係数を広げると探索が実際に浅くなる", async () => {
+    let relaxedAll = 0;
+    for (const id of BOUNDED) {
+      const tight = await expandedTotal(id, 1);
+      const loose = await expandedTotal(id, 3);
+      expect(
+        loose.expanded,
+        `${id}: w=3 の展開 ${loose.expanded} が w=1 の ${tight.expanded} 以上`,
+      ).toBeLessThan(tight.expanded);
+      relaxedAll += loose.relaxed;
+    }
+    expect(relaxedAll, "どの手法も w=3 で一度も最適から離れない").toBeGreaterThan(0);
+  }, 120_000);
+
+  /*
+    ★ w=1 は最適解法と同じでなければならない（focal が open と一致する）。
+      ここがずれるなら focal の条件式が間違っている。
+  */
+  it.each(BOUNDED)(
+    "%s は係数 1 なら最適解に戻る",
+    async (id) => {
+      const bad: string[] = [];
+      for (const scenario of ONE_SHOT) {
+        const oracle = jointStateOptimalSumOfCosts(scenario, 10);
+        if (!oracle.solved || !oracle.sumOfCostsCertified) continue;
+        const result = await getSolver(id)!.solve(
+          scenario,
+          { ...DEFAULT_SOLVER_OPTIONS, suboptimalityFactor: 1 },
+          ctx(),
+        );
+        if (result.outcome !== "solved") {
+          bad.push(`${scenario.id}: ${result.outcome}`);
+        } else if (result.metrics.sumOfCosts !== oracle.sumOfCosts) {
+          bad.push(`${scenario.id}: SOC ${result.metrics.sumOfCosts} ≠ 最適 ${oracle.sumOfCosts}`);
+        }
+      }
+      expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+    },
+    120_000,
+  );
+
+  it("最適解法に係数を渡したら、使わない旨を伝える", async () => {
+    const result = await getSolver("cbs")!.solve(
+      ONE_SHOT[0]!,
+      { ...DEFAULT_SOLVER_OPTIONS, suboptimalityFactor: 2 },
+      ctx(),
+    );
+    const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+    expect(messages).toContain("suboptimalityFactor");
+  }, 60_000);
+});
+
 describe("MAPD の共通不変条件", () => {
   const ids = listSolverMetadata()
     .filter((m) => m.supports.includes("mapd"))
