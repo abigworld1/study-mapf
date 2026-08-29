@@ -1495,6 +1495,92 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-29 未照合だった領域を掃き出し、実装ミス 3 件を直した（Claude Code）
+
+有界準最適の照合で残っていた穴（TAPF の最適性、lifelong、大きい盤面）を
+実際に叩いた。3 件出た。うち 2 件は同じ型だった。
+
+### 1. 時空間 A* が、全プリセットで必ずエラーになっていた
+
+`space-time-astar` は `requireSingleAgent: true`（単一エージェント専用。
+原論文どおりの低レベル探索で、CA* と混同させないための設計判断）だが、
+**`canSolve` を定義していなかった**。`solversFor` は `canSolve` の無い Solver を
+素通しするので、UI の候補に常に出る。one-shot のプリセットは 8 件すべて
+2 体以上だったので、選ぶと 100% エラーだった。
+
+`canSolve` は TAPF / MAPD の Solver だけが使っていて、one-shot 側は
+誰も使っていなかった。
+
+★ 受け付けない形は `solve` の中でエラーにするのではなく `canSolve` で断ること。
+solve の中でしか弾かないと、画面には選択肢として出てしまう。
+
+直し方は 2 つで対。`createSequentialSolver` が `requireSingleAgent` のときに
+`canSolve` を張るようにし、あわせて **`single-agent` プリセットを追加**した。
+`canSolve` だけ足すと、1 体の盤面がひとつも無いので時空間 A* が画面から
+完全に消える。壁を迂回する 9×7 の盤面にして、直線距離 8 に対し SOC 18 になる。
+
+### 2・3. 有効な解を持ちながら「時間切れ」と表示していた（LaCAM* / MAPF-LNS）
+
+```text
+lacam-star outcome=timeout failureReason=limit-exceeded
+           paths=10  到達=10/10  衝突=0  規則違反=0
+```
+
+10 体全員が goal に着いた衝突ゼロの完全な解を持ちながら `timeout` を返していた。
+大きい盤面 12 例中 8 例。MAPF-LNS も同じで、初期計画が complete なのに
+改善ループの上限で `node-limit` を返していた（上限を絞ると全プリセットで再現）。
+
+どちらも**打ち切った理由を outcome に入れていた**のが原因。anytime 手法なので
+「探索を完遂していない」のは事実だが、それは outcome ではなく warnings で
+言うこと。LaCAM* の最適性が OPEN 完了時の主張である
+（lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 が OPEN 完了時を optimal、
+interruption 時を sub-optimal と分ける）ことは従来どおり警告で伝えており、
+そこへ打ち切りの理由（実行時間の上限 / 展開数の上限 / 経路長の上限 / 利用者の中断）を
+足した。`failureReason` は「outcome が solved 以外のときの分類」なので外した。
+
+★ outcome は「何が起きたか」であって「なぜ探索をやめたか」ではない。
+混ぜると、利用者には成功が失敗に見える。
+
+### 常設テスト
+
+`solver-invariants.test.ts` に「プリセットと Solver の噛み合わせ」を追加した。
+プリセット × 候補に出る全 Solver を、探索上限 100 と 1000 で一周する。
+
+★ 上限を絞るのは速さのためだけではない。**打ち切りが起きない条件では
+2 つ目の検査が空振りする。** 既定の上限で一周すると 135 秒かかるうえ、
+小さいプリセットは全部完走してしまうので誤報を検出できない。
+上限 100 なら 0.5 秒で、しかも打ち切りが起きる。
+
+1. 候補に出した Solver が invalid-scenario で落ちないこと（1 の一般形）
+2. 全員が goal に着いた衝突ゼロの経路を持つなら solved を名乗ること（2・3 の一般形）
+
+旧挙動を固定していた既存テスト 2 件（`batch5-solvers` と `solvers`）を
+新しい契約に書き換えた。E2E にも「時空間 A* は 1 体の盤面でだけ選べて、
+そこでは解ける」を追加した。
+
+### 調べて問題が無かったもの
+
+- **CBS-TA / MCMF / CBM の TAPF 最適性** — ランダム 12 盤面で SOC オラクルと全一致。
+  既存テストはプリセット 1 件だけだったので、ここは新たに広げて確認した範囲。
+- **RHCR の lifelong** — 40 盤面で solved 40 / 衝突 0。最初 20 例中 3 例が
+  timeout に見えたが、生成器が 2 体に同じ最終 goal を割り当てていたためで
+  （片方が居座るので原理的に解けない）、RHCR 側の問題ではなかった。
+- M* の timeout 4/12、ICTS の node-limit 1/12 は 10 体規模では想定どおり。
+
+### まだ照合していない主張
+
+- `sipp` の complete/optimal、`pibt` / `winpibt` / `push-and-rotate` の
+  条件付き完全性、`lacam-star` の eventually optimal。
+- **lifelong-mapf は UI から到達できない。** goal 列は `goalSequences` という
+  `Scenario` 型にもプリセットにも JSON にも無いキーを `buildGoalQueues` が
+  キャストで読んでいるだけで、手でオブジェクトを組まない限り動かせない。
+- ルール変種（edge-swap / following を切った場合）。
+
+最終ゲート: sources:validate errors=0/warnings=14、format check、lint、
+typecheck 0 errors、unit 363 passed、build 65 pages、E2E 56 passed。
+
+---
+
 ## 2026-08-29 有界準最適（BCBS / ECBS / EECBS）の係数を照合した（Claude Code）
 
 前回の検証で積み残していた「有界準最適の係数を検査していない」への対応。

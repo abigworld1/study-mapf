@@ -139,11 +139,21 @@ describe("解けなかった理由の説明責任", () => {
       { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 30 },
       createRecordingContext(1).context,
     );
-    expect(cut.outcome, "この予算では探索を完遂しない想定").not.toBe("solved");
+    /*
+      ★ 打ち切っても解は解なので outcome は solved。
+        「完遂していない」は warnings で言う。ここを outcome に混ぜていたため、
+        有効な解を返しながら画面に「上限到達」と出していた。
+    */
+    expect(cut.outcome, "有効な解を返すなら solved").toBe("solved");
+    expect(cut.failureReason, "solved に failureReason は付けない").toBeUndefined();
     expect(cut.paths.length, "途中経過の解が返る想定").toBeGreaterThan(0);
     expect(
       (cut.warnings ?? []).some((w) => w.message.includes("最適解ではありません")),
       "打ち切った解を最適でないと言っていない",
+    ).toBe(true);
+    expect(
+      (cut.warnings ?? []).some((w) => w.message.includes("展開数の上限")),
+      "なぜ打ち切ったのかを言っていない",
     ).toBe(true);
 
     // 完遂した場合は逆に、その但し書きを出してはいけない。

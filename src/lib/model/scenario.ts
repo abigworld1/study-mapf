@@ -501,6 +501,35 @@ export const PRESETS: readonly PresetDefinition[] = [
         seed,
       ),
   },
+  /*
+    ★ 1 体だけの盤面。Space-Time A* は単一エージェント専用（原論文の
+      低レベル探索そのもの）なので、これが無いと画面から一度も動かせない。
+      実際、これを足すまで one-shot のプリセットは全部 2 体以上で、
+      「時空間 A*」を選ぶと必ずエラーになっていた。
+  */
+  {
+    id: "single-agent",
+    name: "Single Agent",
+    description:
+      "エージェント 1 体だけ。壁を迂回する必要がある。時空間 A* のような単一エージェント専用の低レベル探索を動かすためのもの。",
+    build: (seed) => {
+      let map = createEmptyMap(9, 7);
+      map = blockRect(map, 4, 0, 4, 4);
+      map = blockRect(map, 2, 2, 2, 6);
+      return baseScenario(
+        "single-agent",
+        "Single Agent",
+        map,
+        agentsFrom([
+          [
+            { x: 0, y: 0 },
+            { x: 8, y: 0 },
+          ],
+        ]),
+        seed,
+      );
+    },
+  },
   {
     id: "narrow-corridor",
     name: "Narrow Corridor",

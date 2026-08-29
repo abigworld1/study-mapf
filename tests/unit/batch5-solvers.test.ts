@@ -142,7 +142,13 @@ describe("LaCAM*", () => {
     expect(result.trace?.some((event) => event.type === "rewire-configuration")).toBe(true);
   });
 
-  it("初解後の node limit では incumbent path を保持しつつ最適と扱わない", async () => {
+  /*
+    ★ 初解を得たあとで上限に達した場合、返す経路は有効な解である。
+      以前はここで outcome を node-limit にしていたが、全員が goal に着いた
+      衝突ゼロの解を持ちながら画面に「上限到達」と出るのは誤報だった。
+      outcome は solved、打ち切った事実と「最適ではない」ことは warnings で言う。
+  */
+  it("初解後に上限へ達したら、解は返しつつ最適とは言わない", async () => {
     const scenario = swapWithDetour(9);
     let interrupted: SolverResult | undefined;
     for (let maxExpansions = 1; maxExpansions <= 200; maxExpansions += 1) {
@@ -150,15 +156,19 @@ describe("LaCAM*", () => {
         ...DEFAULT_SOLVER_OPTIONS,
         maxExpansions,
       });
-      if (result.outcome === "node-limit" && result.paths.length > 0) {
+      const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+      if (result.paths.length > 0 && messages.includes("展開数の上限")) {
         interrupted = result;
         break;
       }
     }
     expect(interrupted).toBeDefined();
-    expect(interrupted!.outcome).toBe("node-limit");
-    expect(interrupted!.failureReason).toBe("limit-exceeded");
+    expect(interrupted!.outcome).toBe("solved");
+    expect(interrupted!.failureReason).toBeUndefined();
     expect(checkPaths(scenario, interrupted!.paths)).toEqual([]);
+    expect((interrupted!.warnings ?? []).map((w) => w.message).join("\n")).toContain(
+      "最適解ではありません",
+    );
   });
 });
 

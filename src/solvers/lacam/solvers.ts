@@ -30,6 +30,23 @@ import { buildResult, checkAbort } from "../shared.js";
 type Variant = "lacam" | "lacam-star";
 type StopState = "timeout" | "aborted" | "node-limit" | null;
 
+/**
+ * 探索を完遂できなかった理由。
+ *
+ * ★ これは outcome ではない。incumbent がある限り outcome は solved で、
+ *   「なぜ探索を完遂していないか」だけをこれで伝える。
+ *   両者を混ぜていたせいで、全員が goal に着いた衝突ゼロの解を持ちながら
+ *   画面に「時間切れ」と出していた。
+ */
+type Interruption = "timeout" | "aborted" | "node-limit" | "horizon";
+
+const INTERRUPTION_LABEL: Record<Interruption, string> = {
+  timeout: "実行時間の上限",
+  aborted: "利用者の中断",
+  "node-limit": "展開数の上限",
+  horizon: "経路長の上限",
+};
+
 interface LowLevelNode {
   readonly id: number;
   readonly depth: number;
@@ -170,7 +187,7 @@ async function solveLacam(
 
     const node = open[open.length - 1]!;
     if (isGoalConfiguration(node.positions)) {
-      if (variant === "lacam") return finish(solutionResult(node, "solved"));
+      if (variant === "lacam") return finish(solutionResult(node));
       if (goalNode === undefined) {
         goalNode = node;
         emit({ type: "update-incumbent", cost: node.g, iteration: expanded });
@@ -268,13 +285,10 @@ async function solveLacam(
       code: "simplified-behavior",
       message: `最大 path length ${maxPathLength} で後継を打ち切りました。これは解不存在の証明ではありません。`,
     });
-    if (goalNode) {
-      const incumbent = solutionResult(goalNode, "node-limit");
-      return finish({ ...incumbent, failureReason: "limit-exceeded" });
-    }
+    if (goalNode) return finish(solutionResult(goalNode, "horizon"));
     return finish(failureResult("node-limit", "limit-exceeded"));
   }
-  if (goalNode) return finish(solutionResult(goalNode, "solved"));
+  if (goalNode) return finish(solutionResult(goalNode));
   return finish(failureResult("no-solution", "search-exhausted"));
 
   function createHighLevelNode(
@@ -498,10 +512,19 @@ async function solveLacam(
     }));
   }
 
-  function solutionResult(goal: HighLevelNode, outcome: SolverOutcome): SolverResult {
+  /**
+   * incumbent から結果を組む。
+   *
+   * ★ interruption が付いていても outcome は solved を返す。
+   *   全員が goal に着いていて衝突も無い経路を持っているのに
+   *   「時間切れ」と表示するのは誤報である。打ち切った事実は
+   *   warnings で伝える（`failureReason` は outcome が solved 以外の
+   *   ときの分類なので付けない）。
+   */
+  function solutionResult(goal: HighLevelNode, interruption?: Interruption): SolverResult {
     const paths = reconstruct(goal);
     if (!paths) return internalError("LaCAM* の parent relation に cycle があります。");
-    const result = buildResult(scenario, paths, context.now() - startedAt, expanded, outcome, {
+    const result = buildResult(scenario, paths, context.now() - startedAt, expanded, "solved", {
       generatedNodes: generated,
     });
     if (result.conflicts.length > 0) {
@@ -518,11 +541,12 @@ async function solveLacam(
           ここで言わないと利用者は表示された解を最適と受け取る
           （SOURCE_POLICY.md 第 8 条が名指ししている手法である）。
       */
-      if (outcome !== "solved") {
+      if (interruption) {
         warnings.push({
           code: "simplified-behavior",
           message:
-            "探索を完遂する前に打ち切ったため、これは途中経過の解であって最適解ではありません。LaCAM* の最適性は OPEN を空にした場合の保証です。",
+            `${INTERRUPTION_LABEL[interruption]}で探索を打ち切ったため、これは途中経過の解であって` +
+            "最適解ではありません。LaCAM* の最適性は OPEN を空にした場合の保証です。",
         });
       }
 
@@ -544,6 +568,12 @@ async function solveLacam(
             "goal を一度離れて戻る agent がいるためです。最適性の主張は前者に対するものです。",
         });
       }
+    } else if (interruption) {
+      // LaCAM は最適性を主張しないので、打ち切った事実だけ伝える。
+      warnings.push({
+        code: "simplified-behavior",
+        message: `${INTERRUPTION_LABEL[interruption]}で探索を打ち切りました。解は見つかっていますが、探索は完遂していません。`,
+      });
     }
     for (let time = 1; time < (paths[0]?.positions.length ?? 0); time += 1) {
       const positions: Record<string, Cell> = {};
@@ -573,10 +603,7 @@ async function solveLacam(
   }
 
   function stoppedResult(outcome: Exclude<StopState, null>): SolverResult {
-    if (goalNode) {
-      const result = solutionResult(goalNode, outcome);
-      return { ...result, failureReason: "limit-exceeded" };
-    }
+    if (goalNode) return solutionResult(goalNode, outcome);
     return failureResult(outcome, "limit-exceeded");
   }
 

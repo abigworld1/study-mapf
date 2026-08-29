@@ -4,10 +4,15 @@ import { DEFAULT_RULES, DEFAULT_SOLVER_OPTIONS } from "@/lib/model/types";
 import { createEmptyMap, isWalkable, withBlocked } from "@/lib/model/grid";
 import { createRandom, randomInt } from "@/lib/model/random";
 import { createSolverContext } from "@/solvers/context";
-import { getSolver, listSolverMetadata, solversFor } from "@/solvers/registry";
+import {
+  getSolver,
+  listSolverMetadata,
+  listSolverMetadataFor,
+  solversFor,
+} from "@/solvers/registry";
 import { detectConflicts, makespanOf, sumOfCosts } from "@/lib/model/conflicts";
 import { jointStateOptimalSumOfCosts } from "@/solvers/reference/joint-state";
-import { validateScenario } from "@/lib/model/scenario";
+import { PRESETS, buildPreset, validateScenario } from "@/lib/model/scenario";
 import { checkWellFormed } from "@/lib/model/mapd";
 import { checkPaths } from "../helpers/check-paths";
 
@@ -30,6 +35,9 @@ import { checkPaths } from "../helpers/check-paths";
 
 const ctx = () =>
   createSolverContext({ seed: 1, signal: new AbortController().signal, emit: () => {} });
+
+const cellSame = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+  a.x === b.x && a.y === b.y;
 
 /** 衝突以外の破れだけ拾う。衝突は別に見る。 */
 const isStructural = (rule: string) => !/同時刻に同じセル|edge swap|following/.test(rule);
@@ -449,4 +457,97 @@ describe("TAPF の共通不変条件", () => {
     expect(checked).toBeGreaterThan(3);
     expect(bad, bad.join(" / ")).toEqual([]);
   }, 120_000);
+});
+
+describe("プリセットと Solver の噛み合わせ", () => {
+  /*
+    ★ プリセット × 候補に出る全 Solver を、探索上限を絞って一周する。
+
+      上限を絞るのは速さのためだけではない。「途中で打ち切られた」状態を
+      作らないと次の 2 つ目が検査できない。既定の上限だと小さいプリセットは
+      全部完走してしまう（既定で一周すると 135 秒かかるうえ、打ち切りが
+      起きないので取りこぼす。上限 100 なら 0.5 秒で、しかも打ち切りが起きる）。
+
+      1. 候補に出した Solver が invalid-scenario で落ちないこと。
+         Space-Time A* は単一エージェント専用なのに canSolve が無く、
+         one-shot のプリセットは当時 8 件すべて 2 体以上だったので、
+         画面から選ぶと必ずエラーになっていた。
+         受け付けない形は solve の中ではなく canSolve で断ること。
+
+      2. 全員が goal に着いた衝突ゼロの経路を持っているなら solved を
+         名乗ること。LaCAM* と MAPF-LNS が、有効な解を返しながら
+         outcome に打ち切り理由（timeout / node-limit）を入れていた。
+         画面には「時間切れ」と出るので、利用者からは失敗に見える。
+         打ち切った事実は warnings で伝えるべきもので、outcome ではない。
+  */
+  const CAPS = [100, 1000];
+
+  it("候補に出した Solver は、エラーにならず、解があれば solved を名乗る", async () => {
+    const bad: string[] = [];
+    for (const preset of PRESETS) {
+      const scenario = buildPreset(preset.id, 1);
+      for (const meta of listSolverMetadataFor(scenario)) {
+        for (const maxExpansions of CAPS) {
+          const result = await getSolver(meta.id)!.solve(
+            scenario,
+            { ...DEFAULT_SOLVER_OPTIONS, maxExpansions },
+            ctx(),
+          );
+          const where = `${preset.id}/${meta.id}(上限 ${maxExpansions})`;
+          if (result.outcome === "error") {
+            bad.push(`${where}: ${result.error?.code} ${result.error?.message ?? ""}`);
+            continue;
+          }
+          if (result.outcome === "solved") continue;
+          if (scenario.kind !== "one-shot-mapf") continue;
+          if (result.paths.length !== scenario.agents.length) continue;
+          const reached = result.paths.every((path) => {
+            const agent = scenario.agents.find((a) => a.id === path.agentId);
+            const last = path.positions.at(-1)?.cell;
+            return agent?.goal && last && cellSame(last, agent.goal);
+          });
+          const clean =
+            detectConflicts(result.paths, scenario.rules).length === 0 &&
+            checkPaths(scenario, result.paths).length === 0;
+          if (reached && clean) {
+            bad.push(`${where}: 有効な解を持ちながら ${result.outcome} を返す`);
+          }
+        }
+      }
+    }
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 300_000);
+
+  it("Space-Time A* は 1 体の盤面にだけ候補として出る", () => {
+    const listed = (id: string) =>
+      listSolverMetadataFor(buildPreset(id, 1)).some((m) => m.id === "space-time-astar");
+    expect(listed("single-agent")).toBe(true);
+    expect(buildPreset("single-agent", 1).agents).toHaveLength(1);
+    for (const preset of PRESETS) {
+      const scenario = buildPreset(preset.id, 1);
+      if (scenario.kind !== "one-shot-mapf" || scenario.agents.length === 1) continue;
+      expect(listed(preset.id), `${preset.id} に単一エージェント専用が出ている`).toBe(false);
+    }
+  });
+
+  /*
+    ★ 打ち切って incumbent を返す場合、解は有効でも最適ではない
+      （lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 が OPEN 完了時を
+      optimal、interruption 時を sub-optimal と分ける）。
+      solved にしたぶん、最適でない旨を必ず添えること。
+  */
+  it("LaCAM* は打ち切っても、解があれば solved と「最適ではない」を返す", async () => {
+    const scenario = buildPreset("warehouse", 1);
+    const result = await getSolver("lacam-star")!.solve(
+      scenario,
+      { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 100 },
+      ctx(),
+    );
+    expect(result.outcome).toBe("solved");
+    expect(result.failureReason).toBeUndefined();
+    expect(detectConflicts(result.paths, scenario.rules)).toHaveLength(0);
+    const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+    expect(messages).toContain("最適解ではありません");
+    expect(messages).toContain("展開数の上限");
+  }, 60_000);
 });

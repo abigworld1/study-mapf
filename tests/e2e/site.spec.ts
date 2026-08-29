@@ -341,6 +341,30 @@ test.describe("シミュレータ", () => {
     await expect(metrics).not.toContainText("解が求まりました");
   });
 
+  /*
+    Space-Time A* は単一エージェント専用（原論文どおりの低レベル探索）。
+    canSolve が無かったころは全プリセットが 2 体以上だったので、
+    画面から選ぶと必ずエラーになっていた。候補の出し分けと、
+    single-agent プリセットで実際に解けることを画面から固定する。
+  */
+  test("時空間 A* は 1 体の盤面でだけ選べて、そこでは解ける", async ({ page }) => {
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+
+    await page.getByLabel("プリセット").selectOption("open-grid");
+    await expect(solverSelect.locator('option[value="space-time-astar"]')).toHaveCount(0);
+
+    await page.getByLabel("プリセット").selectOption("single-agent");
+    await expect(solverSelect.locator('option[value="space-time-astar"]')).toHaveCount(1);
+    await solverSelect.selectOption("space-time-astar");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.locator(".run-outcome")).toContainText("解が求まりました", {
+      timeout: 30_000,
+    });
+  });
+
   test("well-formed でない MAPD 入力は、保証の対象外だと画面に出る", async ({ page }) => {
     await page.getByLabel("プリセット").selectOption("mapd-not-well-formed");
     await expect(page.locator(".wf")).toContainText("well-formed ではありません");

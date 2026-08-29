@@ -44,6 +44,18 @@ export function createSequentialSolver(
 ): MapfSolver {
   return {
     metadata,
+    /*
+      ★ 受け付けない形は canSolve で断る。solve の中でエラーにするだけでは
+        UI の候補一覧に出てしまう。
+
+        Space-Time A* は単一エージェント専用なのに canSolve が無く、
+        one-shot のプリセットは 8 件すべて 2 体以上だったので、
+        選ぶと必ずエラーになる状態だった。single-agent プリセットを
+        足すのと対で直している。
+    */
+    ...(config.requireSingleAgent
+      ? { canSolve: (scenario: Scenario) => scenario.agents.length === 1 }
+      : {}),
     async solve(scenario, options, context): Promise<SolverResult> {
       return solveSequential(scenario, options, context, config);
     },

@@ -32,6 +32,13 @@ type StopState = "timeout" | "aborted" | "node-limit" | "max-expansions" | null;
 type LnsStrategy = "agent" | "map" | "random";
 const ALNS_REACTION_FACTOR = 0.01;
 
+/** 打ち切り理由を利用者向けの語にする。outcome とは別物。 */
+const LNS_STOP_LABEL: Partial<Record<SolverOutcome, string>> = {
+  timeout: "実行時間の上限",
+  aborted: "利用者の中断",
+  "node-limit": "展開数の上限",
+};
+
 interface RhcrGoal {
   readonly cell: Cell;
   readonly releaseTime: number;
@@ -223,20 +230,26 @@ async function solveMapfLns(
     });
   }
 
+  /*
+    ★ ここまで来ていれば incumbent は全 agent が goal に着く衝突ゼロの解である。
+      初期計画は complete を確認済みで、改善は conflicts.length === 0 の
+      候補しか受け入れない。改善ループを打ち切っただけなので outcome は
+      solved であり、node-limit や timeout を返してはいけない。
+
+      以前は打ち切り理由をそのまま outcome にしていたため、有効な解を
+      返しながら画面に「時間切れ」「上限到達」と出していた。
+      LaCAM* と同じ誤報である。
+  */
   if (outcome !== "solved") {
-    addIncompleteWarning(run, "MAPF-LNS", "探索を完遂できませんでした。");
+    run.warnings.push({
+      code: "simplified-behavior",
+      message:
+        `${LNS_STOP_LABEL[outcome] ?? "上限"}で改善を打ち切りました。` +
+        "解は見つかっていますが、MAPF-LNS は anytime 手法なので、続ければさらに改善する余地があります。",
+    });
   }
 
-  return finishLns(
-    run,
-    resultFromPaths(
-      scenario,
-      incumbent,
-      run,
-      outcome,
-      outcome === "solved" ? undefined : "limit-exceeded",
-    ),
-  );
+  return finishLns(run, resultFromPaths(scenario, incumbent, run, "solved", undefined));
 }
 
 async function solveMapfLns2(
