@@ -754,6 +754,84 @@ export default function Simulator({ initialSolverId }: Props) {
               {progress}
             </p>
           )}
+          {/*
+            ★ 実行の結末はボタンのすぐ下に出す。
+              指標表は下のほうにあるので、押した人の目線から遠い。
+              「解けたのか、詰まったのか、衝突が残ったのか」は
+              押した直後にいちばん知りたいこと。
+              詳しい数値は下の指標表に出す。ここは結末だけ。
+          */}
+          {result && (
+            <p className={`run-outcome ${outcomeTone(result)}`} role="status">
+              <strong>{outcomeLabel(result.outcome)}</strong>
+              {result.conflicts.length > 0 && `／残存衝突 ${result.conflicts.length} 件`}
+              {result.metrics.pendingTasks !== undefined &&
+                result.metrics.pendingTasks > 0 &&
+                `／未処理タスク ${result.metrics.pendingTasks} 件`}
+              {result.warnings && result.warnings.length > 0 && (
+                <span className="run-outcome-note">
+                  但し書きが {result.warnings.length} 件あります（下の「指標」を参照）
+                </span>
+              )}
+            </p>
+          )}
+        </section>
+
+        <section>
+          <h3>再生</h3>
+          <div className="row">
+            <button type="button" onClick={() => setPlaying((p) => !p)} disabled={horizon === 0}>
+              {playing ? "一時停止" : "再生"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTime((t) => Math.max(0, t - 1))}
+              disabled={horizon === 0}
+            >
+              1 ステップ戻る
+            </button>
+            <button
+              type="button"
+              onClick={() => setTime((t) => Math.min(horizon, t + 1))}
+              disabled={horizon === 0}
+            >
+              1 ステップ進む
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTime(0);
+                setPlaying(false);
+              }}
+            >
+              リセット
+            </button>
+          </div>
+          <label>
+            時刻 {time} / {horizon}
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, horizon)}
+              value={time}
+              onChange={(e) => setTime(Number(e.target.value))}
+              disabled={horizon === 0}
+            />
+          </label>
+          <label>
+            再生速度（1 ステップ {speed}ms）
+            <input
+              type="range"
+              min={60}
+              max={1200}
+              step={20}
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+            />
+          </label>
+          {reduceMotion && (
+            <p className="hint">動きを減らす設定が有効なため、再生速度の下限を制限しています。</p>
+          )}
         </section>
 
         <section>
@@ -856,63 +934,6 @@ export default function Simulator({ initialSolverId }: Props) {
             キーボードでは矢印キーでセルを選び、Enter で掴んで矢印キーで動かし、もう一度 Enter
             で置きます（Escape で元に戻ります）。
           </p>
-        </section>
-
-        <section>
-          <h3>再生</h3>
-          <div className="row">
-            <button type="button" onClick={() => setPlaying((p) => !p)} disabled={horizon === 0}>
-              {playing ? "一時停止" : "再生"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTime((t) => Math.max(0, t - 1))}
-              disabled={horizon === 0}
-            >
-              1 ステップ戻る
-            </button>
-            <button
-              type="button"
-              onClick={() => setTime((t) => Math.min(horizon, t + 1))}
-              disabled={horizon === 0}
-            >
-              1 ステップ進む
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTime(0);
-                setPlaying(false);
-              }}
-            >
-              リセット
-            </button>
-          </div>
-          <label>
-            時刻 {time} / {horizon}
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, horizon)}
-              value={time}
-              onChange={(e) => setTime(Number(e.target.value))}
-              disabled={horizon === 0}
-            />
-          </label>
-          <label>
-            再生速度（1 ステップ {speed}ms）
-            <input
-              type="range"
-              min={60}
-              max={1200}
-              step={20}
-              value={speed}
-              onChange={(e) => setSpeed(Number(e.target.value))}
-            />
-          </label>
-          {reduceMotion && (
-            <p className="hint">動きを減らす設定が有効なため、再生速度の下限を制限しています。</p>
-          )}
         </section>
 
         <section>
@@ -1170,6 +1191,21 @@ function TaskGenerator({
       </button>
     </>
   );
+}
+
+/**
+ * 実行結果の見た目の強さ。
+ *
+ * ★ solved でも衝突や未処理が残っていれば「うまくいった」扱いにしない。
+ *   衝突を解消しない手法（BFS / A*）は solved を返しつつ重なりを残すので、
+ *   緑一色にすると誤読させる。
+ */
+function outcomeTone(result: SolverResult): "ok" | "warn" | "bad" {
+  if (result.outcome === "error") return "bad";
+  if (result.outcome !== "solved") return "warn";
+  if (result.conflicts.length > 0) return "warn";
+  if ((result.metrics.pendingTasks ?? 0) > 0) return "warn";
+  return "ok";
 }
 
 function outcomeLabel(outcome: SolverResult["outcome"]): string {

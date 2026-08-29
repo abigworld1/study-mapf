@@ -123,6 +123,37 @@ test.describe("シミュレータ", () => {
     await expect(page.getByText(/時刻 0 \//)).toBeVisible();
   });
 
+  test("操作パネルはアルゴリズムの次に再生が来る", async ({ page }) => {
+    const headings = await page.locator(".sim-controls h3").allTextContents();
+    expect(headings.slice(0, 2)).toEqual(["アルゴリズム", "再生"]);
+  });
+
+  /*
+    実行の結末は押したボタンのすぐ下に出す。指標表は下のほうにあり、
+    押した人の目線から遠い。solved でも衝突が残っていれば「うまくいった」
+    扱いにしないこと。BFS は衝突を解消しないので solved のまま重なりを残す。
+  */
+  test("実行の結末が実行ボタンのすぐ下に出る", async ({ page }) => {
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    const outcome = page.locator(".run-outcome");
+
+    await solverSelect.selectOption("cbs");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(outcome).toContainText("解が求まりました", { timeout: 30_000 });
+    await expect(outcome).toHaveClass(/\bok\b/);
+    // 結末は「アルゴリズム」節の中にある＝実行ボタンと同じ場所。
+    await expect(algorithmSection.locator(".run-outcome")).toHaveCount(1);
+
+    // BFS は衝突を解消しないので、solved でも警告扱いにする。
+    await solverSelect.selectOption("bfs");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(outcome).toContainText("残存衝突", { timeout: 30_000 });
+    await expect(outcome).toHaveClass(/\bwarn\b/);
+  });
+
   test("マップを編集してエージェントを追加できる", async ({ page }) => {
     const canvas = page.locator("canvas.sim-canvas");
     const box = await canvas.boundingBox();

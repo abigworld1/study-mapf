@@ -297,6 +297,26 @@ export async function runMapdLoop(
         carrying.delete(ownerId);
         emit({ type: "swap-task", taskId, from: ownerId, to: agentId, time });
       }
+      /*
+        ★ 割り当てられた時点ですでに pickup 地点に立っているなら、その場で拾う。
+
+          pickup / delivery の判定は移動のあと（手順 4）にしか走らない。
+          そのため「配達を終えた地点が、次に割り当てられたタスクの pickup と
+          同じ」場合、エージェントは次の step でそこを離れてしまい、
+          pickup が一度も記録されずに pickedUp=false のまま delivery へ着く。
+          すると配達が成立せず、そのタスクを抱えたまま delivery 上に居座り、
+          他のエージェントもそのタスクを取れなくなって詰む。
+
+          実際 TP は well-formed な入力の 2 割弱でこれに当たっていた。
+          well-formed なら解けるはず（mapd-tp-tpts-central-2017 p.4 Theorem 3）
+          なので、手法ではなくループ側の取りこぼしだった。
+      */
+      const at = positions.get(agentId);
+      if (at && cellEquals(at, task.pickup)) {
+        carrying.set(agentId, { task, pickedUp: true });
+        emit({ type: "pickup", taskId: task.id, agentId, time });
+        continue;
+      }
       carrying.set(agentId, { task, pickedUp: false });
     }
 
@@ -492,6 +512,14 @@ async function runExtendedMapdLoop(
         );
         if ((carrying.get(owner[0]) ?? []).length === 0) carrying.delete(owner[0]);
         emit({ type: "swap-task", taskId, from: owner[0], to: agentId, time });
+      }
+      // ★ 基本ループと同じ取りこぼし対策。割当時点で pickup 地点に居るならその場で拾う。
+      const at = positions.get(agentId);
+      if (at && cellEquals(at, task.pickup)) {
+        carrying.set(agentId, [...current, { task, pickedUp: true, goalIndex: 0 }]);
+        emit({ type: "assign-task", taskId, agentId });
+        emit({ type: "pickup", taskId, agentId, time });
+        return;
       }
       carrying.set(agentId, [...current, { task, pickedUp: false, goalIndex: 0 }]);
       emit({ type: "assign-task", taskId, agentId });

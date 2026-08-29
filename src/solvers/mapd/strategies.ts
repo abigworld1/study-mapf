@@ -117,13 +117,34 @@ export class TokenMapdStrategy implements MapdStrategy {
           const oldDistance = this.distanceTo(input, currentOwner, candidate.task.pickup);
           if (candidate.distance >= oldDistance) continue;
           const oldPath = this.token.paths.get(currentOwner);
-          // old owner は loop で carrying から外れ、同じ timestep に別 task を
-          // 計画できる。resting path を token に残すと、一本の通路を自分自身で
-          // 永久に塞いで新 owner の MLA* を失敗させるため、いったん token から外す。
-          this.token.paths.delete(currentOwner);
+          /*
+            ★ old owner は loop で carrying から外れるので、pickup へ向かう
+              古い経路は捨てる。ただし **token から消してはいけない。**
+
+              消すと、この timestep に後から計画する agent からは old owner が
+              居ないものとして見え、その居場所を通る経路を引いてしまう。
+              old owner が新しい task を取れなければその場に留まるので、
+              実際には重なる。well-formed な 114 例を回すと、TPTS だけ
+              11 例で「解が求まりました」なのに衝突が残っていた。
+
+              正しい最小状態は「いまの場所に留まり続ける」。そう置いてから
+              新 owner を計画すれば、新 owner はそこを避ける。避けられない
+              なら奪取そのものを見送る（奪えないより、衝突するほうが悪い）。
+              old owner が同じ timestep に別 task を取れば、この resting path は
+              planTask が上書きする。
+          */
+          const owner = currentOwner;
+          const restingAt = input.positions.get(owner);
+          this.token.paths.set(owner, {
+            agentId: owner,
+            positions: [
+              { time: input.time, cell: { ...(restingAt ?? input.scenario.agents[0]!.start) } },
+            ],
+          });
           const planned = this.planTask(input, agent.id, candidate.task);
           if (!planned) {
             if (oldPath) this.token.paths.set(currentOwner, oldPath);
+            else this.token.paths.delete(currentOwner);
             continue;
           }
           provisional.delete(candidate.task.id);

@@ -326,6 +326,36 @@ const solvers = listSolverMetadata();
     }
 
     /*
+      実行の結末。押したボタンのすぐ下に置く。
+      指標表は下のほうにあり、押した人の目線から遠いため。
+    */
+    .sim-controls .run-outcome {
+      margin: var(--space-3) 0 0;
+      padding: var(--space-2) var(--space-3);
+      border-left: 4px solid var(--fg-muted);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      line-height: 1.6;
+    }
+    .sim-controls .run-outcome.ok {
+      border-left-color: var(--ok, var(--accent));
+      background: var(--ok-subtle, transparent);
+    }
+    .sim-controls .run-outcome.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-subtle);
+    }
+    .sim-controls .run-outcome.bad {
+      border-left-color: var(--bad, var(--warn));
+      background: var(--warn-subtle);
+    }
+    .sim-controls .run-outcome-note {
+      display: block;
+      color: var(--fg-muted);
+      margin-top: var(--space-1);
+    }
+
+    /*
       MAPD の well-formed 判定。
       TP / TPTS の保証はこの条件を満たす入力についての主張なので、
       満たすかどうかを指標表と同じ強さで見せる。
