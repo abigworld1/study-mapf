@@ -551,3 +551,104 @@ describe("プリセットと Solver の噛み合わせ", () => {
     expect(messages).toContain("展開数の上限");
   }, 60_000);
 });
+
+describe("following 禁止ルール", () => {
+  /*
+    ★ 既定から外れたルールでも、solved を名乗る以上そのルールを満たすこと。
+
+      forbidFollowing は UI にチェックボックスこそ無いが、JSON 読み込みから
+      設定でき、benchmarks ページが JSON 形式の説明で明示している。
+      つまり利用者が設定してよいものとして案内している。
+
+      直す前は 2 通りに壊れていた。
+        - 優先順位系 5 手法が「予約表で防ぐべき衝突が解に残りました」で落ちる
+        - MAPD 7 手法が following 衝突を残したまま solved を返す
+      原因はどちらも判定が一方向だったこと（[[isFollowingReserved]] を参照）。
+
+      対応しない手法は unsupported-rules を返してよい。ここで見るのは
+      「受けたなら守る」であって「全手法が対応する」ではない。
+  */
+  const FOLLOWING_BOARDS = [
+    ...PRESETS.map((preset) => buildPreset(preset.id, 1)),
+    ...ONE_SHOT.slice(0, 10),
+  ];
+
+  it("following 禁止を受けた Solver は、それを守った解だけを solved と呼ぶ", async () => {
+    const bad: string[] = [];
+    let accepted = 0;
+    for (const board of FOLLOWING_BOARDS) {
+      const scenario = {
+        ...board,
+        rules: { ...board.rules, forbidFollowing: true },
+      } as Scenario;
+      for (const meta of listSolverMetadataFor(scenario)) {
+        const result = await getSolver(meta.id)!.solve(
+          scenario,
+          { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 400 },
+          ctx(),
+        );
+        const where = `${board.id}/${meta.id}`;
+        // 非対応を宣言するのは正しい振る舞い。internal で落ちるのは違う。
+        if (result.outcome === "error") {
+          if (result.error?.code !== "unsupported-rules") {
+            bad.push(`${where}: ${result.error?.code} ${result.error?.message ?? ""}`);
+          }
+          continue;
+        }
+        if (result.outcome !== "solved") continue;
+        accepted += 1;
+        const conflicts = detectConflicts(result.paths, scenario.rules);
+        if (conflicts.length && !NO_CONFLICT_RESOLUTION.has(meta.id)) {
+          bad.push(`${where}: ${conflicts[0]!.kind} を残して solved`);
+        }
+        if (scenario.kind === "one-shot-mapf" && !NO_CONFLICT_RESOLUTION.has(meta.id)) {
+          const violations = checkPaths(scenario, result.paths);
+          if (violations.length) bad.push(`${where}: ${violations[0]!.rule}`);
+        }
+      }
+    }
+    // 全部が非対応を返しているだけ、では検査になっていない。
+    expect(accepted).toBeGreaterThan(50);
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 300_000);
+
+  /*
+    ★ 向き 2 を落とした実装でも、向き 1 だけの盤面は通ってしまうので、
+      実際に壊れていた最小の形を固定しておく。
+
+      1 本道（y=1）と退避くぼみ (3,0) だけの 5×3。2 体が入れ替わる。
+      直す前、この盤面の優先順位付き計画は
+      「予約表で防ぐべき衝突が解に残りました」で internal エラーになっていた。
+      くぼみへ退避した a2 が通路へ戻る瞬間と、a1 が同じセルへ進む瞬間が
+      重なるためで、向き 1 だけでは検出できない。
+
+      プリセットに依存させない（盤面が変わるとテストの意味が変わる）。
+  */
+  it("優先順位付き計画は、自分が空けた跡へ先行 agent が入る形を避ける", async () => {
+    let map = createEmptyMap(5, 3);
+    for (let y = 0; y < 3; y += 1)
+      for (let x = 0; x < 5; x += 1) map = withBlocked(map, { x, y }, true);
+    for (let x = 0; x < 5; x += 1) map = withBlocked(map, { x, y: 1 }, false);
+    map = withBlocked(map, { x: 3, y: 0 }, false);
+    const scenario: Scenario = {
+      id: "follow",
+      name: "follow",
+      kind: "one-shot-mapf",
+      map,
+      agents: [
+        { id: "a1", start: { x: 0, y: 1 }, goal: { x: 4, y: 1 }, colorIndex: 0 },
+        { id: "a2", start: { x: 4, y: 1 }, goal: { x: 0, y: 1 }, colorIndex: 1 },
+      ],
+      rules: { ...DEFAULT_RULES, forbidFollowing: true },
+      seed: 1,
+    };
+    const result = await getSolver("prioritized-planning")!.solve(
+      scenario,
+      DEFAULT_SOLVER_OPTIONS,
+      ctx(),
+    );
+    expect(result.outcome).toBe("solved");
+    expect(detectConflicts(result.paths, scenario.rules)).toEqual([]);
+    expect(checkPaths(scenario, result.paths)).toEqual([]);
+  }, 60_000);
+});

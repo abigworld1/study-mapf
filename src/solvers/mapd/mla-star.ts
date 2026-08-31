@@ -210,8 +210,16 @@ function tokenConflict(input: MlaStarInput, from: Cell, to: Cell, time: number):
       )
         return true;
     }
-    if (input.scenario.rules.forbidFollowing) {
+    /*
+      ★ following は向きが 2 つある。片方だけ見ると必ず取りこぼす。
+        token の経路は動かせないので、後から計画する側が両方を避けるしかない。
+        向き 2 を落としていたため、MAPD の 7 手法は forbidFollowing の入力で
+        衝突を残したまま「解が求まりました」を返していた。
+        予約表側の isFollowingReserved と同じ規則である。
+    */
+    if (input.scenario.rules.forbidFollowing && !cellEquals(from, to)) {
       const otherPrevious = positionAt(path, time - 1, input.scenario.rules);
+      // 向き 1: 相手が t-1 に居た to を空けた跡へ、自分が入る
       if (
         otherPrevious &&
         otherNow &&
@@ -219,6 +227,8 @@ function tokenConflict(input: MlaStarInput, from: Cell, to: Cell, time: number):
         !cellEquals(otherPrevious, otherNow)
       )
         return true;
+      // 向き 2: 自分が t-1 に居た from を空けた跡へ、相手が入る
+      if (otherNow && cellEquals(from, otherNow)) return true;
     }
   }
   return false;

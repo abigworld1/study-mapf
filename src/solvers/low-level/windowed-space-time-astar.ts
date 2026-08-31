@@ -163,8 +163,7 @@ export function windowedSpaceTimeAStar(
     }
     if (
       input.rules.forbidFollowing &&
-      !cellEquals(from, to) &&
-      input.reservations.isReserved(to, time - 1, input.agentId)
+      input.reservations.isFollowingReserved(from, to, time, input.agentId)
     ) {
       return "following";
     }

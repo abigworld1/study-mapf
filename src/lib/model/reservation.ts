@@ -45,6 +45,39 @@ export class SimpleReservationTable implements ReservationTable {
     return exceptAgent === undefined ? true : owner !== exceptAgent;
   }
 
+  /**
+   * time に from→to と動いたとき following conflict になるか。
+   *
+   * conflicts.ts の判定と同じものを、予約表の側から見ている。
+   * あちらは「A が t に居るセルを B が t-1 に居て t に空けた」で、
+   * ここでは自分が A の側と B の側の両方になりうる。
+   *
+   *   向き 1: to を t-1 に押さえていた別 agent が、t には別のセルへ動いている
+   *           → 自分がその跡地へ入る
+   *   向き 2: 自分が t-1 に居た from を、別 agent が t に押さえている
+   *           → 自分が抜けた跡へ相手が入ってくる
+   *
+   * ★ 向き 2 を落とすと、優先順位付き計画は必ず following を残す。
+   *   先に計画した経路は動かせないので、後から計画する側が避けるしかない。
+   *   ここを片方しか見ていなかったせいで、優先順位系 5 手法が
+   *   「予約表で防ぐべき衝突が解に残りました」で落ちていた。
+   */
+  isFollowingReserved(from: Cell, to: Cell, time: Time, exceptAgent?: AgentId): boolean {
+    if (cellEquals(from, to)) return false;
+
+    const before = this.byTime.get(time - 1)?.get(SimpleReservationTable.key(to));
+    if (before && before.agentId !== exceptAgent) {
+      // t にも同じ agent が to に居るなら、空けていないので vertex conflict の側。
+      const after = this.byTime.get(time)?.get(SimpleReservationTable.key(to));
+      if (!after || after.agentId !== before.agentId) return true;
+    }
+
+    const taker = this.byTime.get(time)?.get(SimpleReservationTable.key(from));
+    if (taker && taker.agentId !== exceptAgent) return true;
+
+    return false;
+  }
+
   reserve(agentId: AgentId, cell: Cell, time: Time): void {
     let slot = this.byTime.get(time);
     if (!slot) {

@@ -195,11 +195,7 @@ export function spaceTimeAStar(input: SpaceTimeAStarInput): SpaceTimeAStarOutput
     if (rules.forbidEdgeSwap && reservations.isEdgeReserved(from, to, time, agentId)) {
       return "edge-swap";
     }
-    if (
-      rules.forbidFollowing &&
-      !cellEquals(from, to) &&
-      reservations.isReserved(to, time - 1, agentId)
-    ) {
+    if (rules.forbidFollowing && reservations.isFollowingReserved(from, to, time, agentId)) {
       return "following";
     }
     return null;

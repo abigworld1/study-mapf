@@ -273,6 +273,18 @@ export interface ReservationTable {
   isReserved(cell: Cell, time: Time, exceptAgent?: AgentId): boolean;
   /** from→to の辺が time に逆向きで使われているか（edge swap 検出用）。 */
   isEdgeReserved(from: Cell, to: Cell, time: Time, exceptAgent?: AgentId): boolean;
+  /**
+   * time に from→to と動くと following conflict になるか。
+   *
+   * ★ following は向きが 2 つある。片方だけ見ると必ず取りこぼす。
+   *     1. 他が空けたセルへ自分が入る
+   *     2. 自分が空けるセルへ他が入る
+   *   2 は優先順位付き計画で実際に起きる。先に計画した経路は動かせないので、
+   *   後から計画する側が「自分が抜けた跡に相手が入ってくる」ことまで
+   *   避けなければならない。判定をここに集約するのは、呼ぶ側が
+   *   片方だけ実装して取りこぼすのを防ぐため。
+   */
+  isFollowingReserved(from: Cell, to: Cell, time: Time, exceptAgent?: AgentId): boolean;
   reserve(agentId: AgentId, cell: Cell, time: Time): void;
   reservePath(path: TimedPath, horizon: Time): void;
   clearAgent(agentId: AgentId): void;

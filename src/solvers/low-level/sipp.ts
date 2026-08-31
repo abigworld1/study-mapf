@@ -221,7 +221,10 @@ export function sippSearch(input: SippInput): SippOutput {
     ) {
       return "edge-swap";
     }
-    if (input.rules.forbidFollowing && reservations.isReserved(to, arrival - 1, input.agentId)) {
+    if (
+      input.rules.forbidFollowing &&
+      reservations.isFollowingReserved(from, to, arrival, input.agentId)
+    ) {
       return "following";
     }
     return null;

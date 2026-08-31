@@ -1495,6 +1495,103 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-31 following conflict の判定を予約表に実装した（Claude Code）
+
+`forbidFollowing: true` が全面的に壊れていたのを直した。
+
+### どう壊れていたか
+
+プリセット 9 + ランダム 20 盤面で 2 通りに壊れていた。
+
+```text
+ERROR  prioritized-planning  internal  13 件   ← 「予約表で防ぐべき衝突が解に残りました」
+ERROR  cooperative-astar     internal  13 件
+ERROR  hca-star              internal  10 件
+ERROR  sipp                  internal   9 件
+ERROR  whca-star             internal   9 件
+
+CONFLICT  mapd-greedy / token-passing / tpts / central
+          lns-pbs / lns-wpbs / rmca        各 2〜3 件  ← 衝突を残して solved
+```
+
+MAPD 側は自己検査が無いので、**following 衝突を残したまま「解が求まりました」と
+表示していた**。優先順位系は自己検査に引っかかって internal で落ちていた。
+
+到達可能な経路がある。UI にチェックボックスは無いが「JSON を読み込む」があり、
+`scenarioFromJson` は `json.rules` をそのままマージする。しかも
+`benchmarks.astro` が JSON 形式の説明で `forbidFollowing` を明示しているので、
+設定してよいものとして案内している状態だった。
+
+### 原因: 判定が一方向だった
+
+★ **following は向きが 2 つある。片方だけ見ると必ず取りこぼす。**
+
+`conflicts.ts` の定義は「A が t に居るセルを、B が t-1 に居て t に空けた」。
+自分は A の側にも B の側にもなりうる。
+
+```text
+向き 1  他が空けたセルへ自分が入る      ← 実装されていた
+向き 2  自分が空けるセルへ他が入る      ← 落ちていた
+```
+
+低レベル探索はどれも `isReserved(to, time - 1)`、つまり向き 1 しか見ていなかった。
+優先順位付き計画では**先に計画した経路は動かせない**ので、後から計画する側が
+「自分が抜けた跡へ相手が入ってくる」ことまで避けなければならない。
+MLA*（MAPD）も同じで、`cellEquals(to, otherPrevious)` の側しか見ていなかった。
+
+### 直し方
+
+判定を `ReservationTable.isFollowingReserved(from, to, time, exceptAgent?)` として
+予約表へ集約した。呼ぶ側が片方だけ実装して取りこぼすのを防ぐためである。
+向き 1 では「相手が本当に空けたか」まで見る（空けていなければ vertex conflict の側で、
+following とは呼ばない）。`space-time-astar` / `windowed-space-time-astar` / `sipp` が
+これを使い、MLA* には同じ規則を経路走査の形で足した。
+
+### 結果
+
+29 盤面 × 既定 / following 禁止の両方で、**エラー・衝突・規則違反ともゼロ**。
+
+```text
+solved 数（既定 → 禁止）
+  prioritized-planning   27 → 23      token-passing   4 → 4
+  cooperative-astar      27 → 22      tpts            4 → 4
+  hca-star               22 → 18      central         4 → 4
+  whca-star              22 → 19      lns-pbs         6 → 6
+  sipp                   24 → 21      rmca            6 → 6
+```
+
+減っているのは固定優先順位が不完全だからで、過剰棄却ではない。MAPD 側は
+同じ盤面を、今度は正しい経路で解いている。
+
+### 分かったこと: 対応している手法は少数派
+
+★ **前回の報告を訂正する。** 「CBS 系・ICTS・M*・LaCAM・PIBT・push 系・LNS・TAPF は
+正しく動いている」と書いたが、実際にはこれらは `unsupported-rules` を返していた。
+集計で unsupported-rules を除外していたため、正常に見えていた。
+
+現状 `forbidFollowing` を受け付けるのは、優先順位系 5・MAPD 7・MCMF・
+Space-Time A* だけである。残り 20 手法は非対応を宣言して断る。断ること自体は
+正しい振る舞い（黙って壊れるより良い）だが、CBS 系まで広げるには
+following 用の制約型と分岐規則が要る。今回はそこまで踏み込んでいない。
+
+### 常設テスト
+
+- `conflicts.test.ts` に `isFollowingReserved` の単体テスト 6 件（両方向、
+  「空けていない」場合、待機、自分自身の除外）。
+- `solver-invariants.test.ts` に「following 禁止ルール」を追加。
+  プリセット + ランダム 10 盤面 × 候補に出る全 Solver で
+  「受けたなら守る」を検査する。非対応の宣言は許すが internal は許さない。
+  受理数が 50 を下回ったら検査になっていないので落ちる。
+- 壊れていた最小の形（1 本道 + 退避くぼみの 5×3 で 2 体が入れ替わる）を
+  プリセットに依存しない形で固定した。
+
+向き 2 を外すと両方とも落ちることを確認済み（回帰テストとして機能する）。
+
+最終ゲート: sources:validate errors=0/warnings=14、format check、lint、
+typecheck 0 errors、unit 371 passed、build 65 pages、E2E 56 passed。
+
+---
+
 ## 2026-08-29 未照合だった領域を掃き出し、実装ミス 3 件を直した（Claude Code）
 
 有界準最適の照合で残っていた穴（TAPF の最適性、lifelong、大きい盤面）を

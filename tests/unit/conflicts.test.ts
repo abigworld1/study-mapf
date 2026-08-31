@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_RULES, type SimulationRules, type TimedPath } from "@/lib/model/types";
 import { detectConflicts, makespanOf, positionAt, sumOfCosts } from "@/lib/model/conflicts";
+import { SimpleReservationTable } from "@/lib/model/reservation";
 
 const path = (agentId: string, cells: [number, number][]): TimedPath => ({
   agentId,
@@ -162,5 +163,56 @@ describe("コスト", () => {
       ],
     };
     expect(sumOfCosts([a])).toBe(1);
+  });
+});
+
+describe("予約表の following 判定", () => {
+  /*
+    ★ following は向きが 2 つある。片方だけ見ると必ず取りこぼす。
+
+      conflicts.ts の定義（rules.forbidFollowing のとき）:
+        「A が t に居るセルを、B が t-1 に居て t に空けた」なら following。
+
+      これを予約表の側から見ると、自分は A にも B にもなりうる。
+        向き 1: 他が空けた跡へ自分が入る
+        向き 2: 自分が空けた跡へ他が入る
+
+      向き 2 を落としていたため、優先順位付き計画は following を残していた。
+      先に計画した経路は動かせないので、後から計画する側が両方避けるしかない。
+  */
+  const table = () => {
+    const t = new SimpleReservationTable();
+    // b1 は (1,0) に t=0 で居て、t=1 に (2,0) へ抜ける。
+    t.reserve("b1", { x: 1, y: 0 }, 0);
+    t.reserve("b1", { x: 2, y: 0 }, 1);
+    // b2 は (5,0) に t=0 で居て、t=1 も動かない。
+    t.reserve("b2", { x: 5, y: 0 }, 0);
+    t.reserve("b2", { x: 5, y: 0 }, 1);
+    return t;
+  };
+
+  it("向き 1: 他が空けたセルへ入るのを止める", () => {
+    expect(table().isFollowingReserved({ x: 0, y: 0 }, { x: 1, y: 0 }, 1, "me")).toBe(true);
+  });
+
+  it("向き 2: 自分が空けるセルへ他が入るのを止める", () => {
+    // 自分は t=0 に (2,0) に居て t=1 に (3,0) へ抜ける。その跡へ b1 が入る。
+    expect(table().isFollowingReserved({ x: 2, y: 0 }, { x: 3, y: 0 }, 1, "me")).toBe(true);
+  });
+
+  it("相手が空けていないなら following ではない（vertex 側で弾く）", () => {
+    expect(table().isFollowingReserved({ x: 4, y: 0 }, { x: 5, y: 0 }, 1, "me")).toBe(false);
+  });
+
+  it("その場で待つときは following にならない", () => {
+    expect(table().isFollowingReserved({ x: 1, y: 0 }, { x: 1, y: 0 }, 1, "me")).toBe(false);
+  });
+
+  it("自分自身の予約は除外する", () => {
+    expect(table().isFollowingReserved({ x: 0, y: 0 }, { x: 1, y: 0 }, 1, "b1")).toBe(false);
+  });
+
+  it("関係ないセルなら止めない", () => {
+    expect(table().isFollowingReserved({ x: 8, y: 3 }, { x: 9, y: 3 }, 1, "me")).toBe(false);
   });
 });
