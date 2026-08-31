@@ -1495,6 +1495,43 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-31 マニフェストの未確定保証を一次資料で 9 件確定させた（Claude Code）
+
+`complete` / `optimal` がどちらも `unknown` のエントリ 38 件のうち、PDF 本文に
+定理・命題が見つかった 9 件を確定させた。**推測では埋めない**ので、
+本文に該当記述を確認できなかったものは unknown のまま残す（29 件）。
+
+抽出は規約のコマンドをページ単位に広げて行い、ページ番号つきで原文を引いた。
+
+| id                  | complete    | optimal     | 根拠                                                   |
+| ------------------- | ----------- | ----------- | ------------------------------------------------------ |
+| rectangle-reasoning | conditional | true        | cbsh2-rtc p.16 Th.3 / p.20 Th.4 / p.27 Th.5            |
+| corridor-reasoning  | conditional | true        | 同 p.36 Th.7 / p.44 Th.8                               |
+| target-reasoning    | conditional | true        | 同 p.32 Th.6                                           |
+| disjoint-splitting  | conditional | true        | disjoint-splitting-icaps-2019 p.3 / cbsh2-rtc p.6 Th.2 |
+| recursive-mstar     | true        | true        | mstar-aij-2015 p.32 / p.30 Th.1                        |
+| sipps               | true        | conditional | mapf-lns2-aaai-2022 p.5 Th.1 / Th.2                    |
+| sippwrt             | conditional | unknown     | sippwrt-aaai-2019 p.5 Th.2 / p.1                       |
+| joint-state-astar   | true        | unknown     | standley-od-id-2010 p.5                                |
+| auction-algorithm   | conditional | conditional | auction-algorithm-1988 p.11 Prop.1 / p.12 Prop.2       |
+
+★ CBS の対称性推論 3 種と disjoint splitting は、いずれも定理が
+「preserves the completeness and optimality of **CBS**」という形をしている。
+保つ対象は CBS の保証なので、complete は CBS と同じ conditional にした。
+true にすると、CBS 自身が持たない無条件の完全性を主張することになる。
+
+★ 条件付きは条件まで書く。SIPPS の optimal は「soft collision が 0 の経路の
+中での最短」であって無条件の最短ではない。auction algorithm の optimal は
+ε < 1/N のとき、complete は complete assignment が存在するとき。
+
+astar / dijkstra など残りは、本文の該当記述を確認しきれていないので触っていない。
+「明らかに最適だから」で埋めない。
+
+最終ゲート: sources:validate errors=0/warnings=14、build 65 pages、
+マニフェストを読む単体テスト（implementation-state / mini-yaml）14 件通過。
+
+---
+
 ## 2026-08-31 条件付きの保証を照合し、push-and-rotate の過大主張を直した（Claude Code）
 
 「未照合の保証」を、**原論文に書いてある条件を実際に作って**確かめた。

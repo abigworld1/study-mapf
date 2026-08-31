@@ -205,10 +205,10 @@
   implementation_repository_ids: [mapf-lns2]
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
-    bounded_suboptimal: unknown
-  guarantee_evidence: null
+    complete: true
+    optimal: conditional
+    bounded_suboptimal: false
+  guarantee_evidence: "mapf-lns2-aaai-2022 p.5 Theorem 1「SIPPS guarantees to return a path if one exists and No Solution otherwise.」/ 同 p.5 Theorem 2「SIPPS guarantees to return a shortest path with zero soft collisions if one exists.」。最適性は soft collision が 0 の経路の中での最短であり、無条件の最短ではないため conditional。"
   notes: "MAPF-LNS2 の低レベル探索として提案された。ハード制約とソフト制約（衝突数を減らしたいが違反してもよい制約）を同時に扱う SIPP 拡張。原論文 PDF 本文で SIPPS の記載を 39 箇所確認済み。"
 
 - id: sippwrt
@@ -220,10 +220,10 @@
   implementation_repository_ids: []
   implementation_status: planned
   guarantees:
-    complete: unknown
+    complete: conditional
     optimal: unknown
-    bounded_suboptimal: unknown
-  guarantee_evidence: null
+    bounded_suboptimal: false
+  guarantee_evidence: "sippwrt-aaai-2019 p.5 Theorem 2「TP-SIPPwRT solves all well-formed MAPD instances.」/ 同 p.1「is complete for wellformed MAPD instances」。well-formed MAPD という条件付き。解の質に関する定理は確認できないため optimal は unknown。"
   notes: "運動学制約（速度・向き）付きの MAPD 向け SIPP 拡張。全エージェントの現在経路を高速に更新・参照するデータ構造を伴う。公開実装は未特定。要調査。"
 
 # =============================================================================
@@ -516,10 +516,10 @@
   implementation_repository_ids: [cbsh2-rtc]
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
-    bounded_suboptimal: unknown
-  guarantee_evidence: null
+    complete: conditional
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbsh2-rtc-aij-2021 p.16 Theorem 3「Using the rectangle reasoning technique I preserves the completeness and optimality of CBS.」/ 同 p.20 Theorem 4（technique II）/ 同 p.27 Theorem 5（generalized）。保つ対象は CBS の保証なので、complete は CBS と同じく conditional（complete/optimal な低レベル探索に依存）。"
   notes: "開けた矩形領域で 2 エージェントが交差するとき、指数個の等価な解消手が生じる。専用のバリア制約で 1 回の分岐に畳む。PDF 本文で Rectangle Reasoning / Rectangle Symmetry の記載を確認済み。"
 
 - id: corridor-reasoning
@@ -531,10 +531,10 @@
   implementation_repository_ids: [cbsh2-rtc]
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
-    bounded_suboptimal: unknown
-  guarantee_evidence: null
+    complete: conditional
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbsh2-rtc-aij-2021 p.36 Theorem 7「Resolving corridor conflicts with range constraints preserves the completeness and optimality of CBS.」/ 同 p.44 Theorem 8（generalized corridor conflicts、Algorithm 3 の制約集合）。complete は CBS と同じく conditional。"
   notes: "幅 1 の通路で正面衝突するときの対称性。PDF 本文で corridor reasoning の記載を 30 箇所以上確認済み。"
 
 - id: target-reasoning
@@ -546,10 +546,10 @@
   implementation_repository_ids: [cbsh2-rtc]
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
-    bounded_suboptimal: unknown
-  guarantee_evidence: null
+    complete: conditional
+    optimal: true
+    bounded_suboptimal: false
+  guarantee_evidence: "cbsh2-rtc-aij-2021 p.32 Theorem 6「Resolving target conflicts with length constraints preserves the completeness and optimality of CBS.」。complete は CBS と同じく conditional。"
   notes: "ゴールに到達して停止したエージェントと、その頂点を通りたいエージェントの間に生じる対称性。停止後の扱い（stay at target）に依存するため、問題定義とセットで説明すること。"
 
 - id: disjoint-splitting
@@ -561,10 +561,10 @@
   implementation_repository_ids: [cbsh2-rtc]
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: conditional
+    optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "disjoint-splitting-icaps-2019 p.3「Clearly, disjoint splitting is complete since one of the two constraints must hold for any candidate conflict-free plan in the parent CT node」/ cbsh2-rtc-aij-2021 p.6 Theorem 2「Using two sets of mutually disjunctive constraints to split a CT node preserves the completeness and optimality of CBS.」。complete は CBS と同じく conditional。"
   notes: "標準分割では 2 つの子ノードの探索空間が重なる。positive constraint（必ずそこを通れ）を導入して重なりを消す。"
 
 - id: bcp
@@ -625,10 +625,10 @@
   implementation_repository_ids: []
   implementation_status: planned
   guarantees:
-    complete: unknown
+    complete: true
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "standley-od-id-2010 p.5「Both OD and the standard algorithm are complete.」の standard algorithm が結合状態空間の A* にあたる。最適性を明示する定理・命題は同 PDF 本文で確認できなかったため optimal は unknown（naive な実装では最適性を失う旨が同 p.3 にある）。"
   notes: "全エージェントの位置の組を 1 状態とする素朴な結合探索。分岐数がエージェント数の指数になることを示すためのベースライン。OD / ID / M* / CBS はいずれもこの爆発への対処として説明できる。"
 
 - id: operator-decomposition
@@ -685,10 +685,10 @@
   implementation_repository_ids: []
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: true
+    optimal: true
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "mstar-aij-2015 p.32「Recursive M* retains the optimality and completeness properties of M*.」/ 同 p.30 Theorem 1「M* is complete and optimal.」。"
   notes: "衝突集合をさらに独立な部分集合へ分解して再帰的に M* を適用する。mstar-aij-2015 に含まれる。"
 
 - id: icts
@@ -1208,10 +1208,10 @@
   implementation_repository_ids: []
   implementation_status: planned
   guarantees:
-    complete: unknown
-    optimal: unknown
+    complete: conditional
+    optimal: conditional
     bounded_suboptimal: false
-  guarantee_evidence: null
+  guarantee_evidence: "auction-algorithm-1988 p.12 PROPOSITION 2「If at least one complete assignment exists, the algorithm terminates in a finite number of iterations.」より complete は complete assignment の存在を条件とする。同 p.11 PROPOSITION 1「A complete assignment obtained upon termination of the algorithm is within N-epsilon of being optimal, and is optimal if epsilon < 1/N.」より optimal は epsilon < 1/N の条件付き。"
   notes: "未割当の主体が同時に入札して価格を上げる分散的な緩和法。分散 MAPD のタスク割当と相性がよい。epsilon-complementary slackness による最適性の議論は PDF 取得後に確認すること。"
 
 - id: min-cost-max-flow
