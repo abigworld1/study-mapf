@@ -12,7 +12,15 @@ export interface DecompositionResult {
   readonly order: readonly number[];
   readonly priorityEdges: readonly { higher: number; lower: number }[];
   readonly stopped: boolean;
-  readonly impossible: boolean;
+  /**
+   * 優先度関係に閉路があり、順序を決めるために 1 本切ったか。
+   *
+   * ★ 閉路があること自体は「解なし」ではない（原論文 Algorithm 4 は
+   *   全順序を要求しない）。ただし論文どおりの優先順位から外れるので、
+   *   失敗したときに「手法の前提から外れた可能性がある」と言えるよう
+   *   呼び出し側へ伝える。
+   */
+  readonly brokeCycle: boolean;
 }
 
 interface MutableSubproblem {
@@ -191,16 +199,11 @@ export function decomposeAndOrder(
   const priorityEdges = [...edges]
     .map((edge) => edge.split(">").map(Number) as [number, number])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const topological = topologicalOrder(subproblems.length, priorityEdges, random);
-  if (!topological) {
-    return {
-      subproblems: freezeSubproblems(),
-      order: [],
-      priorityEdges: priorityEdges.map(([higher, lower]) => ({ higher, lower })),
-      stopped: false,
-      impossible: true,
-    };
-  }
+  const { order: topological, brokeCycle } = topologicalOrder(
+    subproblems.length,
+    priorityEdges,
+    random,
+  );
   const order: number[] = [];
   for (const subproblem of topological) {
     const members = [...subproblems[subproblem]!.agents]
@@ -218,7 +221,7 @@ export function decomposeAndOrder(
     order,
     priorityEdges: priorityEdges.map(([higher, lower]) => ({ higher, lower })),
     stopped: false,
-    impossible: false,
+    brokeCycle,
   };
 
   function assign(agent: number, subproblem: number): void {
@@ -468,11 +471,30 @@ function countEmpty(vertices: ReadonlySet<number>, starts: Int32Array): number {
   return count;
 }
 
+/**
+ * subproblem の優先度関係から並び順を作る。閉路があっても順序は返す。
+ *
+ * ★ 閉路を「解なし」にしてはいけない。
+ *
+ *   原論文 Algorithm 4 は毎回「(equal) highest priority の未完了 agent を
+ *   randomly select」する方式で、事前に全順序を作ることを要求していない。
+ *   解が無いと判定してよいのは Theorem 1 の条件、すなわち swap が失敗した
+ *   ときだけであり、優先度関係に閉路があることではない。
+ *
+ *   以前はここが null を返すと `impossible` として、警告も無しに
+ *   no-solution / search-exhausted を返していた。空き頂点がちょうど 2 個の
+ *   密な盤面では閉路が普通に起きるので、LaCAM が解ける入力の 6 割で
+ *   「解なし」と表示していた。
+ *
+ *   閉路が残ったら、残りのうち添字の小さいものから順に出して先へ進む。
+ *   その先で push / swap が失敗すれば、そちらの経路が但し書き付きで
+ *   失敗を返す（それが論文どおりの判定である）。
+ */
 function topologicalOrder(
   count: number,
   edges: readonly [number, number][],
   random: () => number,
-): number[] | null {
+): { readonly order: number[]; readonly brokeCycle: boolean } {
   const indegree = new Int32Array(count);
   const outgoing = Array.from({ length: count }, () => [] as number[]);
   for (const [higher, lower] of edges) {
@@ -481,20 +503,37 @@ function topologicalOrder(
     indegree[lower] = (indegree[lower] ?? 0) + 1;
   }
   const ranks = Array.from({ length: count }, () => random());
+  const placed = new Uint8Array(count);
   const ready = Array.from({ length: count }, (_, index) => index).filter(
     (index) => indegree[index] === 0,
   );
   const result: number[] = [];
-  while (ready.length > 0) {
-    ready.sort((a, b) => ranks[a]! - ranks[b]! || a - b);
-    const current = ready.shift()!;
+  let brokeCycle = false;
+
+  const emit = (current: number): void => {
+    placed[current] = 1;
     result.push(current);
     for (const next of outgoing[current]!) {
       indegree[next] = (indegree[next] ?? 0) - 1;
-      if (indegree[next] === 0) ready.push(next);
+      if (indegree[next] === 0 && !placed[next]) ready.push(next);
     }
+  };
+
+  while (result.length < count) {
+    while (ready.length > 0) {
+      ready.sort((a, b) => ranks[a]! - ranks[b]! || a - b);
+      const current = ready.shift()!;
+      if (placed[current]) continue;
+      emit(current);
+    }
+    if (result.length === count) break;
+    // 閉路が残った。残りのうち添字の小さいものを 1 つ出して進める（決定的）。
+    const stuck = Array.from({ length: count }, (_, index) => index).find((i) => !placed[i]);
+    if (stuck === undefined) break;
+    brokeCycle = true;
+    emit(stuck);
   }
-  return result.length === count ? result : null;
+  return { order: result, brokeCycle };
 }
 
 function reconstruct(parent: Int32Array, goal: number): number[] {
@@ -509,5 +548,5 @@ function reconstruct(parent: Int32Array, goal: number): number[] {
 }
 
 function emptyStopped(): DecompositionResult {
-  return { subproblems: [], order: [], priorityEdges: [], stopped: true, impossible: false };
+  return { subproblems: [], order: [], priorityEdges: [], stopped: true, brokeCycle: false };
 }

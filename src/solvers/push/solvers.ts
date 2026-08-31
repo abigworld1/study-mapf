@@ -54,11 +54,20 @@ export const pushAndRotateSolver: MapfSolver = {
     category: "push",
     supports: ["one-shot-mapf"],
     status: "runnable",
-    fidelity: "paper-faithful",
+    /*
+      ★ paper-faithful から下げた。
+
+        原論文 Theorem 1 は「各連結成分に空き頂点が 2 個以上」で完全と示すが、
+        この実装はそのクラスを取りこぼす。4×2 の空きグリッド・空き頂点 2 個で、
+        LaCAM が解ける配置を no-solution と返す例が出ている（該当クラスは
+        biconnected なので Kornhauser の結果より常に可解）。swap の多段 clear を
+        論文どおりに再現できていないことが原因で、rotate までは到達していない。
+    */
+    fidelity: "educational",
     unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
     basedOnPaperIds: ["push-and-rotate-aamas-2013"],
     implementationNote:
-      "AAMAS 2013 Algorithms 1–4 と著者 thesis Algorithms 4.1.1–4.2.11 を基に、biconnected subproblem merge、agent assignment、priority propagation、plan / push / swap / rotate / resolve、4-stage clear を独立実装。4 近傍 unit-cost grid に限定し、solution smoothing と一般 graph import は含まない。",
+      "AAMAS 2013 Algorithms 1–4 と著者 thesis Algorithms 4.1.1–4.2.11 を基に、biconnected subproblem merge、agent assignment、priority propagation、plan / push / swap / rotate / resolve、4-stage clear を独立実装。4 近傍 unit-cost grid に限定し、solution smoothing と一般 graph import は含まない。★ swap の多段 clear が論文どおりでないため、原論文 Theorem 1 のクラス（各連結成分に空き頂点 2 個以上）でも失敗することがある。完全性は主張しない。",
   },
   async solve(scenario, options, context): Promise<SolverResult> {
     return solvePushVariant("push-and-rotate", scenario, options, context);
@@ -142,8 +151,24 @@ async function solvePushVariant(
     if (decomposition.stopped) {
       return finish(failureResult(stopState ?? "node-limit", "limit-exceeded"));
     }
-    if (decomposition.impossible) {
-      return finish(failureResult("no-solution", "search-exhausted"));
+    /*
+      ★ 優先度関係に閉路があっても「解なし」にしない。
+
+        原論文 Algorithm 4 は毎回「最高優先度の未完了 agent」を選ぶ方式で、
+        事前の全順序を要求しない。解が無いと判定してよいのは Theorem 1 の
+        条件（swap の失敗）だけである。
+
+        以前はここで警告も無しに no-solution / search-exhausted を返しており、
+        空き頂点がちょうど 2 個の密な盤面では、LaCAM が解ける入力の 6 割で
+        「解が見つかりませんでした」と表示していた。
+    */
+    if (decomposition.brokeCycle) {
+      warnings.push({
+        code: "simplified-behavior",
+        message:
+          "subproblem の優先度関係に閉路があったため、順序を決める際に 1 本切りました。" +
+          "原論文の優先順位から外れるので、失敗した場合でも解の非存在の証明にはなりません。",
+      });
     }
     order = decomposition.order;
     for (const subproblem of decomposition.subproblems) {
@@ -344,13 +369,33 @@ async function solvePushVariant(
       });
       return finish(failureResult(engine.stop, "limit-exceeded"));
     }
-    if (variant === "push-and-swap") {
-      warnings.push({
-        code: "simplified-behavior",
-        message:
-          "Push and Swap の primitive で計画を継続できませんでした。後続一次資料が反例を示しているため、一般の MAPF 解が存在しないことの証明ではありません。",
-      });
-    }
+    /*
+      ★ どちらの variant でも「解が無い」とは言えない。
+
+        原論文 Theorem 1 は「各連結成分に空き頂点が 2 個以上」のクラスで
+        Push and Rotate の完全性を示す。しかしこのブラウザ実装はそのクラスを
+        取りこぼす。4×2 の空きグリッド・空き頂点 2 個（biconnected なので
+        Kornhauser の結果より常に可解）で、LaCAM が解ける配置を
+        no-solution と返す例が出ている。原因は swap の多段 clear を
+        論文どおりに実装しきれていないことで、rotate までは到達していない。
+
+        以前は push-and-swap のときだけ但し書きを付け、push-and-rotate では
+        「対象クラスなら必ず解ける」前提で無言の no-solution を返していた。
+        実装が前提を満たしていないので、これは過大主張だった。
+    */
+    warnings.push(
+      variant === "push-and-swap"
+        ? {
+            code: "simplified-behavior",
+            message:
+              "Push and Swap の primitive で計画を継続できませんでした。後続一次資料が反例を示しているため、一般の MAPF 解が存在しないことの証明ではありません。",
+          }
+        : {
+            code: "simplified-behavior",
+            message:
+              "Push and Rotate の primitive で計画を継続できませんでした。原論文 Theorem 1 は空き頂点 2 個以上のクラスでの完全性を示しますが、この実装は swap の多段 clear を再現しきれておらず、そのクラス内でも失敗することがあります。解が存在しないことの証明ではありません。",
+          },
+    );
     return finish(failureResult("no-solution", "search-exhausted"));
   }
 

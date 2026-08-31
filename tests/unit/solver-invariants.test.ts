@@ -652,3 +652,144 @@ describe("following 禁止ルール", () => {
     expect(checkPaths(scenario, result.paths)).toEqual([]);
   }, 60_000);
 });
+
+describe("条件付きの保証を、書いてある条件で照合する", () => {
+  /*
+    ★ 「条件付き」は条件を作って初めて検査になる。
+      条件は原論文から取る。推測で作らない。
+  */
+
+  /*
+    push-and-rotate-aamas-2013 p.5 Theorem 1（原文）:
+      "Push and Rotate is complete for the class of multi-agent path planning
+       problems in which there are two or more unoccupied vertices in each
+       connected component."
+
+    ★ このサイトの実装はそのクラスを取りこぼす。
+      4×2 の空きグリッド・空き頂点 2 個は biconnected なので、Kornhauser の
+      結果よりどの配置間も到達可能、つまり必ず解がある。それでも下の配置では
+      no-solution を返す。swap の多段 clear を論文どおりに再現できておらず、
+      rotate まで到達しないことが原因（trace に rotate-cycle が 1 件も出ない）。
+
+      ここで固定するのは「完全である」ことではなく、
+      **解が無いと言い切らないこと**である。実装が論文のクラスを満たして
+      いない以上、no-solution を証明として出してはいけない。
+  */
+  const KNOWN_UNSOLVED: Scenario = {
+    id: "pr-gap",
+    name: "pr-gap",
+    kind: "one-shot-mapf",
+    map: createEmptyMap(4, 2),
+    agents: [
+      { id: "a1", start: { x: 0, y: 1 }, goal: { x: 0, y: 0 }, colorIndex: 0 },
+      { id: "a2", start: { x: 1, y: 1 }, goal: { x: 3, y: 0 }, colorIndex: 1 },
+      { id: "a3", start: { x: 2, y: 1 }, goal: { x: 2, y: 0 }, colorIndex: 2 },
+      { id: "a4", start: { x: 1, y: 0 }, goal: { x: 1, y: 1 }, colorIndex: 3 },
+      { id: "a5", start: { x: 2, y: 0 }, goal: { x: 3, y: 1 }, colorIndex: 4 },
+      { id: "a6", start: { x: 3, y: 0 }, goal: { x: 1, y: 0 }, colorIndex: 5 },
+    ],
+    rules: DEFAULT_RULES,
+    seed: 1,
+  };
+
+  it("push-and-rotate が失敗しても、解の非存在とは言わない", async () => {
+    const result = await getSolver("push-and-rotate")!.solve(
+      KNOWN_UNSOLVED,
+      { ...DEFAULT_SOLVER_OPTIONS, extra: { maxMoves: 2000 } },
+      ctx(),
+    );
+    // この盤面に解があることを、完全性を主張できる別手法で確かめる。
+    const reference = await getSolver("lacam")!.solve(
+      KNOWN_UNSOLVED,
+      DEFAULT_SOLVER_OPTIONS,
+      ctx(),
+    );
+    expect(reference.outcome, "前提が崩れている。この盤面は解ける必要がある").toBe("solved");
+    if (result.outcome === "solved") return; // 実装が直ったならそれでよい
+    const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+    expect(messages, "解が無いと言い切っている").toContain("証明ではありません");
+  }, 60_000);
+
+  it("push-and-rotate は no-solution を必ず但し書き付きで返す", async () => {
+    const bad: string[] = [];
+    for (const scenario of ONE_SHOT) {
+      const result = await getSolver("push-and-rotate")!.solve(
+        scenario,
+        { ...DEFAULT_SOLVER_OPTIONS, extra: { maxMoves: 2000 } },
+        ctx(),
+      );
+      if (result.outcome === "solved" || result.outcome === "error") continue;
+      const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+      if (!messages.includes("証明ではありません")) {
+        bad.push(`${scenario.id}: ${result.outcome} を但し書き無しで返す`);
+      }
+    }
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 120_000);
+
+  /*
+    lacam-star-ijcai-2023 p.4 Algorithm 3 lines 27-30 は OPEN 完了時を optimal、
+    interruption 時を sub-optimal と分ける。つまり eventually optimal であって、
+    有限の打ち切りでの最適性ではない。
+
+    ★ 論文の目的関数は sum-of-loss で、サイト表示の sum of costs とは別物。
+      そのまま SOC オラクルと比べてはいけない。ただし
+      「返した解の sum-of-loss と SOC が一致する」ときは比較できる:
+        最適 loss ≤ (SOC 最適解の loss) ≤ (SOC 最適解の SOC) = 最適 SOC
+      なので、その解の SOC = その解の loss = 最適 loss ≤ 最適 SOC。
+      解は実行可能なので SOC ≥ 最適 SOC。よって等号。
+  */
+  it("LaCAM* は完遂したとき、目的関数が一致する盤面で最適に一致する", async () => {
+    const bad: string[] = [];
+    let checked = 0;
+    for (const scenario of ONE_SHOT) {
+      const oracle = jointStateOptimalSumOfCosts(scenario, 10);
+      if (!oracle.solved || !oracle.sumOfCostsCertified) continue;
+      const result = await getSolver("lacam-star")!.solve(
+        scenario,
+        { ...DEFAULT_SOLVER_OPTIONS, maxExpansions: 2_000_000 },
+        ctx(),
+      );
+      if (result.outcome !== "solved") continue;
+      const messages = (result.warnings ?? []).map((w) => w.message).join("\n");
+      // 打ち切っていたら eventual optimality の対象外。
+      if (messages.includes("打ち切")) continue;
+      // sum-of-loss と SOC が食い違う盤面は、上の但し書きが出るので除く。
+      if (messages.includes("sum-of-loss")) continue;
+      checked += 1;
+      if (result.metrics.sumOfCosts !== oracle.sumOfCosts) {
+        bad.push(`${scenario.id}: SOC ${result.metrics.sumOfCosts} ≠ 最適 ${oracle.sumOfCosts}`);
+      }
+    }
+    expect(checked, "照合できた盤面が少なすぎる").toBeGreaterThan(8);
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 300_000);
+
+  /*
+    sipp-icra-2011 p.5 Theorem 1/2 の完全性・最適性は単一エージェントの主張で、
+    サイトの固定優先順位 wrapper には及ばない（manifest の notes にも明記済み）。
+
+    ★ 及ばないことは既に警告で伝えている。ここで見るのは
+      「単一エージェントなら本当に最適か」。時空間 A* と一致すべき。
+  */
+  it("SIPP は 1 体なら時空間探索と同じコストを返す", async () => {
+    const bad: string[] = [];
+    let checked = 0;
+    for (const scenario of ONE_SHOT) {
+      const single: Scenario = { ...scenario, agents: [scenario.agents[0]!] };
+      const sipp = await getSolver("sipp")!.solve(single, DEFAULT_SOLVER_OPTIONS, ctx());
+      const reference = await getSolver("astar")!.solve(single, DEFAULT_SOLVER_OPTIONS, ctx());
+      if (reference.outcome !== "solved") continue;
+      checked += 1;
+      if (sipp.outcome !== "solved") {
+        bad.push(`${scenario.id}: 解けるはずが ${sipp.outcome}`);
+      } else if (sipp.metrics.sumOfCosts !== reference.metrics.sumOfCosts) {
+        bad.push(
+          `${scenario.id}: SIPP ${sipp.metrics.sumOfCosts} ≠ 最短 ${reference.metrics.sumOfCosts}`,
+        );
+      }
+    }
+    expect(checked).toBeGreaterThan(15);
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 120_000);
+});

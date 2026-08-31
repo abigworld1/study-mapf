@@ -1495,6 +1495,70 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-31 条件付きの保証を照合し、push-and-rotate の過大主張を直した（Claude Code）
+
+「未照合の保証」を、**原論文に書いてある条件を実際に作って**確かめた。
+条件は推測で作らない。
+
+### push-and-rotate: 論文のクラスで失敗していた（実装の穴）
+
+原文（p.5 Theorem 1）:
+
+> "Push and Rotate is complete for the class of multi-agent path planning
+> problems in which there are two or more unoccupied vertices in each
+> connected component."
+
+この条件を満たす盤面（連結成分に空き頂点ちょうど 2 個）を 40 例作って回したところ、
+**25 例で no-solution を返した**。しかも完全性を主張できる LaCAM は同じ盤面を解く。
+
+最小例は 4×2 の空きグリッド・6 体（空き 2）。この形は biconnected なので
+Kornhauser の結果よりどの配置間も到達可能、つまり必ず解がある。
+
+trace を見ると **rotate-cycle が 1 件も出ていない**。Push and Rotate が
+Push and Swap に加えた中核が rotate なので、そこへ到達する前に swap が
+失敗している。swap の多段 clear を論文どおりに再現できていない。
+
+★ より悪かったのは、**失敗を無言の no-solution / search-exhausted で返して
+いた**こと。`failedPlan()` は push-and-swap のときだけ但し書きを付け、
+push-and-rotate は「対象クラスなら必ず解ける」前提で証明のように返していた。
+実装がその前提を満たしていないので、これは過大主張だった。
+
+直したこと。
+
+- どちらの variant でも「解の非存在の証明ではない」と必ず言う。
+  push-and-rotate 側は理由（swap の多段 clear が論文どおりでない）も書く。
+- `fidelity` を `paper-faithful` から `educational` へ下げた。
+- マニフェストの notes を修正した。「対象クラス内では解を返す」は嘘なので、
+  4×2 の反例と原因を書いた。**保証は原論文のものであって、この実装の挙動ではない。**
+
+なお副次的に、subproblem の優先度関係に閉路があると `impossible` として
+警告も無しに no-solution を返していた箇所も直した。原論文 Algorithm 4 は
+毎回「(equal) highest priority の未完了 agent を randomly select」する方式で、
+事前の全順序を要求しない。解が無いと判定してよいのは Theorem 1 の条件
+（swap の失敗）だけなので、閉路は 1 本切って先へ進める。
+
+### 照合して問題が無かったもの
+
+- **LaCAM\* の eventually optimal**（p.4 Algorithm 3 lines 27-30）。
+  ★ 論文の目的関数は sum-of-loss で、サイト表示の SOC とは別物なので
+  そのまま比べてはいけない。返した解の loss と SOC が一致するときだけ
+  比較できる（最適 loss ≤ SOC 最適解の loss ≤ その SOC = 最適 SOC、
+  かつ解は実行可能なので SOC ≥ 最適 SOC、よって等号）。
+  打ち切っていない盤面で全一致。
+- **SIPP の単一エージェント最適性**（p.5 Theorem 1/2）。1 体なら時空間探索と
+  同コスト。多エージェント wrapper に保証が及ばないことは既に警告済みで、
+  マニフェストの notes にも書いてある。
+- **PIBT / winPIBT の条件付き完全性**は照合していない。原論文の主張は
+  「goal に留まり続けなくてよい変種」での到達性（pibt-aij-2022 p.12）や
+  iterative setting の individual reachability（winpibt-2019 p.7 Theorem 4.3）で、
+  このサイトの stay-at-goal 古典 MAPF では条件そのものを作れない。
+  作れない条件を作れたことにしないため、未照合のままにする。
+
+最終ゲート: sources:validate errors=0/warnings=14、format check、lint、
+typecheck 0 errors、unit 398 passed、build 65 pages、E2E 58 passed。
+
+---
+
 ## 2026-08-31 following 対応を 14 手法へ広げ、lifelong を画面から触れるようにした（Claude Code）
 
 ### 1. following 禁止に対応する手法を 20 → 5 に減らした

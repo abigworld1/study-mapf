@@ -56,7 +56,13 @@ describe("Batch 4 registry / metadata", () => {
     for (const id of IDS) expect(ids).toContain(id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(getSolver("push-and-rotate")!.metadata.status).toBe("runnable");
-    expect(getSolver("push-and-rotate")!.metadata.fidelity).toBe("paper-faithful");
+    /*
+      ★ paper-faithful から educational へ下げた。
+        原論文 Theorem 1 のクラス（各連結成分に空き頂点 2 個以上）でも
+        失敗する例が見つかっている（swap の多段 clear が論文どおりでない）。
+        再現度を主張できない以上、ラベルを下げるほうが正確である。
+    */
+    expect(getSolver("push-and-rotate")!.metadata.fidelity).toBe("educational");
   });
 });
 
@@ -269,7 +275,7 @@ describe("Push and Rotate rotate", () => {
       () => false,
     );
     expect(decomposition.stopped).toBe(false);
-    expect(decomposition.impossible).toBe(false);
+    expect(decomposition.brokeCycle).toBe(false);
     const left = decomposition.subproblems.findIndex((part) => part.cells.includes(8));
     const right = decomposition.subproblems.findIndex((part) => part.cells.includes(12));
     expect(left).toBeGreaterThanOrEqual(0);
@@ -278,7 +284,17 @@ describe("Push and Rotate rotate", () => {
     expect(decomposition.priorityEdges).toContainEqual({ higher: left, lower: right });
   });
 
-  it("相反する subproblem priority を解なしとして検出する", () => {
+  /*
+    ★ 優先度関係の閉路は「解なし」ではない。
+
+      原論文 Algorithm 4 は毎回「(equal) highest priority の未完了 agent を
+      randomly select」する方式で、事前の全順序を要求しない。解が無いと
+      判定してよいのは Theorem 1 の条件（swap の失敗）だけである。
+
+      以前はここで order を空にして impossible を立て、solver 側が警告も
+      無しに no-solution / search-exhausted を返していた。
+  */
+  it("相反する subproblem priority では閉路を切って順序を作る", () => {
     const map = twoRoomMap();
     const starts = [0, 1, 7, 8, 9, 5, 6, 12, 13];
     const goals = [0, 12, 7, 6, 9, 5, 8, 1, 13];
@@ -295,8 +311,9 @@ describe("Push and Rotate rotate", () => {
       () => false,
     );
     expect(decomposition.stopped).toBe(false);
-    expect(decomposition.impossible).toBe(true);
-    expect(decomposition.order).toEqual([]);
+    expect(decomposition.brokeCycle).toBe(true);
+    // 全 agent が並ぶこと。順序が空だと solve へ進めない。
+    expect([...decomposition.order].sort((a, b) => a - b)).toEqual(agents.map((_, index) => index));
   });
 
   it("2 個の空きだけを持つ二部屋 graph で両 subproblem の配置を解く", async () => {
