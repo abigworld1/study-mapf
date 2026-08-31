@@ -1495,6 +1495,109 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-08-31 following 対応を 14 手法へ広げ、lifelong を画面から触れるようにした（Claude Code）
+
+### 1. following 禁止に対応する手法を 20 → 5 に減らした
+
+前回、判定を予約表へ集約したあとも 20 手法が `unsupported-rules` を返していた。
+中身を見ると、多くは「実装できない」のではなく**ゲートで断っていただけ**だった。
+
+**CBS 系（cbs / bcbs / ecbs / icbs / eecbs）** がその典型で、`detectConflicts` は
+following を返し、`constraintsFor` は following の分岐を既に持っていた。
+ゲートを外すだけで動いた。分岐が解を取りこぼさないことも確認した。
+
+```text
+A@c@t かつ B@c@(t-1) かつ B@t≠c
+  ¬(A@c@t) の側 …… 枝 1（A の vertex 制約）
+  A@c@t の側 …… B が t に c に居れば A と vertex conflict なので B@t≠c は強制。
+                  よって ¬(B@c@(t-1)) が必要で、これが枝 2。
+2 枝で場合を尽くしているので完全性は落ちない。
+```
+
+残りは手法ごとに違った。
+
+- **PBS** …… 低レベルに following の検査が無かったので追加。予約表の
+  `isFollowingReserved` を見るだけ。
+- _*M* / ICTS_* …… どちらも配置遷移（from→to）を直接見る手法なので、
+  対の判定に 1 条件足すだけで済む。**following は非対称なので両方向を書く。**
+- **LaCAM / LaCAM*** …… PIBT 生成は「押し出した相手のセルへ同じ step で入る」
+  ことを前提にしており、これがそのまま following になる。個々の割当の途中で
+  弾くと優先度継承の再帰と噛み合わないので、**出来上がった配置ごと捨てる**形に
+  した。捨てた分は上位の constraint tree が別の配置を列挙する。
+- **MAPF-LNS / LNS2 / RHCR / CBS-TA / TAPF baseline / mapd-greedy** ……
+  いずれも予約表か CBS を土台にしているので、ゲートを外すだけ。
+
+### 対応しないと決めた 5 手法
+
+★ ここは「未実装」ではなく、**手法の成り立ちとして対応しない**。
+断る理由をメッセージに書いた（前は「原論文モデルだけに対応します」で理由が無かった）。
+
+- **PIBT / winPIBT / push-and-swap / push-and-rotate** ……
+  優先度継承や push は「押し出した相手のセルへ同じ step で入る」動きそのもの。
+  禁止すると空きセルへの移動しか残らず、原論文の振る舞いでも条件付き完全性の
+  前提でもなくなる。「動くには動くが別物」を出すより、断るほうが正確である。
+- **CBM** …… following は「相手が同じ step に抜けたか」という 2 経路にまたがる
+  条件で、時空間フローの辺容量に落とせない。
+
+### 結果
+
+プリセット 9 + ランダム 20 盤面で、エラー・衝突・規則違反ともゼロ。
+
+```text
+cbs 25/29  bcbs 27  ecbs 27  eecbs 27  icbs 25  icts 25  mstar 25
+lacam 25   lacam-star 25     pbs 27    mapf-lns 26  mapf-lns2 25  rhcr 25
+（残りは node-limit / no-solution。非対応エラーはゼロ）
+```
+
+### 2. lifelong-mapf を画面から触れるようにした
+
+goal 列は `goalSequences` という**型にもプリセットにも JSON にも無いキー**を
+RHCR が `as` キャストで読んでいるだけだった。手でオブジェクトを組まない限り
+lifelong モードは動かせず、実質デッドコードだった。
+
+- `Scenario.goalSequences`（`LifelongGoal[]` の Record）を型に足した。
+- `ScenarioJson` に入出力を通した。
+- `validateScenario` に lifelong の検査を足した（未知の agent id、空の列、
+  壁の上の goal、負の releaseTime）。
+- `lifelong-loop` プリセットを追加。releaseTime をずらしてあるので
+  「まだ見えていない goal」がある状態を作れる。窓を狭めたときの説明に使う。
+- 描画を追加。**one-shot の goal（実線）と描き分ける。** lifelong では goal が
+  順に現れるので、全部が同時に目標であるように見せてはいけない。破線のリングに
+  順番を添えた。
+- `buildGoalQueues` はキャストをやめて型付きフィールドを読む。
+
+### 3. JSON 往復で parkingEndpoints が落ちていたのも直した
+
+`ScenarioJson` にフィールドが無く、`scenarioToJson` が出力していなかった。
+MAPD の non-task endpoint は well-formed 条件 (b)
+（mapd-tp-tpts-central-2017 p.2 Definition 1）に効くので、落ちると
+**書き出して読み込んだだけで well-formed だった入力が well-formed でなくなる**。
+
+```text
+parkingEndpoints  2 → 0
+non-task endpoint 2 → 0
+well-formed       true → false
+```
+
+lifelong と同じ「シナリオモデルと JSON 形式のずれ」なので一緒に直した。
+
+### 常設テスト
+
+- `scenario.test.ts` に**全プリセットの JSON 往復**を追加。kind / agents /
+  tasks / teams / parkingEndpoints / goalSequences / rules / 検証結果、そして
+  **well-formed 判定が反転しないこと**まで見る。項目を足したときに入出力へ
+  通し忘れると、ここで落ちる。
+- parkingEndpoints だけが non-task endpoint を供給する形も固定した。
+- lifelong プリセットの検証・候補 Solver・RHCR の完走・検証の不備検出。
+- E2E に「lifelong の盤面で RHCR が goal 列を処理しきる」を追加。
+- 旧挙動（非対応であること）を固定していた既存テスト 7 件を新契約へ更新した。
+  PBS は対応、PIBT / winPIBT は非対応、と手法ごとに分けている。
+
+最終ゲート: sources:validate errors=0/warnings=14、format check、lint、
+typecheck 0 errors、unit 394 passed、build 65 pages、E2E 58 passed。
+
+---
+
 ## 2026-08-31 following conflict の判定を予約表に実装した（Claude Code）
 
 `forbidFollowing: true` が全面的に壊れていたのを直した。

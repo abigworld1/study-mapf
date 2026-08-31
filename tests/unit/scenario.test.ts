@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { Scenario } from "@/lib/model/types";
+import { DEFAULT_RULES, DEFAULT_SOLVER_OPTIONS } from "@/lib/model/types";
 import {
+  PRESETS,
   ScenarioParseError,
   buildPreset,
   scenarioFromJson,
@@ -7,7 +10,11 @@ import {
   validateScenario,
 } from "@/lib/model/scenario";
 import { parseMovingAiMap, parseMovingAiScen, scenarioFromMovingAi } from "@/lib/model/movingai";
-import { isBlocked } from "@/lib/model/grid";
+import { createEmptyMap, isBlocked, withBlocked } from "@/lib/model/grid";
+import { checkWellFormed } from "@/lib/model/mapd";
+import { detectConflicts } from "@/lib/model/conflicts";
+import { createSolverContext } from "@/solvers/context";
+import { getSolver, listSolverMetadataFor } from "@/solvers/registry";
 import { createRandom, shuffleInPlace } from "@/lib/model/random";
 
 describe("シナリオ JSON", () => {
@@ -151,5 +158,117 @@ describe("乱数", () => {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThan(1);
     }
+  });
+});
+
+describe("JSON の往復で情報が落ちないこと", () => {
+  /*
+    ★ 書き出して読み込むだけで消える項目があった。
+
+      parkingEndpoints は ScenarioJson にフィールドが無く、
+      scenarioToJson が出力していなかった。MAPD の non-task endpoint は
+      well-formed 条件 (b)（mapd-tp-tpts-central-2017 p.2 Definition 1）に
+      効くので、落ちると well-formed だった入力が well-formed でなくなる。
+      画面はその判定を出しているので、往復しただけで表示が反転していた。
+
+      lifelong の goal 列も同じで、型にも JSON にも無く、実装だけが
+      キャストで読んでいた。
+
+      プリセット個別ではなく全プリセットで見る。項目を足したときに
+      入出力へ通し忘れるのを、ここで捕まえる。
+  */
+  it.each(PRESETS.map((preset) => preset.id))("%s は往復しても同じ", (id) => {
+    const original = buildPreset(id, 1);
+    const restored = scenarioFromJson(JSON.parse(JSON.stringify(scenarioToJson(original))));
+
+    expect(restored.kind).toBe(original.kind);
+    expect(restored.agents).toEqual(original.agents);
+    expect(restored.tasks ?? null).toEqual(original.tasks ?? null);
+    expect(restored.teams ?? null).toEqual(original.teams ?? null);
+    expect(restored.parkingEndpoints ?? null).toEqual(original.parkingEndpoints ?? null);
+    expect(restored.goalSequences ?? null).toEqual(original.goalSequences ?? null);
+    expect(restored.rules).toEqual(original.rules);
+    expect(validateScenario(restored)).toEqual([]);
+
+    const before = checkWellFormed(original);
+    const after = checkWellFormed(restored);
+    if (before.checked && after.checked) {
+      expect(after.wellFormed, "往復で well-formed 判定が変わる").toBe(before.wellFormed);
+    }
+  });
+
+  /*
+    ★ parkingEndpoints が well-formed を左右する形を固定しておく。
+      agent の start を作業地点に重ねると、non-task endpoint を供給するのは
+      parkingEndpoints だけになる。落とすと条件 (b) が破れる。
+  */
+  it("parkingEndpoints だけが non-task endpoint を supply する場合も往復する", () => {
+    let map = createEmptyMap(9, 3);
+    for (const y of [0, 2])
+      for (let x = 0; x < 9; x += 1) if (x % 2 === 1) map = withBlocked(map, { x, y }, true);
+    const scenario: Scenario = {
+      id: "park",
+      name: "park",
+      kind: "mapd",
+      map,
+      agents: [
+        { id: "a1", start: { x: 2, y: 0 } },
+        { id: "a2", start: { x: 6, y: 0 } },
+      ],
+      tasks: [
+        { id: "t1", pickup: { x: 2, y: 0 }, delivery: { x: 4, y: 0 }, releaseTime: 0 },
+        { id: "t2", pickup: { x: 6, y: 0 }, delivery: { x: 8, y: 0 }, releaseTime: 0 },
+      ],
+      parkingEndpoints: [
+        { x: 0, y: 2 },
+        { x: 2, y: 2 },
+      ],
+      rules: DEFAULT_RULES,
+      seed: 1,
+    };
+    const restored = scenarioFromJson(JSON.parse(JSON.stringify(scenarioToJson(scenario))));
+    expect(restored.parkingEndpoints).toEqual(scenario.parkingEndpoints);
+    expect(checkWellFormed(scenario).wellFormed).toBe(true);
+    expect(checkWellFormed(restored).wellFormed).toBe(true);
+  });
+});
+
+describe("lifelong MAPF", () => {
+  /*
+    ★ goal 列は Scenario.goalSequences に持つ。
+      型・プリセット・JSON・検証のどれかが欠けると、実装だけが読める
+      隠しキーに戻ってしまう。4 つとも揃っていることを見る。
+  */
+  it("プリセットが検証を通り、RHCR だけが候補に出る", () => {
+    const scenario = buildPreset("lifelong-loop", 1);
+    expect(scenario.kind).toBe("lifelong-mapf");
+    expect(Object.keys(scenario.goalSequences ?? {})).toHaveLength(scenario.agents.length);
+    expect(validateScenario(scenario)).toEqual([]);
+    expect(listSolverMetadataFor(scenario).map((m) => m.id)).toEqual(["rhcr"]);
+  });
+
+  it("RHCR が goal 列を最後まで処理する", async () => {
+    const scenario = buildPreset("lifelong-loop", 1);
+    const result = await getSolver("rhcr")!.solve(
+      scenario,
+      DEFAULT_SOLVER_OPTIONS,
+      createSolverContext({ seed: 1, signal: new AbortController().signal, emit: () => {} }),
+    );
+    expect(result.outcome).toBe("solved");
+    expect(result.metrics.pendingTasks).toBe(0);
+    expect(detectConflicts(result.paths, scenario.rules)).toEqual([]);
+  }, 60_000);
+
+  it("goal 列の不備を検証で捕まえる", () => {
+    const base = buildPreset("lifelong-loop", 1);
+    expect(validateScenario({ ...base, goalSequences: {} })).toContain(
+      "lifelong MAPF には goalSequences が必要です",
+    );
+    expect(
+      validateScenario({
+        ...base,
+        goalSequences: { ...base.goalSequences, zzz: [{ cell: { x: 0, y: 0 }, releaseTime: 0 }] },
+      }),
+    ).toContain("goalSequences: 未知のエージェント zzz が指定されています");
   });
 });

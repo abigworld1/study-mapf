@@ -74,7 +74,13 @@ describe("Batch 3 registry と metadata", () => {
       expect(solver!.metadata.status).toBe("runnable");
       expect(["paper-faithful", "reference-validated"]).toContain(solver!.metadata.fidelity);
       expect(solver!.metadata.unsupportedRules).toContain("allowDiagonal");
-      expect(solver!.metadata.unsupportedRules).toContain("forbidFollowing");
+      /*
+        ★ PIBT / winPIBT は優先度継承で「押し出した相手のセルへ同じ step で入る」
+          ことが中核なので、following 禁止には対応しない。PBS は予約表の側で
+          避けられるので対応する。
+      */
+      if (id === "pbs") expect(solver!.metadata.unsupportedRules).not.toContain("forbidFollowing");
+      else expect(solver!.metadata.unsupportedRules).toContain("forbidFollowing");
       expect(solver!.metadata.unsupportedRules).toContain("goalBehavior");
     }
   });

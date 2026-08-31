@@ -127,6 +127,17 @@ export function pbsLowLevelAStar(input: PbsLowLevelInput): PbsLowLevelOutput {
       ) {
         continue;
       }
+      /*
+        ★ 高優先の経路は動かせないので、following も低レベルで避けるしかない。
+          これが抜けていたため、forbidFollowing の入力では PBS 自身の
+          「comparable agents 間に conflict が残っていない」不変条件が破れていた。
+      */
+      if (
+        rules.forbidFollowing &&
+        hardReservations.isFollowingReserved(current.cell, next, nextTime, agent.id)
+      ) {
+        continue;
+      }
 
       const h = lookupDistance(map, input.heuristic, next);
       if (!Number.isFinite(h)) continue;

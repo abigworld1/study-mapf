@@ -331,11 +331,23 @@ export function validatePibtScenario(
       message: "このブラウザ版 PIBT / winPIBT は one-shot MAPF のみに対応します。",
     };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
+    return { code: "unsupported-rules", message: "PIBT / winPIBT は 4 近傍 grid に対応します。" };
+  }
+  /*
+    ★ ここは「未実装」ではなく、手法の成り立ちとして対応しない。
+
+      PIBT の優先度継承は、押し出した相手のセルへ同じ step で入ることで
+      数珠つなぎに動く。その動きがそのまま following conflict である。
+      禁止すると空きセルへの移動しか残らず、原論文が示す振る舞いでも
+      条件付き完全性の前提でもなくなる。
+      「動くには動くが別物」を出すより、対応しないと言うほうが正確である。
+  */
+  if (scenario.rules.forbidFollowing) {
     return {
       code: "unsupported-rules",
       message:
-        "PIBT / winPIBT は 4 近傍かつ following conflict を許す原論文モデルだけに対応します。",
+        "PIBT / winPIBT は優先度継承で「押し出した相手のセルへ同じ step で入る」ことを前提にしており、これ自体が following conflict にあたります。禁止するとこの手法の中核が成り立たないため対応しません。",
     };
   }
   if (scenario.rules.goalBehavior !== "stay") {

@@ -6,6 +6,7 @@ import { createRecordingContext } from "@/solvers/context";
 import { getSolver } from "@/solvers/registry";
 import { jointStateOptimalSumOfCosts } from "@/solvers/reference/joint-state";
 import { constrainedFocalAStar } from "@/solvers/cbs/low-level";
+import { detectConflicts } from "@/lib/model/conflicts";
 import { checkPaths } from "../helpers/check-paths";
 
 const BATCH_2_IDS = ["cbs", "bcbs", "ecbs", "icbs", "eecbs"] as const;
@@ -67,7 +68,8 @@ describe("Batch 2 registry と metadata", () => {
       expect(solver!.metadata.status).toBe(id === "icbs" ? "partial" : "runnable");
       expect(solver!.metadata.fidelity).toBe("paper-faithful");
       expect(solver!.metadata.unsupportedRules).toContain("allowDiagonal");
-      expect(solver!.metadata.unsupportedRules).toContain("forbidFollowing");
+      // following 禁止は扱える（detectConflicts が返し、constraintsFor が分岐を持つ）。
+      expect(solver!.metadata.unsupportedRules).not.toContain("forbidFollowing");
     }
   });
 });
@@ -281,11 +283,16 @@ describe("CBS 系共通の安全性と可視化", () => {
     const aborted = await solver.solve(scenario, DEFAULT_SOLVER_OPTIONS, context);
     expect(aborted.outcome).toBe("aborted");
 
-    const following = await solve("cbs", {
+    /*
+      ★ following 禁止は断らずに解く。受けた以上、返す解はその規則を満たすこと。
+    */
+    const followingInput: Scenario = {
       ...scenario,
       rules: { ...scenario.rules, forbidFollowing: true },
-    });
-    expect(following.result.outcome).toBe("error");
-    expect(following.result.error?.code).toBe("unsupported-rules");
+    };
+    const following = await solve("cbs", followingInput);
+    expect(following.result.outcome).toBe("solved");
+    expect(detectConflicts(following.result.paths, followingInput.rules)).toEqual([]);
+    expect(checkPaths(followingInput, following.result.paths)).toEqual([]);
   });
 });

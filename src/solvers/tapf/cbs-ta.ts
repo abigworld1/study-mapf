@@ -84,11 +84,8 @@ export async function solveCbsTa(
   if (problems.length > 0) return errorResult("invalid-scenario", problems.join(" / "));
   const model = assignmentModel(scenario);
   if (!model) return errorResult("invalid-scenario", "割当行列または teams がありません。");
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
-    return errorResult(
-      "unsupported-rules",
-      "CBS-TA は 4 近傍・following conflict 許可に対応します。",
-    );
+  if (scenario.rules.allowDiagonal) {
+    return errorResult("unsupported-rules", "CBS-TA は 4 近傍 grid に対応します。");
   }
 
   const candidates = enumerateAssignments(model, scenario.agents.length);

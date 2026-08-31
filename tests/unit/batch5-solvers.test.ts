@@ -67,7 +67,8 @@ describe("Batch 5 registry と metadata", () => {
         id === "lacam" ? "paper-faithful" : "reference-validated",
       );
       expect(solver!.metadata.unsupportedRules).toContain("allowDiagonal");
-      expect(solver!.metadata.unsupportedRules).toContain("forbidFollowing");
+      // 配置が固まってから following を弾く。捨てた分は constraint tree が列挙する。
+      expect(solver!.metadata.unsupportedRules).not.toContain("forbidFollowing");
       expect(solver!.metadata.unsupportedRules).toContain("goalBehavior");
     }
   });
@@ -228,12 +229,15 @@ describe("Batch 5 共通の安全弁・決定性・rules", () => {
     expect(guarded.result.outcome).toBe("error");
     expect(guarded.result.failureReason).toBe("limit-exceeded");
 
-    const following = await solve("lacam-star", {
+    const followingInput: Scenario = {
       ...swapWithDetour(),
       rules: { ...DEFAULT_RULES, forbidFollowing: true },
-    });
-    expect(following.result.outcome).toBe("error");
-    expect(following.result.error?.code).toBe("unsupported-rules");
+    };
+    const following = await solve("lacam-star", followingInput);
+    expect(following.result.outcome).not.toBe("error");
+    if (following.result.outcome === "solved") {
+      expect(checkPaths(followingInput, following.result.paths)).toEqual([]);
+    }
 
     const invalidOption = await solve("lacam", swapWithDetour(), {
       ...DEFAULT_SOLVER_OPTIONS,

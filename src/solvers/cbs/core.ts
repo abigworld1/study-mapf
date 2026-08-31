@@ -662,12 +662,16 @@ function validateInput(
   if (scenario.rules.allowDiagonal) {
     return { message: "この実装は 4 近傍 grid のみに対応しています。", code: "unsupported-rules" };
   }
-  if (scenario.rules.forbidFollowing) {
-    return {
-      message: "following conflict 禁止は今回の CBS 証明モデルに含まれません。",
-      code: "unsupported-rules",
-    };
-  }
+  /*
+    ★ following は CBS の枠組みに乗る。
+      detectConflicts が following を返し、constraintsFor がその分岐を持っている。
+
+      分岐が解を取りこぼさないことの確認（A@c@t かつ B@c@(t-1) かつ B@t≠c）:
+        - ¬(A@c@t) の側 …… 枝 1（A の vertex 制約）
+        - A@c@t の側 …… B が t に c に居れば A と vertex conflict なので
+          B@t≠c は強制される。よって ¬(B@c@(t-1)) が必要で、これが枝 2。
+      2 枝で場合を尽くしているので、完全性は落ちない。
+  */
   if (scenario.rules.goalBehavior !== "stay") {
     return {
       message: "今回の CBS 系実装は stay at goal のみに対応しています。",

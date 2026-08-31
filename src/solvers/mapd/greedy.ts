@@ -41,7 +41,7 @@ export const mapdGreedySolver: MapfSolver = {
     supports: ["mapd"],
     status: "runnable",
     fidelity: "educational",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing"],
+    unsupportedRules: ["allowDiagonal"],
     basedOnPaperIds: ["mapd-tp-tpts-central-2017"],
     implementationNote:
       "論文手法ではないサイト独自のベースライン。手の空いたエージェントに最も近い未割当タスクを渡し、予約表を見ながら時空間 A* で pickup → delivery を計画する。TP の endpoint 規律（同 p.3-4 の Path2 / Property 2）が無いため、手が空いたエージェントがその場に居座って後続を塞ぐことがある。pickup 経由も 2 回の探索に分けており、MLA* のように 1 本では解かない。理論保証は無い。",

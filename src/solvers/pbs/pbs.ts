@@ -46,7 +46,7 @@ export const pbsSolver: MapfSolver = {
     supports: ["one-shot-mapf"],
     status: "runnable",
     fidelity: "reference-validated",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["pbs-aaai-2019"],
     validatedAgainst: [
       "Jiaoyang-Li/PBS d7b91fa5 (Space-Time A* low level): 3x2 empty swap fixture で success、SOC=6、makespan=4、path validity を比較。",
@@ -464,11 +464,8 @@ function validateScenario(
   if (scenario.kind !== "one-shot-mapf") {
     return { code: "unsupported-rules", message: "PBS は one-shot MAPF のみに対応しています。" };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
-    return {
-      code: "unsupported-rules",
-      message: "PBS は 4 近傍・following conflict 許可の原論文モデルだけに対応します。",
-    };
+  if (scenario.rules.allowDiagonal) {
+    return { code: "unsupported-rules", message: "PBS は 4 近傍 grid のみに対応します。" };
   }
   if (scenario.rules.goalBehavior !== "stay") {
     return {

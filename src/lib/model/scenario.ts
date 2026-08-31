@@ -2,6 +2,7 @@ import type {
   AgentSpec,
   Cell,
   GridMap,
+  LifelongGoal,
   Scenario,
   SimulationRules,
   TaskSpec,
@@ -47,6 +48,18 @@ export interface ScenarioJson {
     readonly targets: readonly { id: string; cell: [number, number] }[];
     readonly allowed: readonly (readonly boolean[])[];
   };
+  /**
+   * MAPD の追加 parking 地点。
+   *
+   * ★ 出力していなかったので、書き出して読み込むだけで消えていた。
+   *   non-task endpoint の数は well-formed 条件 (b) に効くので、
+   *   落とすと well-formed だった入力が well-formed でなくなる。
+   */
+  readonly parkingEndpoints?: readonly [number, number][];
+  /** lifelong MAPF の goal 列。key は agent id。 */
+  readonly goalSequences?: Readonly<
+    Record<string, readonly { cell: [number, number]; releaseTime?: number }[]>
+  >;
   readonly rules: SimulationRules;
   readonly seed: number;
   readonly attribution?: string;
@@ -106,6 +119,26 @@ export function scenarioToJson(scenario: Scenario): ScenarioJson {
             })),
             allowed: scenario.assignment.allowed.map((row) => [...row]),
           },
+        }
+      : {}),
+    ...(scenario.parkingEndpoints && scenario.parkingEndpoints.length > 0
+      ? {
+          parkingEndpoints: scenario.parkingEndpoints.map(
+            (cell) => [cell.x, cell.y] as [number, number],
+          ),
+        }
+      : {}),
+    ...(scenario.goalSequences && Object.keys(scenario.goalSequences).length > 0
+      ? {
+          goalSequences: Object.fromEntries(
+            Object.entries(scenario.goalSequences).map(([agentId, goals]) => [
+              agentId,
+              goals.map((goal) => ({
+                cell: [goal.cell.x, goal.cell.y] as [number, number],
+                releaseTime: goal.releaseTime,
+              })),
+            ]),
+          ),
         }
       : {}),
     rules: scenario.rules,
@@ -191,6 +224,18 @@ export function scenarioFromJson(input: unknown): Scenario {
       }
     : undefined;
 
+  const parkingEndpoints: Cell[] = (json.parkingEndpoints ?? []).map((pair, i) =>
+    toCell(pair, `parkingEndpoints[${i}]`),
+  );
+
+  const goalSequences: Record<string, LifelongGoal[]> = {};
+  for (const [agentId, goals] of Object.entries(json.goalSequences ?? {})) {
+    goalSequences[agentId] = goals.map((goal, i) => ({
+      cell: toCell(goal.cell, `goalSequences.${agentId}[${i}].cell`),
+      releaseTime: goal.releaseTime ?? 0,
+    }));
+  }
+
   return {
     id: json.id ?? "imported",
     name: json.name ?? "読み込んだシナリオ",
@@ -200,6 +245,8 @@ export function scenarioFromJson(input: unknown): Scenario {
     ...(tasks.length > 0 ? { tasks } : {}),
     ...(teams.length > 0 ? { teams } : {}),
     ...(assignment ? { assignment } : {}),
+    ...(parkingEndpoints.length > 0 ? { parkingEndpoints } : {}),
+    ...(Object.keys(goalSequences).length > 0 ? { goalSequences } : {}),
     rules: { ...DEFAULT_RULES, ...(json.rules ?? {}) },
     seed: json.seed ?? 1,
     ...(json.attribution ? { attribution: json.attribution } : {}),
@@ -217,6 +264,11 @@ export interface PresetDefinition {
 
 function agentsFrom(pairs: readonly [Cell, Cell][]): AgentSpec[] {
   return pairs.map(([start, goal], i) => ({ id: `a${i + 1}`, start, goal, colorIndex: i }));
+}
+
+/** goal を持たないエージェント。lifelong / MAPD のように goal を後から与える場合に使う。 */
+function agentsFromStarts(starts: readonly Cell[]): AgentSpec[] {
+  return starts.map((start, i) => ({ id: `a${i + 1}`, start, colorIndex: i }));
 }
 
 function baseScenario(
@@ -528,6 +580,56 @@ export const PRESETS: readonly PresetDefinition[] = [
         ]),
         seed,
       );
+    },
+  },
+  /*
+    ★ lifelong MAPF。goal を 1 つ処理し終えると次が現れる。
+
+      RHCR は lifelong の手法なのに、これを足すまで one-shot の盤面でしか
+      動かせなかった。goal 列は型にもプリセットにも JSON にも無く、
+      実装だけがキャストで読んでいた。
+
+      releaseTime をずらしてあるので、rolling horizon が「まだ見えていない
+      goal」を持つ状態が作れる。窓を狭めたときの挙動の説明に使う。
+  */
+  {
+    id: "lifelong-loop",
+    name: "Lifelong: 巡回",
+    description:
+      "goal を処理し終えると次の goal が現れる。3 体が順に 3 地点を回る。RHCR のように window 単位で計画し直す手法を動かすためのもの。",
+    build: (seed) => {
+      const map = createEmptyMap(9, 5);
+      const agents = agentsFromStarts([
+        { x: 0, y: 0 },
+        { x: 0, y: 2 },
+        { x: 0, y: 4 },
+      ]);
+      return {
+        id: "lifelong-loop",
+        name: "Lifelong: 巡回",
+        kind: "lifelong-mapf",
+        map,
+        agents,
+        goalSequences: {
+          a1: [
+            { cell: { x: 8, y: 0 }, releaseTime: 0 },
+            { cell: { x: 8, y: 4 }, releaseTime: 4 },
+            { cell: { x: 0, y: 0 }, releaseTime: 8 },
+          ],
+          a2: [
+            { cell: { x: 8, y: 2 }, releaseTime: 0 },
+            { cell: { x: 0, y: 4 }, releaseTime: 4 },
+            { cell: { x: 8, y: 2 }, releaseTime: 8 },
+          ],
+          a3: [
+            { cell: { x: 8, y: 4 }, releaseTime: 0 },
+            { cell: { x: 0, y: 0 }, releaseTime: 4 },
+            { cell: { x: 4, y: 2 }, releaseTime: 8 },
+          ],
+        },
+        rules: DEFAULT_RULES,
+        seed,
+      };
     },
   },
   {
@@ -965,6 +1067,31 @@ export function validateScenario(scenario: Scenario): string[] {
     const missing = scenario.agents.filter((a) => !a.goal);
     if (missing.length > 0) {
       problems.push(`目標が未設定のエージェントがあります: ${missing.map((a) => a.id).join(", ")}`);
+    }
+  }
+  /*
+    ★ lifelong は goal 列が本体。agents[].goal は使わない。
+      ここを検証していなかったので、壊れた goal 列がそのまま Solver へ渡っていた。
+  */
+  if (scenario.kind === "lifelong-mapf") {
+    const sequences = scenario.goalSequences ?? {};
+    const known = new Set(scenario.agents.map((a) => a.id));
+    if (Object.keys(sequences).length === 0) {
+      problems.push("lifelong MAPF には goalSequences が必要です");
+    }
+    for (const [agentId, goals] of Object.entries(sequences)) {
+      if (!known.has(agentId)) {
+        problems.push(`goalSequences: 未知のエージェント ${agentId} が指定されています`);
+      }
+      if (goals.length === 0) problems.push(`goalSequences[${agentId}]: goal が 1 個もありません`);
+      for (const [index, goal] of goals.entries()) {
+        if (!isWalkable(scenario.map, goal.cell)) {
+          problems.push(`goalSequences[${agentId}][${index}]: 目標が壁または範囲外です`);
+        }
+        if (!Number.isInteger(goal.releaseTime) || goal.releaseTime < 0) {
+          problems.push(`goalSequences[${agentId}][${index}]: releaseTime は 0 以上の整数です`);
+        }
+      }
     }
   }
   if (scenario.kind === "tapf") {

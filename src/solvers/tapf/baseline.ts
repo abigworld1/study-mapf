@@ -33,7 +33,7 @@ export const tapfBaselineSolver: MapfSolver = {
     supports: ["tapf"],
     status: "runnable",
     fidelity: "educational",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["cbm-tapf-aamas-2016", "cbs-aij-2015"],
     implementationNote:
       "チーム内の割当（順列）を全通り試し、それぞれ CBS で解いて makespan 最小を選ぶ。cbm-tapf-aamas-2016 p.2 が「scalability に難がある」と名指しした素朴な方法そのもので、CBM / CBS-TA の比較対象と最適性の検証用に置いている。組合せ数が上限を超える入力は受け付けない。",

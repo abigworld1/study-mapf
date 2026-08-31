@@ -188,6 +188,7 @@ export default function Simulator({ initialSolverId }: Props) {
       agents: scenario.agents,
       tasks: scenario.tasks,
       nonTaskEndpoints: wellFormed?.endpoints.nonTask,
+      goalSequences: scenario.goalSequences,
       teams: scenario.teams,
       assignment: scenario.assignment,
       targetAssignments: result?.targetAssignments,

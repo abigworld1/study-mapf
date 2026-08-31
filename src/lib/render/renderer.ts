@@ -3,6 +3,7 @@ import type {
   Cell,
   Conflict,
   GridMap,
+  LifelongGoal,
   TaskSpec,
   TeamSpec,
   AssignmentSpec,
@@ -101,6 +102,8 @@ export interface RenderState {
   readonly nonTaskEndpoints?: readonly Cell[];
   /** TAPF のチーム。target は割当前なのでエージェントの goal とは別に描く。 */
   readonly teams?: readonly TeamSpec[];
+  /** lifelong MAPF の goal 列。順に現れるので、one-shot の goal とは描き分ける。 */
+  readonly goalSequences?: Readonly<Record<string, readonly LifelongGoal[]>>;
   readonly assignment?: AssignmentSpec;
   /** 解けたあとの目標割当。描画では target にエージェント名を添えるのに使う。 */
   readonly targetAssignments?: readonly {
@@ -307,6 +310,37 @@ export function render(canvas: HTMLCanvasElement, state: RenderState, theme: Ren
     ctx.arc(px(agent.goal.x) + s / 2, py(agent.goal.y) + s / 2, s * 0.33, 0, Math.PI * 2);
     ctx.stroke();
   });
+
+  /*
+    --- lifelong の goal 列
+    ★ one-shot の goal と描き分ける。lifelong では goal が順に現れるので、
+      「今どれを目指しているか」ではなく「どういう順で回るか」を見せる。
+      破線のリングに順番を添える。実線のリング（one-shot の goal）と
+      同じ見た目にすると、全部が同時に目標であるように読めてしまう。
+  */
+  if (state.goalSequences) {
+    ctx.lineWidth = 2;
+    state.agents.forEach((agent, i) => {
+      const goals = state.goalSequences?.[agent.id];
+      if (!goals || goals.length === 0) return;
+      const color = theme.agents[(agent.colorIndex ?? i) % theme.agents.length] ?? theme.goalRing;
+      goals.forEach((goal, order) => {
+        ctx.strokeStyle = color;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(px(goal.cell.x) + s / 2, py(goal.cell.y) + s / 2, s * 0.33, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (state.layers.labels) {
+          ctx.fillStyle = color;
+          ctx.font = `${Math.max(9, Math.floor(s * 0.26))}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`${order + 1}`, px(goal.cell.x) + s / 2, py(goal.cell.y) + s / 2);
+        }
+      });
+    });
+  }
 
   // --- conflicts
   if (state.layers.conflicts && state.conflicts) {

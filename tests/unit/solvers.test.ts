@@ -398,6 +398,18 @@ describe("プリセット", () => {
             `${preset.id}/${task.id} の delivery`,
           ).toBe(true);
         }
+      } else if (scenario.kind === "lifelong-mapf") {
+        // lifelong も固定 goal を持たない。行き先は goal 列として順に現れる。
+        for (const agent of scenario.agents) {
+          const goals = scenario.goalSequences?.[agent.id] ?? [];
+          expect(goals.length, `${preset.id}/${agent.id} の goal 列`).toBeGreaterThan(0);
+          for (const goal of goals) {
+            expect(
+              isWalkable(scenario.map, goal.cell),
+              `${preset.id}/${agent.id} の goal 列の要素`,
+            ).toBe(true);
+          }
+        }
       } else {
         for (const agent of scenario.agents) {
           expect(isWalkable(scenario.map, agent.goal!), `${preset.id}/${agent.id} の goal`).toBe(

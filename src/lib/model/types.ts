@@ -160,6 +160,13 @@ export const DEFAULT_RULES: SimulationRules = {
   allowDiagonal: false,
 };
 
+/** lifelong MAPF で 1 体に順に与える goal。 */
+export interface LifelongGoal {
+  readonly cell: Cell;
+  /** この goal が系に現れる時刻。既定 0。 */
+  readonly releaseTime: Time;
+}
+
 export interface Scenario {
   readonly id: string;
   readonly name: string;
@@ -187,6 +194,16 @@ export interface Scenario {
    *   ここに書くのは第 3 項だけなので、直接 V_ep として使わないこと。
    */
   readonly parkingEndpoints?: readonly Cell[];
+  /**
+   * lifelong MAPF の goal 列。kind: "lifelong-mapf" のときだけ使う。
+   * key は agent id。goal を処理し終えたら次の goal が現れる。
+   *
+   * ★ 一度に全部見えているわけではない。releaseTime より前の goal は
+   *   まだ系に現れていないものとして扱う。RHCR のような
+   *   rolling-horizon 手法は「今見えている範囲だけで計画する」ため、
+   *   ここを一括で渡してしまうと窓の意味が消える。
+   */
+  readonly goalSequences?: Readonly<Record<AgentId, readonly LifelongGoal[]>>;
   readonly rules: SimulationRules;
   /** 乱数 seed。同じ seed と同じ入力なら同じ結果になること。 */
   readonly seed: number;

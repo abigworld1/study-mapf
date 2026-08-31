@@ -57,7 +57,7 @@ export const mstarSolver: MapfSolver = {
     supports: ["one-shot-mapf"],
     status: "runnable",
     fidelity: "paper-faithful",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["mstar-aij-2015"],
     implementationNote:
       "AIJ 2015 Algorithms 1–2 の basic M*、limited neighbors、collision set と backpropagation set を実装。edge collision は site の transition 上で直接検出。recursive / operator-decomposition / inflated M* は未対応。",
@@ -335,6 +335,26 @@ async function solveMstar(
             to: indexToCell(scenario.map, to[left]!),
             time,
           };
+        } else if (scenario.rules.forbidFollowing) {
+          /*
+            ★ following は非対称なので両方向を見る。
+              「A が t に居るセルを、B が t-1 に居て t に空けた」が条件。
+              left/right のどちらが A 側かで 2 通りある。
+          */
+          const follows = (a: number, b: number) => to[a] === from[b] && to[b] !== from[b];
+          const follower = follows(left, right) ? left : follows(right, left) ? right : null;
+          if (follower !== null) {
+            const vacated = follower === left ? right : left;
+            involved.add(left);
+            involved.add(right);
+            first ??= {
+              kind: "following",
+              agentA: agents[follower]!.id,
+              agentB: agents[vacated]!.id,
+              cell: indexToCell(scenario.map, to[follower]!),
+              time,
+            };
+          }
         }
       }
     }
@@ -462,7 +482,7 @@ function validateScenario(
   if (scenario.kind !== "one-shot-mapf") {
     return { code: "unsupported-rules", message: "M* は one-shot MAPF のみに対応します。" };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
     return {
       code: "unsupported-rules",
       message: "M* は 4 近傍かつ following conflict を許すモデルだけに対応します。",

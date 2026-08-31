@@ -441,10 +441,17 @@ function validateScenario(
       message: "Push 系 solver は one-shot MAPF のみに対応します。",
     };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
+    return { code: "unsupported-rules", message: "Push 系 solver は 4 近傍 grid に対応します。" };
+  }
+  /*
+    ★ PIBT と同じ理由。push 操作は「押した相手のセルへ入る」ことそのもの。
+  */
+  if (scenario.rules.forbidFollowing) {
     return {
       code: "unsupported-rules",
-      message: "Push 系 solver は 4 近傍 grid かつ following conflict 許可のルールに対応します。",
+      message:
+        "Push 系 solver の push 操作は「押した相手が空けたセルへ入る」ことそのもので、following conflict にあたります。禁止するとこの手法の中核が成り立たないため対応しません。",
     };
   }
   if (scenario.rules.goalBehavior !== "stay") {

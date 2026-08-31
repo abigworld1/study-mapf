@@ -83,7 +83,7 @@ export const lacamSolver: MapfSolver = {
     supports: ["one-shot-mapf"],
     status: "runnable",
     fidelity: "paper-faithful",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["lacam-aaai-2023"],
     implementationNote:
       "AAAI 2023 Algorithm 1 の configuration DFS、constraint-tree BFS、lazy successor generation を独立実装。generator は同論文 §3.3 の PIBT 型 1-step assignment。既知 node 再挿入などの engineering は LaCAM* と区別するため含めない。",
@@ -103,7 +103,7 @@ export const lacamStarSolver: MapfSolver = {
     supports: ["one-shot-mapf"],
     status: "runnable",
     fidelity: "reference-validated",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["lacam-star-ijcai-2023", "lacam-aaai-2023"],
     validatedAgainst: [
       "Kei18/pylacam 864a158f: 3x2 empty swap fixture で success、sum-of-loss=6、makespan=4、path validity を比較。browser implementation も同じ値と validity を得た。",
@@ -358,6 +358,23 @@ async function solveLacam(
       if (stopState) return undefined;
     }
     if (next.some((position) => position === undefined)) return undefined;
+    /*
+      ★ following は配置が固まってから一括で見る。
+
+        PIBT の生成は「押し出した相手のセルへ同じ step で入る」ことを前提に
+        しており、これがそのまま following になる。個々の割当の途中で弾くと
+        優先度継承の再帰と噛み合わないので、出来上がった配置を捨てる形にする。
+        捨てられた分は上位の constraint tree が別の配置を列挙するので、
+        健全性も網羅性も保てる。
+    */
+    if (scenario.rules.forbidFollowing) {
+      for (let index = 0; index < agents.length; index += 1) {
+        const occupant = ownerNow[next[index]!]!;
+        if (occupant >= 0 && occupant !== index && next[occupant] !== current[occupant]) {
+          return undefined;
+        }
+      }
+    }
     return next as number[];
 
     function assign(agentIndex: number): boolean {
@@ -687,7 +704,7 @@ function validateScenario(scenario: Scenario): ValidationError | null {
   if (scenario.kind !== "one-shot-mapf") {
     return { code: "unsupported-rules", message: "LaCAM 系は one-shot MAPF のみに対応します。" };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
     return {
       code: "unsupported-rules",
       message: "LaCAM 系は 4 近傍かつ following conflict を許すモデルだけに対応します。",

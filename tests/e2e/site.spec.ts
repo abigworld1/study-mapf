@@ -342,6 +342,28 @@ test.describe("シミュレータ", () => {
   });
 
   /*
+    lifelong MAPF は goal 列を持つ問題。goal 列は Scenario.goalSequences に
+    入っていて、型・プリセット・JSON・検証のどれかが欠けると画面から
+    到達できなくなる。実際、プリセットを足すまで RHCR は lifelong 手法
+    なのに one-shot の盤面でしか動かせなかった。
+  */
+  test("lifelong の盤面で RHCR が goal 列を処理しきる", async ({ page }) => {
+    await page.getByLabel("プリセット").selectOption("lifelong-loop");
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    // lifelong を扱えるのは RHCR だけ。
+    await expect(solverSelect.locator("option")).toHaveCount(1);
+    await solverSelect.selectOption("rhcr");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.locator(".run-outcome")).toContainText("解が求まりました", {
+      timeout: 30_000,
+    });
+    await expect(page.locator(".metrics")).toContainText("未処理タスク");
+  });
+
+  /*
     Space-Time A* は単一エージェント専用（原論文どおりの低レベル探索）。
     canSolve が無かったころは全プリセットが 2 体以上だったので、
     画面から選ぶと必ずエラーになっていた。候補の出し分けと、

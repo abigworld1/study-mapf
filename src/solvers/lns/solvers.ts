@@ -68,7 +68,7 @@ interface PlanOutput {
   readonly generated: number;
 }
 
-const LNS_UNSUPPORTED = ["allowDiagonal", "forbidFollowing", "goalBehavior"] as const;
+const LNS_UNSUPPORTED = ["allowDiagonal", "goalBehavior"] as const;
 
 export const mapfLnsSolver: MapfSolver = {
   metadata: {
@@ -649,14 +649,9 @@ function validateCommonScenario(
   scenario: Scenario,
   requireGoals: boolean,
 ): { message: string; code: "invalid-scenario" | "unsupported-rules" } | null {
-  if (
-    scenario.rules.allowDiagonal ||
-    scenario.rules.forbidFollowing ||
-    scenario.rules.goalBehavior !== "stay"
-  ) {
+  if (scenario.rules.allowDiagonal || scenario.rules.goalBehavior !== "stay") {
     return {
-      message:
-        "このブラウザ版は 4 近傍・edge-swap 禁止・following 許可・stay-at-goal に限定しています。",
+      message: "このブラウザ版は 4 近傍・stay-at-goal に限定しています。",
       code: "unsupported-rules",
     };
   }
@@ -987,24 +982,20 @@ function isPositiveInteger(value: unknown): value is number {
 }
 
 function buildGoalQueues(scenario: Scenario, agents: readonly AgentSpec[]): RhcrGoal[][] {
-  const raw = scenario as Scenario & {
-    readonly goalSequences?: Readonly<
-      Record<string, readonly (Cell | { readonly cell: Cell; readonly releaseTime?: number })[]>
-    >;
-  };
-  const configured = raw.goalSequences;
+  /*
+    ★ goal 列は Scenario.goalSequences から読む。
+
+      以前は型に無いキーを as キャストで読んでいたので、
+      JSON にもプリセットにも検証にも乗らず、lifelong モードは
+      手でオブジェクトを組まない限り動かせなかった。
+  */
   return agents.map((agent) => {
-    const sequence = configured?.[agent.id];
+    const sequence = scenario.goalSequences?.[agent.id];
     if (sequence && sequence.length > 0) {
-      return sequence.map((entry) => {
-        if ("cell" in entry) {
-          return {
-            cell: { ...entry.cell },
-            releaseTime: entry.releaseTime ?? 0,
-          };
-        }
-        return { cell: { ...entry }, releaseTime: 0 };
-      });
+      return sequence.map((entry) => ({
+        cell: { ...entry.cell },
+        releaseTime: entry.releaseTime,
+      }));
     }
     return agent.goal ? [{ cell: { ...agent.goal }, releaseTime: 0 }] : [];
   });

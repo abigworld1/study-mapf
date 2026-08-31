@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Scenario, SolverOptions } from "@/lib/model/types";
 import { DEFAULT_RULES, DEFAULT_SOLVER_OPTIONS } from "@/lib/model/types";
 import { createEmptyMap } from "@/lib/model/grid";
-import { makespanOf, sumOfCosts } from "@/lib/model/conflicts";
+import { detectConflicts, makespanOf, sumOfCosts } from "@/lib/model/conflicts";
 import { getSolver, listSolvers } from "@/solvers/registry";
 import { createRecordingContext } from "@/solvers/context";
 import { decomposeAndOrder } from "@/solvers/push/decomposition";
@@ -446,15 +446,41 @@ describe("共通 safety", () => {
     expect(result.error?.code).toBe("unsupported-rules");
   });
 
-  it.each(IDS)("%s は following conflict 禁止を黙って解かない", async (id) => {
+  /*
+    ★ following 禁止は ICTS / M* とも扱えるようになった。
+      どちらも配置遷移を直接見る手法なので、from/to の組から判定できる。
+      「受けたなら守る」ことを確かめる（黙って破らない）。
+  */
+  it.each(["icts", "mstar"] as const)("%s は following conflict 禁止を守って解く", async (id) => {
     const input: Scenario = {
       ...scenario(),
       rules: { ...DEFAULT_RULES, forbidFollowing: true },
     };
     const { result } = await solve(id, input);
-    expect(result.outcome).toBe("error");
-    expect(result.error?.code).toBe("unsupported-rules");
+    expect(result.outcome).not.toBe("error");
+    if (result.outcome !== "solved") return;
+    expect(detectConflicts(result.paths, input.rules)).toEqual([]);
+    expect(checkPaths(input, result.paths)).toEqual([]);
   });
+
+  /*
+    ★ push 操作は「押した相手が空けたセルへ入る」ことそのもので、
+      following conflict にあたる。禁止すると手法の中核が成り立たないので、
+      黙って別物を動かすのではなく理由を添えて断ること。
+  */
+  it.each(["push-and-swap", "push-and-rotate"] as const)(
+    "%s は following conflict 禁止を、理由を添えて断る",
+    async (id) => {
+      const input: Scenario = {
+        ...scenario(),
+        rules: { ...DEFAULT_RULES, forbidFollowing: true },
+      };
+      const { result } = await solve(id, input);
+      expect(result.outcome).toBe("error");
+      expect(result.error?.code).toBe("unsupported-rules");
+      expect(result.error?.message).toContain("push");
+    },
+  );
 
   it.each(IDS)("%s は trace 上限を守る", async (id) => {
     const { result } = await solve(id, scenario(), {

@@ -65,10 +65,18 @@ async function solveCbm(
   }
   const problems = validateScenario(scenario);
   if (problems.length > 0) return failure("invalid-scenario", problems.join(" / "));
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
+    return failure("unsupported-rules", "CBM の時空間フローは 4 近傍 grid に対応します。");
+  }
+  /*
+    ★ following は「相手が同じ step に抜けたか」という 2 経路にまたがる条件で、
+      時空間フローの容量制約では表せない。フロー定式化を変える話になるので、
+      ここでは対応しないと言い切る。
+  */
+  if (scenario.rules.forbidFollowing) {
     return failure(
       "unsupported-rules",
-      "CBM の時空間フローは 4 近傍・following conflict 許可に対応します。",
+      "CBM は時空間グラフ上の最大フローとして解きます。following conflict は 2 経路にまたがる条件で辺容量に落とせないため対応しません。",
     );
   }
 

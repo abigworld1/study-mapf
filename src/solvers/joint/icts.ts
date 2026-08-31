@@ -42,7 +42,7 @@ export const ictsSolver: MapfSolver = {
     supports: ["one-shot-mapf"],
     status: "runnable",
     fidelity: "paper-faithful",
-    unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
+    unsupportedRules: ["allowDiagonal", "goalBehavior"],
     basedOnPaperIds: ["icts-ijcai-2011"],
     implementationNote:
       "IJCAI 2011 Algorithm 1 の ICT breadth-first search、exact-cost MDD、k-agent MDD search と optional pairwise pruning を実装。Independence Detection と AIJ 拡張版固有の改良は未対応。",
@@ -309,6 +309,19 @@ async function solveIcts(
               conflict = true;
               break;
             }
+            /*
+              ★ following は非対称なので両方向を見る。
+                current が時刻 t、next が t+1 の配置。
+                「A が t+1 に居るセルを、B が t に居て t+1 に空けた」が条件。
+            */
+            if (
+              scenario.rules.forbidFollowing &&
+              ((candidate === current[previous] && next[previous] !== current[previous]) ||
+                (next[previous] === current[offset] && candidate !== current[offset]))
+            ) {
+              conflict = true;
+              break;
+            }
           }
           if (conflict) {
             conflictsDetected += 1;
@@ -427,7 +440,7 @@ function validateScenario(
   if (scenario.kind !== "one-shot-mapf") {
     return { code: "unsupported-rules", message: "ICTS は one-shot MAPF のみに対応します。" };
   }
-  if (scenario.rules.allowDiagonal || scenario.rules.forbidFollowing) {
+  if (scenario.rules.allowDiagonal) {
     return {
       code: "unsupported-rules",
       message: "ICTS は 4 近傍かつ following conflict を許す原論文モデルだけに対応します。",

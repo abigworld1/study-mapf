@@ -9,7 +9,7 @@ import type {
 } from "@/lib/model/types.js";
 import { solveCbsVariant, type CbsRunConfig, type CbsVariant } from "./core.js";
 
-const COMMON_UNSUPPORTED = ["allowDiagonal", "forbidFollowing", "goalBehavior"] as const;
+const COMMON_UNSUPPORTED = ["allowDiagonal", "goalBehavior"] as const;
 const DEFAULT_BOUND = 1.5;
 
 export const cbsSolver = createSolver(
