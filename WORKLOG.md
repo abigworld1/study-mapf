@@ -1495,6 +1495,78 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-09-01 push-and-rotate を Algorithm 4 の制御フローへ寄せた（Claude Code）
+
+原論文 Theorem 1 のクラス（各連結成分に空き頂点 2 個以上）で取りこぼす件。
+**完全にはできていない。** 境界での取りこぼしを 25/40 → 19/40 に減らした。
+
+### 直した 2 点
+
+**1. lines 30-31 を「失敗」にしていた（最大の原因）**
+
+論文 p.5 の原文:
+
+> 「In case it is not possible to move s to its goal location, then we assign
+> to r the agent occupying its goal location, and return to the loop from
+> line 6.」
+
+つまり **goal を占有している agent を担当にして主ループへ戻る**のであって、
+失敗ではない。実装は `planRotate` を再帰呼び出しし、失敗したら false を
+返していた。`planRotate` / `resolveTrail` という組み替えをやめ、
+Algorithm 4 の制御フローをそのまま `runAlgorithm4()` に書き直した。
+
+あわせて次も論文に合わせた。
+
+- q（trail）を agent ごとに作り直さない。論文は line 1 で 1 度だけ初期化し、
+  line 32 で 1 つずつ取り除くだけ。lines 30-31 で抜けたら残りを引き継ぐ。
+- line 29「move agent s to vertex T[s]」は s が goal に隣接しているとは
+  限らない。隣接を仮定していたのが Push and Swap の欠陥（同 p.3 Figure 5）で
+  Push and Rotate が直した点なので、1 歩ずつ運ぶ `walkTo` にした。
+
+**2. 長さ 2 を「閉路」として rotate しようとしていた**
+
+`trail.indexOf(next) >= 0` なら閉路として `rotateCycle` を呼び、
+長さ 3 未満なら失敗、という作りだった。長さ 2 は直前の頂点へ引き返した
+だけで閉路ではない。失敗にせず push / swap へ落とすようにした。
+
+### 測り方と結果
+
+★ **途中で 2 回、変更が悪化させたので測って戻している。**
+
+```text
+元の実装                        15/40 solved（境界・空き 2 個）
+1 だけ                          11/40   ← 悪化
+1 + 経路を 1 度だけ求める       2/40    ← さらに悪化。戻した
+1 + 2                           21/40   ← 採用
+半分程度の密度                  40/40   （回帰なし）
+```
+
+「経路を 1 度だけ求める」は論文 line 10/12 に忠実だが、この実装の
+rotate / swap と噛み合わず激しく悪化したため採用していない。**論文に
+近づける変更が必ず良くなるとは限らない**という例。
+
+### 残っている原因
+
+残り 19 件はすべて `rotateCycle` の失敗である。満杯 cycle を回すには
+cycle の外へ 1 体退避させる必要があるが、空きが cycle 経由でしか届かない
+配置だと退避できない。ここは未実装。
+
+論文は clear 操作の詳細を Luna & Bekris（Push and Swap）へ委ねており
+（同 p.4「here we do not discuss it in further detail」）、
+この部分は原論文だけからは書き切れない。
+
+### 主張は下げたまま
+
+`fidelity: educational`、失敗時の「解の非存在の証明ではありません」警告、
+マニフェストの notes（測定値つき）はそのまま。**完全性は主張しない。**
+常設テストも「半分程度の密度なら取りこぼさない」だけを固定しており、
+完全性を主張していない。
+
+最終ゲート: sources:validate errors=0/warnings=15、format check、lint、
+typecheck 0 errors、unit 421 passed（分割実行）、build 68 pages、E2E 62 passed。
+
+---
+
 ## 2026-09-01 Batch 10 レビュー（Claude Code）
 
 Codex の Batch 10（disjoint-splitting / cbsh / ma-cbs）を確認した。

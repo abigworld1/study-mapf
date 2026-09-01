@@ -710,6 +710,46 @@ describe("条件付きの保証を、書いてある条件で照合する", () =
     expect(messages, "解が無いと言い切っている").toContain("証明ではありません");
   }, 60_000);
 
+  /*
+    ★ 完全ではないが、どこまで解けるかは数字で押さえておく。
+
+      原論文 Theorem 1 は「各連結成分に空き頂点が 2 個以上」で完全と述べる。
+      この実装はその境界（空きちょうど 2 個）では取りこぼすが、
+      ふつうの密度（半分程度が埋まる盤面）では取りこぼさない。
+
+      境界の取りこぼしは rotate に残っている。満杯 cycle を回すには
+      cycle の外へ 1 体退避させる必要があるが、空きが cycle 経由でしか
+      届かない配置だと退避できない。そこは未実装。
+
+      ここで固定するのは「ふつうの密度では取りこぼさない」ことだけ。
+      完全性を主張しているのではない。
+  */
+  it("push-and-rotate は半分程度の密度なら取りこぼさない", async () => {
+    const bad: string[] = [];
+    let checked = 0;
+    for (const scenario of ONE_SHOT) {
+      const result = await getSolver("push-and-rotate")!.solve(
+        scenario,
+        { ...DEFAULT_SOLVER_OPTIONS, extra: { maxMoves: 2000 } },
+        ctx(),
+      );
+      if (result.outcome === "error") continue;
+      const reference = await getSolver("lacam")!.solve(scenario, DEFAULT_SOLVER_OPTIONS, ctx());
+      if (reference.outcome !== "solved") continue;
+      checked += 1;
+      if (result.outcome !== "solved") {
+        bad.push(`${scenario.id}: 解けるのに ${result.outcome}`);
+        continue;
+      }
+      if (detectConflicts(result.paths, scenario.rules).length)
+        bad.push(`${scenario.id}: 衝突を残して solved`);
+      if (checkPaths(scenario, result.paths).length)
+        bad.push(`${scenario.id}: ${checkPaths(scenario, result.paths)[0]!.rule}`);
+    }
+    expect(checked).toBeGreaterThan(15);
+    expect(bad, bad.slice(0, 3).join(" / ")).toEqual([]);
+  }, 120_000);
+
   it("push-and-rotate は no-solution を必ず但し書き付きで返す", async () => {
     const bad: string[] = [];
     for (const scenario of ONE_SHOT) {

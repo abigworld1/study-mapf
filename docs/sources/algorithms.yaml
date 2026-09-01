@@ -738,7 +738,7 @@
     optimal: false
     bounded_suboptimal: false
   guarantee_evidence: "push-and-rotate-aamas-2013 p.5 Theorem 1 は各 connected component に少なくとも 2 個の unoccupied vertices がある場合の completeness を証明する。p.6 §6 は solution quality の改善を future work とし、最適性・cost bound を主張しない。"
-  notes: "Algorithms 1-4 の subproblem decomposition / priority と Push / Swap / Rotate。解の質は保証されない。★このサイトの実装は原論文 Theorem 1 のクラス（各連結成分に空き頂点 2 個以上）でも失敗することがある。4×2 の空きグリッド・空き頂点 2 個（biconnected なので Kornhauser の結果より常に可解）で、LaCAM が解ける配置を no-solution と返す例を確認した。原因は swap の多段 clear を論文どおりに再現できていないこと。保証は原論文のものであって、この実装の挙動ではない。browser の timeout / node / move 上限による打ち切りも保証の対象外。"
+  notes: "Algorithms 1-4 の subproblem decomposition / priority と Push / Swap / Rotate。解の質は保証されない。★このサイトの実装は原論文 Theorem 1 のクラス（各連結成分に空き頂点 2 個以上）でも失敗することがある。境界（空きちょうど 2 個）の 40 例中 19 例で、LaCAM が解ける配置を no-solution と返す（2026-09-01 時点。Algorithm 4 の制御フローを論文どおりに直す前は 25 例だった）。残る原因は満杯 cycle の rotate で、cycle 外へ 1 体退避させる必要があるのに空きが cycle 経由でしか届かない配置を扱えないこと。半分程度の密度では取りこぼさない。保証は原論文のものであって、この実装の挙動ではない。browser の timeout / node / move 上限による打ち切りも保証の対象外。"
 
 - id: pibt
   display_name: "PIBT (Priority Inheritance with Backtracking)"

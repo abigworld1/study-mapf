@@ -8,7 +8,6 @@ import type {
 } from "@/lib/model/types";
 import { DEFAULT_RULES, DEFAULT_SOLVER_OPTIONS } from "@/lib/model/types";
 import { createEmptyMap } from "@/lib/model/grid";
-import { buildPreset } from "@/lib/model/scenario";
 import { createRecordingContext } from "@/solvers/context";
 import { constrainedFocalAStar } from "@/solvers/cbs/low-level";
 import { cardinalConflictGraphLowerBound } from "@/solvers/cbs/conflict-graph";

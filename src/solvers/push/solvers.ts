@@ -58,10 +58,10 @@ export const pushAndRotateSolver: MapfSolver = {
       ★ paper-faithful から下げた。
 
         原論文 Theorem 1 は「各連結成分に空き頂点が 2 個以上」で完全と示すが、
-        この実装はそのクラスを取りこぼす。4×2 の空きグリッド・空き頂点 2 個で、
-        LaCAM が解ける配置を no-solution と返す例が出ている（該当クラスは
-        biconnected なので Kornhauser の結果より常に可解）。swap の多段 clear を
-        論文どおりに再現できていないことが原因で、rotate までは到達していない。
+        この実装はそのクラスを取りこぼす。境界（空きちょうど 2 個）の 40 例中
+        19 例で、LaCAM が解ける配置を no-solution と返す。残る原因は満杯 cycle の
+        rotate で、cycle 外へ 1 体退避させる必要があるのに、空きが cycle 経由でしか
+        届かない配置を扱えない。半分程度の密度では取りこぼさない。
     */
     fidelity: "educational",
     unsupportedRules: ["allowDiagonal", "forbidFollowing", "goalBehavior"],
@@ -194,28 +194,7 @@ async function solvePushVariant(
   emit({ type: "priority-order", time: 0, order: order.map((index) => agents[index]!.id) });
 
   if (variant === "push-and-rotate") {
-    const finished = new Set<number>();
-    for (const agentIndex of order) {
-      const ok = isPolygonComponent(engine.positions[agentIndex]!)
-        ? planPolygon(agentIndex, finished)
-        : planRotate(agentIndex, finished, [], 0);
-      if (!ok) return failedPlan();
-      emit({
-        type: "progress",
-        ratio: finished.size / agents.length,
-        label: `${agents[agentIndex]!.id} を goal へ配置`,
-      });
-    }
-    // Algorithm 4.2.11 の再帰 resolve が残した trail 外の resolving agent も固定点まで戻す。
-    // swap の準備経路が planning trail と交差しない場合に必要になる。
-    for (let pass = 0; pass < agents.length * 2; pass += 1) {
-      const displaced = agents.findIndex(
-        (agent, index) =>
-          finished.has(index) && engine.positions[index] !== cellIndex(scenario.map, agent.goal),
-      );
-      if (displaced < 0) break;
-      if (!planRotate(displaced, finished, [], 0)) return failedPlan();
-    }
+    if (!runAlgorithm4()) return failedPlan();
     return solvedPlan();
   }
 
@@ -272,39 +251,152 @@ async function solvePushVariant(
     return engine.positions[agentIndex] === goal;
   }
 
-  function planRotate(
-    agentIndex: number,
-    finished: Set<number>,
-    trail: number[],
-    recursionDepth: number,
-  ): boolean {
-    if (recursionDepth > agents.length * 2) return false;
-    // q は planning agent が通った path。最初の swap で後退した finished agent も
-    // resolve が見つけられるよう、path の始点を含める。
-    if (trail.length === 0) trail.push(engine.positions[agentIndex]!);
-    const goal = cellIndex(scenario.map, agents[agentIndex]!.goal);
-    let iterations = 0;
-    const iterationLimit = scenario.map.width * scenario.map.height * 16;
-    while (engine.positions[agentIndex] !== goal && iterations < iterationLimit) {
-      iterations += 1;
-      const path = engine.shortestPath(engine.positions[agentIndex]!, goal);
-      if (!path || path.length < 2) return false;
-      const next = path[1]!;
-      const cycleStart = trail.indexOf(next);
-      if (cycleStart >= 0) {
-        const cycle = trail.slice(cycleStart);
-        if (cycle.length < 3 || !engine.rotateCycle(cycle)) return false;
-        trail.splice(cycleStart);
-      } else if (!pushOne(agentIndex, next, finished)) {
-        const blocker = engine.occupancy[next]!;
-        if (blocker < 0 || !engine.swapAgents(agentIndex, blocker)) return false;
-        generated += 1;
+  /**
+   * 原論文 Algorithm 4 solve(G, R, S, T) を、その制御フローのまま実装する。
+   *
+   * ★ 以前は planRotate / resolveTrail という別の形に組み替えており、
+   *   lines 30-31 を「再帰して、失敗したら false」にしていた。論文 p.5 は
+   *
+   *     「In case it is not possible to move s to its goal location, then we
+   *       assign to r the agent occupying its goal location, and return to
+   *       the loop from line 6.」
+   *
+   *   と書いてある。**失敗ではなく、担当 agent を差し替えて主ループへ戻る。**
+   *   このずれのせいで、Theorem 1 のクラス（各連結成分に空き頂点が 2 個以上）に
+   *   入る盤面でも no-solution を返していた。4×2 の空きグリッド・6 体
+   *   （biconnected なので Kornhauser の結果より必ず可解）が最小の反例。
+   *
+   * ★ q（trail）は agent ごとに作り直さない。論文では line 1 で 1 度だけ初期化し、
+   *   line 32 で 1 つずつ取り除くだけである。lines 30-31 で抜けたときは残りが
+   *   次の担当 agent へ引き継がれる。
+   */
+  function runAlgorithm4(): boolean {
+    const finished = new Set<number>();
+    const trail: number[] = []; // 論文の q
+    let planning: number | null = null; // 論文の r
+    const area = scenario.map.width * scenario.map.height;
+    const guardLimit = Math.max(64, agents.length * area * 4);
+    let guard = 0;
+
+    const goalOf = (index: number) => cellIndex(scenario.map, agents[index]!.goal);
+    const displacedFinished = () =>
+      [...finished].find((index) => engine.positions[index] !== goalOf(index));
+
+    while (true) {
+      if (guard++ > guardLimit) return false;
+      if (engine.stop) return false;
+
+      if (planning === null) {
+        /*
+          line 7-8: 未完了のうち優先度が最も高いものを選ぶ。
+          ★ F = R でも、finished が goal から押し出されたままなら終われない。
+            論文の while F != R はそこを書き切っていないので、押し出された
+            finished agent も担当候補に含める。
+        */
+        const next = order.find((index) => !finished.has(index)) ?? displacedFinished();
+        if (next === undefined) break;
+        planning = next;
       }
-      trail.push(next);
+
+      // line 10: polygon（全頂点の次数が 2）は finished を避ける最短路で運ぶ。
+      if (isPolygonComponent(engine.positions[planning]!)) {
+        if (!planPolygon(planning, finished)) return false;
+        planning = null;
+        continue;
+      }
+
+      /*
+        q は planning agent が通った path。最初の swap で後退した finished agent も
+        resolve が見つけられるよう、path の始点を含める。
+      */
+      if (trail.length === 0) trail.push(engine.positions[planning]!);
+      const goal = goalOf(planning);
+
+      // lines 13-21
+      let steps = 0;
+      while (engine.positions[planning] !== goal) {
+        if (steps++ > area * 16 || guard++ > guardLimit) return false;
+        const path = engine.shortestPath(engine.positions[planning]!, goal);
+        if (!path || path.length < 2) return false;
+        const next = path[1]!;
+        /*
+          lines 15-16: q が閉路を作ったら、その上の agent を 1 つ回す。
+
+          ★ 長さ 2 は閉路ではない（直前の頂点へ引き返しただけ）。
+            rotate できないので失敗にせず、push / swap へ落とす。
+            ここを失敗にしていたため、rotate へ到達した局面で
+            そのまま no-solution を返していた。
+        */
+        const cycleStart = trail.indexOf(next);
+        const cycle = cycleStart >= 0 ? trail.slice(cycleStart) : [];
+        if (cycle.length >= 3) {
+          if (!engine.rotateCycle(cycle)) return false;
+          trail.splice(cycleStart);
+        } else if (!pushOne(planning, next, finished)) {
+          // lines 18-20: push が駄目なら swap。swap も駄目なら Theorem 1 の条件。
+          const blocker = engine.occupancy[next]!;
+          if (blocker < 0 || !engine.swapAgents(planning, blocker)) return false;
+          generated += 1;
+        }
+        trail.push(next);
+      }
+
+      finished.add(planning); // line 22
+      emit({
+        type: "progress",
+        ratio: finished.size / agents.length,
+        label: `${agents[planning]!.id} を goal へ配置`,
+      });
+      planning = null; // line 23
+
+      // lines 24-32
+      while (trail.length > 0) {
+        if (guard++ > guardLimit) return false;
+        const vertex = trail[trail.length - 1]!;
+        const displaced = engine.occupancy[vertex]!; // line 26: s
+        if (displaced >= 0 && finished.has(displaced)) {
+          // line 27
+          const target = goalOf(displaced);
+          if (engine.positions[displaced] !== target) {
+            if (engine.occupancy[target] === -1) {
+              // lines 28-29: goal が空いているなら戻す。
+              if (!walkTo(displaced, target, finished)) return false;
+            } else {
+              // lines 30-31: goal を占有している agent を担当にして主ループへ。
+              planning = engine.occupancy[target]!;
+              break;
+            }
+          }
+        }
+        trail.pop(); // line 32
+      }
     }
-    if (engine.positions[agentIndex] !== goal) return false;
-    finished.add(agentIndex);
-    return resolveTrail(finished, trail, recursionDepth);
+
+    return agents.every((_, index) => engine.positions[index] === goalOf(index));
+  }
+
+  /**
+   * 論文 line 29「move agent s to vertex T[s]」。
+   *
+   * ★ s が goal に隣接しているとは限らない。隣接を仮定していたのが
+   *   Push and Swap の欠陥で（同 p.3 の Figure 5）、Push and Rotate が
+   *   直した点そのものなので、1 歩ずつ運ぶ。
+   */
+  function walkTo(agentIndex: number, target: number, finished: ReadonlySet<number>): boolean {
+    const area = scenario.map.width * scenario.map.height;
+    for (let step = 0; step < area * 2; step += 1) {
+      if (engine.positions[agentIndex] === target) return true;
+      if (engine.stop) return false;
+      const protectedVertices = new Set(
+        [...finished]
+          .filter((index) => index !== agentIndex)
+          .map((index) => engine.positions[index]!),
+      );
+      const path = engine.shortestPath(engine.positions[agentIndex]!, target, protectedVertices);
+      if (!path || path.length < 2) return false;
+      if (!pushOne(agentIndex, path[1]!, finished)) return false;
+    }
+    return engine.positions[agentIndex] === target;
   }
 
   function planPolygon(agentIndex: number, finished: Set<number>): boolean {
@@ -330,24 +422,6 @@ async function solvePushVariant(
     }
     if (!engine.move(agentIndex, target, "plan")) return false;
     generated += 1;
-    return true;
-  }
-
-  function resolveTrail(finished: Set<number>, trail: number[], recursionDepth: number): boolean {
-    while (trail.length > 0) {
-      const vertex = trail[trail.length - 1]!;
-      const occupant = engine.occupancy[vertex]!;
-      if (occupant >= 0 && finished.has(occupant)) {
-        const goal = cellIndex(scenario.map, agents[occupant]!.goal);
-        if (engine.positions[occupant] !== goal && !pushOne(occupant, goal, finished)) {
-          const blocking = engine.occupancy[goal]!;
-          if (blocking < 0 || !planRotate(blocking, finished, trail, recursionDepth + 1)) {
-            return false;
-          }
-        }
-      }
-      trail.pop();
-    }
     return true;
   }
 
@@ -393,7 +467,7 @@ async function solvePushVariant(
         : {
             code: "simplified-behavior",
             message:
-              "Push and Rotate の primitive で計画を継続できませんでした。原論文 Theorem 1 は空き頂点 2 個以上のクラスでの完全性を示しますが、この実装は swap の多段 clear を再現しきれておらず、そのクラス内でも失敗することがあります。解が存在しないことの証明ではありません。",
+              "Push and Rotate の primitive で計画を継続できませんでした。原論文 Theorem 1 は空き頂点 2 個以上のクラスでの完全性を示しますが、この実装は満杯 cycle の rotate を再現しきれておらず、そのクラス内でも失敗することがあります。解が存在しないことの証明ではありません。",
           },
     );
     return finish(failureResult("no-solution", "search-exhausted"));
