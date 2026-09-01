@@ -146,6 +146,75 @@ describe("CBS low level", () => {
     expect(output.path!.positions.at(-1)!.time).toBe(3);
     expect(output.lowerBound).toBe(3);
   });
+
+  it("positive constraint の対象 agent が指定時刻の頂点と辺を必ず通る", () => {
+    const scenario = swapWithDetour();
+    const agent = scenario.agents[0]!;
+    expect(agent.goal).toBeDefined();
+    let remaining = 1_000;
+    const output = constrainedFocalAStar({
+      map: scenario.map,
+      agent: { ...agent, goal: agent.goal! },
+      rules: scenario.rules,
+      constraints: [
+        {
+          kind: "vertex",
+          agentId: agent.id,
+          cell: { x: 0, y: 1 },
+          time: 1,
+          positive: true,
+        },
+        {
+          kind: "edge",
+          agentId: agent.id,
+          from: { x: 0, y: 1 },
+          to: { x: 1, y: 1 },
+          time: 2,
+          positive: true,
+        },
+      ],
+      otherPaths: [],
+      weight: 1,
+      maxTime: 10,
+      consumeExpansion: () => {
+        remaining -= 1;
+        return remaining >= 0 ? "ok" : "node-limit";
+      },
+    });
+    expect(output.path).not.toBeNull();
+    expect(output.path!.positions[1]!.cell).toEqual({ x: 0, y: 1 });
+    expect(output.path!.positions[2]!.cell).toEqual({ x: 1, y: 1 });
+  });
+
+  it("別 agent の positive constraint を暗黙の負制約として扱う", () => {
+    const scenario = swapWithDetour();
+    const agent = scenario.agents[0]!;
+    expect(agent.goal).toBeDefined();
+    let remaining = 1_000;
+    const output = constrainedFocalAStar({
+      map: scenario.map,
+      agent: { ...agent, goal: agent.goal! },
+      rules: scenario.rules,
+      constraints: [
+        {
+          kind: "vertex",
+          agentId: "other-agent",
+          cell: { x: 1, y: 0 },
+          time: 1,
+          positive: true,
+        },
+      ],
+      otherPaths: [],
+      weight: 1,
+      maxTime: 10,
+      consumeExpansion: () => {
+        remaining -= 1;
+        return remaining >= 0 ? "ok" : "node-limit";
+      },
+    });
+    expect(output.path).not.toBeNull();
+    expect(output.path!.positions[1]!.cell).not.toEqual({ x: 1, y: 0 });
+  });
 });
 
 describe("BCBS / ECBS / EECBS の bounded suboptimality", () => {

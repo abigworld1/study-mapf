@@ -92,6 +92,8 @@ export default function Simulator({ initialSolverId }: Props) {
   const [rhcrReplanningPeriod, setRhcrReplanningPeriod] = useState(2);
   // 空欄 = 自動。w から導くと、無関係なつまみで運転時間が決まってしまう。
   const [rhcrHorizon, setRhcrHorizon] = useState("");
+  // MA-CBS の B。空欄は Infinity（素の CBS）として SolverOptions.extra へ渡す。
+  const [maCbsMergeThreshold, setMaCbsMergeThreshold] = useState("1");
   /*
     LNS-wPBS の時間窓。既定 10 は論文の実験設定（mg-mapd-iros-2022 p.6
     「We set the time window of LNS-wPBS to w = 10 timesteps.」）に合わせる。
@@ -519,7 +521,16 @@ export default function Simulator({ initialSolverId }: Props) {
             }
           : solverId === "lns-wpbs"
             ? { extra: { windowSize: wpbsWindow } }
-            : undefined;
+            : solverId === "ma-cbs"
+              ? {
+                  extra: {
+                    mergeThreshold:
+                      maCbsMergeThreshold.trim() === ""
+                        ? Number.POSITIVE_INFINITY
+                        : Number(maCbsMergeThreshold),
+                  },
+                }
+              : undefined;
       const res = await runSolver({
         solverId,
         scenario,
@@ -542,7 +553,16 @@ export default function Simulator({ initialSolverId }: Props) {
       setRunning(false);
       setProgress("");
     }
-  }, [rhcrHorizon, rhcrPlanningWindow, rhcrReplanningPeriod, scenario, seed, solverId, wpbsWindow]);
+  }, [
+    maCbsMergeThreshold,
+    rhcrHorizon,
+    rhcrPlanningWindow,
+    rhcrReplanningPeriod,
+    scenario,
+    seed,
+    solverId,
+    wpbsWindow,
+  ]);
 
   const onStop = useCallback(() => {
     abortRef.current?.abort();
@@ -738,6 +758,29 @@ export default function Simulator({ initialSolverId }: Props) {
                 との違いで、完全性の保証が無い理由でもあります（mg-mapd-iros-2022 p.5）。w
                 を十分大きくすると LNS-PBS と同じ結果になります。既定の 10 は論文の実験設定です（同
                 p.6）。
+              </p>
+            </div>
+          )}
+
+          {solverId === "ma-cbs" && (
+            <div>
+              <div className="row">
+                <label>
+                  併合閾値 B
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="∞（CBS）"
+                    value={maCbsMergeThreshold}
+                    onChange={(event) => setMaCbsMergeThreshold(event.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="hint">
+                2 group 間の衝突回数が B を超えると meta-agent に併合します。B=0
+                は最初の衝突で結合探索、空欄は B=∞ で素の CBS です。既定値は 1 です。ブラウザ版は
+                meta-agent 3 体までで、それを超える要求は警告して打ち切ります。
               </p>
             </div>
           )}

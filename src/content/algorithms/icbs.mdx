@@ -100,8 +100,8 @@ helpful bypass は「選んだ conflict が消えた」だけでは足りませ�
 <Caution title="このページで動くのは ICBS の PC+BP subset です">
   論文の比較で ICBS(25) と呼ぶ完全版は MA-CBS(25)+BP+PC+MR です
   <SourceCitation paperId="icbs-ijcai-2015" page={5} />
-  。サイト版は meta-agent の coupled low-level、merge threshold、merge-and-restart
-  をまだ実装していないため、実装状態を partial と表示します。
+  。サイトには MA-CBS を独立 Solver として実装しましたが、この ICBS Solver へ merge を合成せず、
+  merge-and-restart も実装していないため、実装状態を partial と表示します。
 </Caution>
 
 ## 他手法との比較
@@ -110,7 +110,7 @@ CBS は最初の conflict をそのまま選びます。ICBS の PC+BP は最適
 
 ## サイト上の実装との差異
 
-MA-CBS と MR、MDD cache、meta-agent MDD は未対応です。`mapf-icbs` はライセンスファイルが無いため閲覧のみにし、`cbsh2-rtc` は USC 独自ライセンスのためコードを取り込んでいません。公開コードは一切転記していません。
+ICBS 内部での MA-CBS と MR、MDD cache、meta-agent MDD は未対応です。独立した MA-CBS Solver では B と coupled low level を試せます。`mapf-icbs` はライセンスファイルが無いため閲覧のみにし、`cbsh2-rtc` は USC 独自ライセンスのためコードを取り込んでいません。公開コードは一切転記していません。
 
 ## 実験してみる
 

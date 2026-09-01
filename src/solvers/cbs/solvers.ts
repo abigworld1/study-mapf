@@ -11,6 +11,8 @@ import { solveCbsVariant, type CbsRunConfig, type CbsVariant } from "./core.js";
 
 const COMMON_UNSUPPORTED = ["allowDiagonal", "goalBehavior"] as const;
 const DEFAULT_BOUND = 1.5;
+const DEFAULT_MERGE_THRESHOLD = 1;
+const MAX_META_AGENT_SIZE = 3;
 
 export const cbsSolver = createSolver(
   {
@@ -97,6 +99,57 @@ export const eecbsSolver = createSolver(
   "eecbs",
 );
 
+export const disjointSplittingSolver = createSolver(
+  {
+    id: "disjoint-splitting",
+    displayName: "Disjoint Splitting",
+    originalName: "Disjoint Splitting for CBS",
+    category: "cbs",
+    supports: ["one-shot-mapf"],
+    status: "runnable",
+    fidelity: "paper-faithful",
+    unsupportedRules: COMMON_UNSUPPORTED,
+    basedOnPaperIds: ["disjoint-splitting-icaps-2019", "cbsh2-rtc-aij-2021"],
+    implementationNote:
+      "同じ agent の negative / positive constraint で排他的に分岐する。positive constraint は他 agent への暗黙の禁止も強制する。split agent は論文 p.3 §4.2 の Random 方策を seeded random で選び、conflict 自体は既存 CBS の earliest 規則を維持する。landmark 間だけの再探索と MDD 選択方策は未実装。",
+  },
+  "disjoint-splitting",
+);
+
+export const cbshSolver = createSolver(
+  {
+    id: "cbsh",
+    displayName: "CBSH",
+    originalName: "CBS with Heuristics",
+    category: "cbs",
+    supports: ["one-shot-mapf"],
+    status: "runnable",
+    fidelity: "paper-faithful",
+    unsupportedRules: COMMON_UNSUPPORTED,
+    basedOnPaperIds: ["cbsh-icaps-2018", "icbs-ijcai-2015"],
+    implementationNote:
+      "cardinal conflict graph の minimum vertex cover を CT の許容 h に使う。関与 agent 18 体以下では厳密探索し、それを超える場合は許容性を保つ maximal matching 下界へ切り替える。PC+BP を併用し、cardinal edge が無い node は h=0 として zero-cost bypass 条件を守る。",
+  },
+  "cbsh",
+);
+
+export const maCbsSolver = createSolver(
+  {
+    id: "ma-cbs",
+    displayName: "MA-CBS",
+    originalName: "Meta-Agent Conflict-Based Search",
+    category: "cbs",
+    supports: ["one-shot-mapf"],
+    status: "runnable",
+    fidelity: "paper-faithful",
+    unsupportedRules: COMMON_UNSUPPORTED,
+    basedOnPaperIds: ["ma-cbs-socs-2012", "cbs-aij-2015"],
+    implementationNote:
+      "衝突回数が B を超えた group を meta-agent に併合し、最大 3 体の制約付き joint-state A* で SOC 最適に再計画する。既定 B=1、extra.mergeThreshold で 0〜Infinity を指定できる。3 体を超える併合要求は node-limit と警告で正直に打ち切る。Merge-and-Restart は未実装。",
+  },
+  "ma-cbs",
+);
+
 function createSolver(metadata: SolverMetadata, variant: CbsVariant): MapfSolver {
   return {
     metadata,
@@ -111,7 +164,60 @@ function createSolver(metadata: SolverMetadata, variant: CbsVariant): MapfSolver
 }
 
 function resolveConfig(variant: CbsVariant, options: SolverOptions): CbsRunConfig {
-  if (variant === "cbs" || variant === "icbs") {
+  if (variant === "ma-cbs") {
+    const rawThreshold = options.extra?.mergeThreshold;
+    const mergeThreshold = rawThreshold === undefined ? DEFAULT_MERGE_THRESHOLD : rawThreshold;
+    if (
+      typeof mergeThreshold !== "number" ||
+      mergeThreshold < 0 ||
+      (!Number.isInteger(mergeThreshold) && mergeThreshold !== Number.POSITIVE_INFINITY)
+    ) {
+      return {
+        variant,
+        lowLevelWeight: 1,
+        highLevelWeight: 1,
+        optionError:
+          "MA-CBS の extra.mergeThreshold は 0 以上の整数または Infinity にしてください。",
+      };
+    }
+    const rawCap = options.extra?.maxMetaAgentSize;
+    const maxMetaAgentSize = rawCap === undefined ? MAX_META_AGENT_SIZE : rawCap;
+    if (
+      typeof maxMetaAgentSize !== "number" ||
+      !Number.isInteger(maxMetaAgentSize) ||
+      maxMetaAgentSize < 1 ||
+      maxMetaAgentSize > MAX_META_AGENT_SIZE
+    ) {
+      return {
+        variant,
+        lowLevelWeight: 1,
+        highLevelWeight: 1,
+        optionError: `MA-CBS の extra.maxMetaAgentSize は 1〜${MAX_META_AGENT_SIZE} の整数にしてください。`,
+      };
+    }
+    const optionWarnings: SolverWarning[] = [];
+    if (options.suboptimalityFactor !== undefined) {
+      optionWarnings.push({
+        code: "option-ignored",
+        message: "MA-CBS は最適解法のため suboptimalityFactor を使用しません。",
+      });
+    }
+    return {
+      variant,
+      lowLevelWeight: 1,
+      highLevelWeight: 1,
+      mergeThreshold,
+      maxMetaAgentSize,
+      optionWarnings,
+    };
+  }
+
+  if (
+    variant === "cbs" ||
+    variant === "icbs" ||
+    variant === "cbsh" ||
+    variant === "disjoint-splitting"
+  ) {
     const optionWarnings: SolverWarning[] = [];
     if (options.suboptimalityFactor !== undefined) {
       optionWarnings.push({

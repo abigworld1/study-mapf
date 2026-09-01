@@ -2,7 +2,7 @@
 
 アルゴリズムごとの実装状況。**バッチを終えるたびに更新すること。**
 
-最終更新: 2026-08-03（Codex / Batch 9 レビュー修正）
+最終更新: 2026-08-31（Codex / Batch 10）
 
 ---
 
@@ -31,44 +31,47 @@
 
 ## 実装済み（registry に登録されている）
 
-| algorithm-id           | 手法             | status   | fidelity            | 備考                                                                                                                                                              |
-| ---------------------- | ---------------- | -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bfs`                  | 幅優先探索       | runnable | educational         | 各エージェント独立。衝突は解消しない                                                                                                                              |
-| `astar`                | A*               | runnable | educational         | 同上。ヒューリスティクスの効果を見るため                                                                                                                          |
-| `space-time-astar`     | 時空間 A*        | runnable | paper-faithful      | 単一 agent の `(cell,time)` 探索。[ノート](docs/notes/implementation/space-time-astar.md)                                                                         |
-| `sipp`                 | SIPP             | runnable | paper-faithful      | safe interval 探索。MAPF wrapper は固定順。[ノート](docs/notes/implementation/sipp.md)                                                                            |
-| `prioritized-planning` | 優先順位付き計画 | runnable | paper-faithful      | 固定全順序。PBS の順序探索は含まない。[ノート](docs/notes/implementation/prioritized-planning.md)                                                                 |
-| `cooperative-astar`    | Cooperative A*   | runnable | paper-faithful      | Manhattan + reservation table。[ノート](docs/notes/implementation/cooperative-astar.md)                                                                           |
-| `hca-star`             | HCA*             | runnable | paper-faithful      | Algorithm 1 の on-demand RRA*。[ノート](docs/notes/implementation/hca-star.md)                                                                                    |
-| `whca-star`            | WHCA*            | runnable | paper-faithful      | terminal edge、rolling window、RRA* 再利用。[ノート](docs/notes/implementation/whca-star.md)                                                                      |
-| `cbs`                  | CBS              | runnable | paper-faithful      | standard split、SOC best-first、CAT。[ノート](docs/notes/implementation/cbs.md)                                                                                   |
-| `bcbs`                 | BCBS             | runnable | paper-faithful      | high / low focal、保証係数 `wH*wL`。[ノート](docs/notes/implementation/bcbs.md)                                                                                   |
-| `ecbs`                 | ECBS             | runnable | paper-faithful      | low-level `fMin` の和を CT lower bound に使用。[ノート](docs/notes/implementation/ecbs.md)                                                                        |
-| `icbs`                 | ICBS (PC+BP)     | partial  | paper-faithful      | PC と helpful BP。MA-CBS / MR は未対応。[ノート](docs/notes/implementation/icbs.md)                                                                               |
-| `eecbs`                | EECBS            | runnable | paper-faithful      | §3 の EES 3-list と online error。§4 改善は未対応。[ノート](docs/notes/implementation/eecbs.md)                                                                   |
-| `pbs`                  | PBS              | runnable | reference-validated | PT DFS、partial-order UpdatePlan、2 段 CAT。3×2 fixture を author implementation と照合。[ノート](docs/notes/implementation/pbs.md)                               |
-| `pibt`                 | PIBT             | runnable | reference-validated | Algorithm 1 と one-shot wrapper。2×2 rotation を pypibt と照合。[ノート](docs/notes/implementation/pibt.md)                                                       |
-| `winpibt`              | winPIBT          | runnable | paper-faithful      | Algorithms 1–2、disentangled provisional paths、retroactive inheritance。[ノート](docs/notes/implementation/winpibt.md)                                           |
-| `icts`                 | ICTS             | runnable | paper-faithful      | ICT BFS、exact-cost MDD、k-agent search、pairwise pruning。[ノート](docs/notes/implementation/icts.md)                                                            |
-| `mstar`                | M*               | runnable | paper-faithful      | basic M*、limited neighbors、collision-set backpropagation。[ノート](docs/notes/implementation/mstar.md)                                                          |
-| `push-and-swap`        | Push and Swap    | runnable | paper-faithful      | push / clear / multipush / exchange / reverse。後続論文の反例を反映。[ノート](docs/notes/implementation/push-and-swap.md)                                         |
-| `push-and-rotate`      | Push and Rotate  | runnable | paper-faithful      | subproblem 分解・priority と push / swap / rotate / resolve。[ノート](docs/notes/implementation/push-and-rotate.md)                                               |
-| `lacam`                | LaCAM            | runnable | paper-faithful      | Algorithm 1 の configuration DFS / constraint BFS と PIBT 型 generator。[ノート](docs/notes/implementation/lacam.md)                                              |
-| `lacam-star`           | LaCAM*           | runnable | reference-validated | Algorithm 3 の rewiring。3×2 fixture を pylacam と照合。[ノート](docs/notes/implementation/lacam-star.md)                                                         |
-| `mapf-lns`             | MAPF-LNS         | runnable | paper-faithful      | initial solution、agent/map/random neighborhood、repair、ALNS 重み。[ノート](docs/notes/implementation/mapf-lns.md)                                               |
-| `mapf-lns2`            | MAPF-LNS2        | runnable | paper-faithful      | collision-pair repair、failure/random neighborhood、CP 非増加受理。[ノート](docs/notes/implementation/mapf-lns2.md)                                               |
-| `rhcr`                 | RHCR             | runnable | educational         | planning window `w` / replanning period `h`、goal queue、throughput。Multi-Label A* と online task assigner は未対応。[ノート](docs/notes/implementation/rhcr.md) |
-| `tapf-baseline`        | 全探索割当 + CBS | runnable | educational         | **サイト独自の参照実装で、論文手法ではない。** TAPF の入り口と Batch 7 の最適性検証用。[ノート](docs/notes/implementation/tapf-baseline.md)                       |
-| `mapd-greedy`          | 貪欲割当（MAPD） | runnable | educational         | **サイト独自で、論文手法ではない。** MAPD 実行ループの土台と Batch 8 の対照用。[ノート](docs/notes/implementation/mapd-loop.md)                                   |
-| `token-passing`        | TP               | runnable | educational         | 明示的 token、Path1 / Path2、MLA* low-level。well-formed 条件付き solvability。[ノート](docs/notes/implementation/token-passing.md)                               |
-| `tpts`                 | TPTS             | runnable | educational         | TP 共通 token、前 step を含む未 pickup assignment swap、Path2。well-formed 条件付き solvability。[ノート](docs/notes/implementation/tpts.md)                      |
-| `central`              | CENTRAL          | runnable | educational         | Hungarian + MLA* の centralized strawman。解決性・最適性保証なし。[ノート](docs/notes/implementation/central.md)                                                  |
-| `min-cost-max-flow`    | 最小費用最大流   | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
-| `cbm`                  | CBM              | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
-| `cbs-ta`               | CBS-TA           | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |
-| `lns-pbs`              | LNS-PBS          | runnable | educational         | MG-MAPD の task sequence / multi-goal 教育骨格。well-formed 条件付き。[ノート](docs/notes/implementation/lns-pbs.md)                                              |
-| `lns-wpbs`             | LNS-wPBS         | runnable | educational         | w=10（extra で変更可）の rolling-window sequence planner。探索は goal まで、予約は窓内。完全性保証なし。[ノート](docs/notes/implementation/lns-wpbs.md)           |
-| `rmca`                 | RMCA             | runnable | educational         | capacity / TTD / regret insertion。[ノート](docs/notes/implementation/rmca.md)                                                                                    |
+| algorithm-id           | 手法               | status   | fidelity            | 備考                                                                                                                                                              |
+| ---------------------- | ------------------ | -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bfs`                  | 幅優先探索         | runnable | educational         | 各エージェント独立。衝突は解消しない                                                                                                                              |
+| `astar`                | A*                 | runnable | educational         | 同上。ヒューリスティクスの効果を見るため                                                                                                                          |
+| `space-time-astar`     | 時空間 A*          | runnable | paper-faithful      | 単一 agent の `(cell,time)` 探索。[ノート](docs/notes/implementation/space-time-astar.md)                                                                         |
+| `sipp`                 | SIPP               | runnable | paper-faithful      | safe interval 探索。MAPF wrapper は固定順。[ノート](docs/notes/implementation/sipp.md)                                                                            |
+| `prioritized-planning` | 優先順位付き計画   | runnable | paper-faithful      | 固定全順序。PBS の順序探索は含まない。[ノート](docs/notes/implementation/prioritized-planning.md)                                                                 |
+| `cooperative-astar`    | Cooperative A*     | runnable | paper-faithful      | Manhattan + reservation table。[ノート](docs/notes/implementation/cooperative-astar.md)                                                                           |
+| `hca-star`             | HCA*               | runnable | paper-faithful      | Algorithm 1 の on-demand RRA*。[ノート](docs/notes/implementation/hca-star.md)                                                                                    |
+| `whca-star`            | WHCA*              | runnable | paper-faithful      | terminal edge、rolling window、RRA* 再利用。[ノート](docs/notes/implementation/whca-star.md)                                                                      |
+| `cbs`                  | CBS                | runnable | paper-faithful      | standard split、SOC best-first、CAT。[ノート](docs/notes/implementation/cbs.md)                                                                                   |
+| `bcbs`                 | BCBS               | runnable | paper-faithful      | high / low focal、保証係数 `wH*wL`。[ノート](docs/notes/implementation/bcbs.md)                                                                                   |
+| `ecbs`                 | ECBS               | runnable | paper-faithful      | low-level `fMin` の和を CT lower bound に使用。[ノート](docs/notes/implementation/ecbs.md)                                                                        |
+| `icbs`                 | ICBS (PC+BP)       | partial  | paper-faithful      | PC と helpful BP。MA-CBS / MR は未対応。[ノート](docs/notes/implementation/icbs.md)                                                                               |
+| `eecbs`                | EECBS              | runnable | paper-faithful      | §3 の EES 3-list と online error。§4 改善は未対応。[ノート](docs/notes/implementation/eecbs.md)                                                                   |
+| `cbsh`                 | CBSH               | runnable | paper-faithful      | exact MVC、18 体超は maximal matching 下界、zero-cost node は h=0。[ノート](docs/notes/implementation/cbsh.md)                                                    |
+| `disjoint-splitting`   | Disjoint Splitting | runnable | paper-faithful      | 正負の排他的分岐と、他 agent への正制約の含意。[ノート](docs/notes/implementation/disjoint-splitting.md)                                                          |
+| `ma-cbs`               | MA-CBS             | runnable | paper-faithful      | UI で B=0〜∞、最大 3 体の joint A*、上限超過は警告付き打切り。[ノート](docs/notes/implementation/ma-cbs.md)                                                       |
+| `pbs`                  | PBS                | runnable | reference-validated | PT DFS、partial-order UpdatePlan、2 段 CAT。3×2 fixture を author implementation と照合。[ノート](docs/notes/implementation/pbs.md)                               |
+| `pibt`                 | PIBT               | runnable | reference-validated | Algorithm 1 と one-shot wrapper。2×2 rotation を pypibt と照合。[ノート](docs/notes/implementation/pibt.md)                                                       |
+| `winpibt`              | winPIBT            | runnable | paper-faithful      | Algorithms 1–2、disentangled provisional paths、retroactive inheritance。[ノート](docs/notes/implementation/winpibt.md)                                           |
+| `icts`                 | ICTS               | runnable | paper-faithful      | ICT BFS、exact-cost MDD、k-agent search、pairwise pruning。[ノート](docs/notes/implementation/icts.md)                                                            |
+| `mstar`                | M*                 | runnable | paper-faithful      | basic M*、limited neighbors、collision-set backpropagation。[ノート](docs/notes/implementation/mstar.md)                                                          |
+| `push-and-swap`        | Push and Swap      | runnable | paper-faithful      | push / clear / multipush / exchange / reverse。後続論文の反例を反映。[ノート](docs/notes/implementation/push-and-swap.md)                                         |
+| `push-and-rotate`      | Push and Rotate    | runnable | paper-faithful      | subproblem 分解・priority と push / swap / rotate / resolve。[ノート](docs/notes/implementation/push-and-rotate.md)                                               |
+| `lacam`                | LaCAM              | runnable | paper-faithful      | Algorithm 1 の configuration DFS / constraint BFS と PIBT 型 generator。[ノート](docs/notes/implementation/lacam.md)                                              |
+| `lacam-star`           | LaCAM*             | runnable | reference-validated | Algorithm 3 の rewiring。3×2 fixture を pylacam と照合。[ノート](docs/notes/implementation/lacam-star.md)                                                         |
+| `mapf-lns`             | MAPF-LNS           | runnable | paper-faithful      | initial solution、agent/map/random neighborhood、repair、ALNS 重み。[ノート](docs/notes/implementation/mapf-lns.md)                                               |
+| `mapf-lns2`            | MAPF-LNS2          | runnable | paper-faithful      | collision-pair repair、failure/random neighborhood、CP 非増加受理。[ノート](docs/notes/implementation/mapf-lns2.md)                                               |
+| `rhcr`                 | RHCR               | runnable | educational         | planning window `w` / replanning period `h`、goal queue、throughput。Multi-Label A* と online task assigner は未対応。[ノート](docs/notes/implementation/rhcr.md) |
+| `tapf-baseline`        | 全探索割当 + CBS   | runnable | educational         | **サイト独自の参照実装で、論文手法ではない。** TAPF の入り口と Batch 7 の最適性検証用。[ノート](docs/notes/implementation/tapf-baseline.md)                       |
+| `mapd-greedy`          | 貪欲割当（MAPD）   | runnable | educational         | **サイト独自で、論文手法ではない。** MAPD 実行ループの土台と Batch 8 の対照用。[ノート](docs/notes/implementation/mapd-loop.md)                                   |
+| `token-passing`        | TP                 | runnable | educational         | 明示的 token、Path1 / Path2、MLA* low-level。well-formed 条件付き solvability。[ノート](docs/notes/implementation/token-passing.md)                               |
+| `tpts`                 | TPTS               | runnable | educational         | TP 共通 token、前 step を含む未 pickup assignment swap、Path2。well-formed 条件付き solvability。[ノート](docs/notes/implementation/tpts.md)                      |
+| `central`              | CENTRAL            | runnable | educational         | Hungarian + MLA* の centralized strawman。解決性・最適性保証なし。[ノート](docs/notes/implementation/central.md)                                                  |
+| `min-cost-max-flow`    | 最小費用最大流     | runnable | paper-faithful      | 1 チーム TAPF の時空間 flow。CBM の low-level。[ノート](docs/notes/implementation/min-cost-max-flow.md)                                                           |
+| `cbm`                  | CBM                | runnable | paper-faithful      | team MCMF + CBS。目的は makespan。[ノート](docs/notes/implementation/cbm.md)                                                                                      |
+| `cbs-ta`               | CBS-TA             | runnable | educational         | assignment matrix + CBS。全候補列挙の教育用実装。目的は sum of costs。[ノート](docs/notes/implementation/cbs-ta.md)                                               |
+| `lns-pbs`              | LNS-PBS            | runnable | educational         | MG-MAPD の task sequence / multi-goal 教育骨格。well-formed 条件付き。[ノート](docs/notes/implementation/lns-pbs.md)                                              |
+| `lns-wpbs`             | LNS-wPBS           | runnable | educational         | w=10（extra で変更可）の rolling-window sequence planner。探索は goal まで、予約は窓内。完全性保証なし。[ノート](docs/notes/implementation/lns-wpbs.md)           |
+| `rmca`                 | RMCA               | runnable | educational         | capacity / TTD / regret insertion。[ノート](docs/notes/implementation/rmca.md)                                                                                    |
 
 ---
 
@@ -104,7 +107,7 @@
 
 ## 理論保証の確定状況
 
-`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **54 / 77**。
+`docs/sources/algorithms.yaml` の `guarantees` に `unknown` が残っている手法: **47 / 77**。
 
 根拠つきで確定済みなのは 39 手法（`guarantee_evidence` が入っているもの）。
 主なもの:
@@ -113,6 +116,9 @@
 | ---------------------- | -------- | ------------------ | ----------------------------------------------------------------------- |
 | `cbs`                  | 条件付き | 最適               | cbs-aij-2015 Theorem 1 / 3、§5.2.2                                      |
 | `icbs`                 | 条件付き | 最適               | icbs-ijcai-2015 pp.1, 4。CBS と coupled low level に依存                |
+| `disjoint-splitting`   | 条件付き | 最適               | disjoint-splitting-icaps-2019 p.3 / cbsh2-rtc-aij-2021 Theorem 2        |
+| `ma-cbs`               | 条件付き | 最適               | cbs-aij-2015 pp.19–20。complete / optimal な coupled low level に依存   |
+| `cbsh`                 | 不明     | 不明               | cbsh-icaps-2018 全 5 ページに明示的な保証定理を確認できず               |
 | `mstar`                | あり     | 最適               | mstar-aij-2015 Theorem 1                                                |
 | `ccbs`                 | あり     | 最適               | ccbs-ijcai-2019 アブストラクト                                          |
 | `cbm`                  | あり     | 最適               | cbm-tapf-aamas-2016 p.6                                                 |

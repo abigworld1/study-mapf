@@ -11,6 +11,11 @@ import type {
 import { cellEquals, lookupDistance, movesWithWait, trueDistanceFrom } from "@/lib/model/grid.js";
 import { positionAt } from "@/lib/model/conflicts.js";
 import { MinHeap } from "./heap.js";
+import {
+  canWaitAtGoalUnderConstraints,
+  violatesConstraintsAtVertex,
+  violatesConstraintsOnTransition,
+} from "./constraint-semantics.js";
 
 export type CbsLowLevelStopReason = "node-limit" | "timeout" | "aborted";
 
@@ -187,44 +192,15 @@ export function constrainedFocalAStar(input: ConstrainedSearchInput): Constraine
   }
 
   function violatesVertex(cell: Cell, time: Time): boolean {
-    return constraints.some(
-      (constraint) =>
-        constraint.agentId === agent.id &&
-        constraint.kind === "vertex" &&
-        !constraint.positive &&
-        constraint.time === time &&
-        cellEquals(constraint.cell, cell),
-    );
+    return violatesConstraintsAtVertex(agent.id, cell, time, constraints, rules);
   }
 
   function violatesEdge(from: Cell, to: Cell, time: Time): boolean {
-    return constraints.some(
-      (constraint) =>
-        constraint.agentId === agent.id &&
-        constraint.kind === "edge" &&
-        !constraint.positive &&
-        constraint.time === time &&
-        cellEquals(constraint.from, from) &&
-        cellEquals(constraint.to, to),
-    );
+    return violatesConstraintsOnTransition(agent.id, from, to, time, constraints, rules);
   }
 
   function canStayAtGoal(from: Time): boolean {
-    if (rules.goalBehavior === "disappear") return true;
-    for (const constraint of constraints) {
-      if (constraint.agentId !== agent.id || constraint.positive || constraint.time <= from) {
-        continue;
-      }
-      if (constraint.kind === "vertex" && cellEquals(constraint.cell, agent.goal)) return false;
-      if (
-        constraint.kind === "edge" &&
-        cellEquals(constraint.from, agent.goal) &&
-        cellEquals(constraint.to, agent.goal)
-      ) {
-        return false;
-      }
-    }
-    return true;
+    return canWaitAtGoalUnderConstraints(agent.id, agent.goal, from, constraints, rules);
   }
 
   function conflictsAtStart(cell: Cell): number {

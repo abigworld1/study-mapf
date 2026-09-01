@@ -1,0 +1,87 @@
+---
+title: "Disjoint Splitting"
+algorithmId: disjoint-splitting
+originalName: "Disjoint Splitting for CBS"
+order: 145
+summary: "同じ agent の正制約と負制約で、重なりのない 2 つの CT branch を作る CBS の分割法。"
+status: reviewed
+primarySources:
+  - paperId: disjoint-splitting-icaps-2019
+    sections: ["3", "4", "4.1", "4.2"]
+    pages: [2, 3]
+  - paperId: cbsh2-rtc-aij-2021
+    pages: [6]
+lastReviewed: "2026-08-31"
+simulatorSolverId: disjoint-splitting
+---
+
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+Disjoint Splitting（DS）は CBS の high level を作り直す手法ではなく、1 回の conflict を 2 child へ分ける規則を置き換えます。standard splitting が conflict の 2 agent へ別々の負制約を与えるのに対し、DS は選んだ同じ agent へ「通る」という正制約と「通らない」という負制約を与えます<SourceCitation paperId="disjoint-splitting-icaps-2019" section="4" page={3} />。
+
+## まず何がうれしいのか
+
+standard split の 2 child には、両方の禁止を満たす plan が重複して入ります。DS の 2 child はある条件 `P` とその否定 `¬P` なので重なりません。重複探索を減らしつつ、CBS の CT と low level をそのまま再利用できます。
+
+## 中心となるアイデア
+
+vertex conflict `C=(ai,aj,v,t)` から `ai` を選んだとします。
+
+- positive child: `ai` は時刻 `t` に `v` へ必ず居る
+- negative child: `ai` は時刻 `t` に `v` へ居てはならない
+
+任意の candidate plan は `ai@v@t` を満たすか満たさないかのちょうど一方です。そのため 2 branch は排他的で、親 node が含む conflict-free solution を場合分けし尽くします。原論文も、このどちらか一方を任意の candidate conflict-free plan が満たすことから completeness を説明しています<SourceCitation paperId="disjoint-splitting-icaps-2019" section="4" page={3} />。より一般には、互いに素な constraint set での分割が CBS の完全性・最適性を保つことが Theorem 2 で示されています<SourceCitation paperId="cbsh2-rtc-aij-2021" label="Theorem 2" page={6} />。
+
+## 正制約が他 agent に及ぼす意味
+
+`ai` に `ai@v@t` を必須としたら、他 agent は同じ `v,t` を使えません。正制約は対象 agent の必須条件であると同時に、他 agent への暗黙の禁止です。原論文は positive child で正制約に違反する agent を再計画する処理を説明しています<SourceCitation paperId="disjoint-splitting-icaps-2019" section="4.1" page={3} />。
+
+サイト版はこの意味を vertex と有向 edge の両方へ適用します。edge の正制約なら、対象 agent は指定時刻に指定方向へ通り、他 agent は両 endpoint の同時占有と逆向き edge swap を避けます。
+
+## アルゴリズムの手順
+
+1. CBS と同じ CT node を SOC 順に取り出します。
+2. earliest conflict を 1 個選びます。
+3. conflict の 2 agent から split agent を seeded random で 1 体選びます。
+4. 同じ時空間 predicate の positive / negative child を作ります。
+5. negative child は対象 agent、positive child は制約へ違反する全 agent を再計画します。
+6. feasible child を CBS の OPEN へ戻します。
+
+## 疑似コード
+
+```text
+conflict ← earliestConflict(node.paths)
+x ← seededRandomChoice(conflict.agentA, conflict.agentB)
+P ← positiveConstraint(x, conflict)
+
+for constraint in [not P, P]:
+  child.constraints ← node.constraints + constraint
+  affected ← every path violating constraint or its implication
+  replan affected agents
+  if feasible: OPEN.push(child)
+```
+
+split agent の Random 方策は原論文 §4.2 にある選択肢です<SourceCitation paperId="disjoint-splitting-icaps-2019" section="4.2" page={3} />。サイト版は conflict 自体の選択を既存 CBS の earliest 規則に残した実装上の選択であり、論文の主張ではありません。
+
+## 理論保証と実装上限
+
+マニフェストでは完全性を `conditional`、最適性を `true` としています。これは DS が CBS の保証を保存するという意味であり、CBS が持たない無条件の no-solution 有限判定まで主張するものではありません。
+
+<Caution title="正制約を無視すると DS にはなりません">
+  positive child を「制約なしの child」として開くと `P / ¬P` の分割が壊れ、同じ conflict
+  が再発します。 サイト版は頂点、遷移、goal で待つ suffix のすべてで正制約を検査します。
+</Caution>
+
+## サイト上の実装との差異
+
+原論文 §4.1 の positive landmark 間だけを再探索する最適化、MDD Singletons / Width を使う agent 選択、Disjoint3 は未実装です。公開実装のコードは参照・転記していません。ブラウザ安全上限、有限 `maxHorizon`、timeout、AbortSignal による打切りは保証対象外です。
+
+## 実験してみる
+
+<SimulatorLink solverId="disjoint-splitting" />
+
+detailed trace で `add-constraint` を見ると、同じ conflict から `positive: true` と負制約の両方が作られます。`low-level-replan` が正制約の対象以外にも出る場合は、暗黙の禁止に違反した path を再計画しています。

@@ -1495,6 +1495,69 @@ Claude Code のレビューで確認された公開上の不整合を修正し�
 
 ---
 
+## 2026-09-01 Batch 10 レビュー（Claude Code）
+
+Codex の Batch 10（disjoint-splitting / cbsh / ma-cbs）を確認した。
+実装は良好で、独立に叩いた範囲では破れなし。指摘は 1 件。
+
+### 独立検証
+
+| 検査                                               | 結果                           |
+| -------------------------------------------------- | ------------------------------ |
+| CBS（検証済み最適）と SOC 一致（36 盤面 × 4 手法） | 破れなし                       |
+| MA-CBS の B = 0 / 1 / 2 / 5 / ∞（124 回照合）      | 破れなし                       |
+| DS の seed 3 種（93 回、決定性込み）               | 破れなし                       |
+| following 禁止での 3 手法（60 回照合）             | 破れなし                       |
+| MA-CBS の併合が実際に起きるか                      | 13 回発火（25 盤面中 10 盤面） |
+
+正制約の「他 agent への含意」、CBSH の MVC 下界（大規模時の maximal matching も
+matching ≤ MVC なので許容）、`cbsh` の保証を unknown のままにした判断、
+いずれも確認した。
+
+### 指摘 1：horizon で打ち切ったのに「探索を尽くした」と申告していた
+
+`narrow-corridor` で MA-CBS が結論を出すが、構造化フィールドが実際より強い。
+
+```text
+outcome: no-solution   failureReason: search-exhausted
+警告「有限 horizon 69 までに必要な低レベル path を見つけられませんでした。
+      理論上の完全性はこの打切りには適用されません。」
+```
+
+★ `search-exhausted` は「探索空間を尽くした」＝解の非存在の証明を意味する。
+horizon で切っただけでこれを返すと、**散文の但し書きでは否定しながら
+機械可読なフィールドでは証明を主張する**ことになる。読む側はフィールドを
+信じるので、そちらを直さないと意味がない。
+
+これは Batch 10 が入れたものではなく `core.ts` の `finish()` に前からあった
+挙動で、`sawHorizonCutoff` のとき警告だけ足して `failureReason` は触って
+いなかった。Batch 10 の MA-CBS が既定プリセットで初めてこの経路に到達させた
+ため、画面から見えるようになった。
+
+`finish()` で `sawHorizonCutoff && failureReason === "search-exhausted"` なら
+`limit-exceeded` へ落とすようにした。CBS 系 4 手法すべてに効く。
+
+★ **回帰テストの fixture 選びで一度失敗している。** 最初 `narrow-corridor` を
+使ったが、この盤面は重く、outcome が timeout と no-solution の間で揺れる
+（実際に実行ごとに変わった）。timeout の failureReason は元から
+`limit-exceeded` なので、テストは修正を消しても通ってしまい、検査に
+なっていなかった。`horizon: 2` を明示して低レベルを確実に max-time で
+失敗させる 8×2 の盤面に置き換え、**修正を消すと 4 手法とも落ちる**ことを
+確認した。
+
+### 記録（指摘ではない）
+
+- `SOC_OPTIMAL` に `ma-cbs` が入ったが、これは `randomOneShot` が最大 3 体で
+  併合上限 3 に当たらないから成立している。生成器の体数を増やすと
+  上限到達の node-limit で落ちる（実装ではなくテストの前提）。
+- warnings 14 → 15 は `ma-cbs` の参照実装未登録。`lns-wpbs` / `cbm` /
+  `min-cost-max-flow` と同じ既知の分類。
+
+最終ゲート: sources:validate errors=0/warnings=15、format check、lint、
+typecheck 0 errors、unit 420 passed（分割実行）、build 68 pages、E2E 62 passed。
+
+---
+
 ## 2026-08-31 マニフェストの未確定保証を一次資料で 9 件確定させた（Claude Code）
 
 `complete` / `optimal` がどちらも `unknown` のエントリ 38 件のうち、PDF 本文に
@@ -2724,3 +2787,64 @@ lacam を例に使っていたため、Batch 5 で lacam が実装された時�
 - `rmca` と `regret-insertion` について `rmca-ral-2021` PDF の該当範囲を再確認し、完全性・最適性・準最適性の保証定理・補題を確認できなかった旨を `guarantee_evidence` に記録した。TTD は目的関数であり保証ではない。
 - multi-goal の効果を単一 goal の対照と固定し、LNS-PBS / LNS-wPBS / RMCA の average service time が 6（単一 goal）から 8（2 goal）へ増えることを確認した。
 - 品質ゲート再実行: `sources:validate` errors=0 warnings=14、format / lint / typecheck（0 errors）/ unit 20 files・288 tests。build 65 pages、E2E 44 tests もこの修正後に通過した。
+
+---
+
+## 2026-08-31 Batch 10（Codex）
+
+### 対象アルゴリズム
+
+- `disjoint-splitting`: 既存 CBS の standard split を、同じ agent の positive / negative constraint による排他的分岐へ置換。
+- `cbsh`: cardinal conflict graph から許容 high-level heuristic を計算。
+- `ma-cbs`: conflict threshold `B` を超えた group を meta-agent へ併合し、制約付き joint low level で再計画。
+
+### 一次資料
+
+- `disjoint-splitting-icaps-2019` PDF pp.2–3: standard / disjoint split、positive constraint の意味と違反 agent の再計画、§4.2 の Random 方策。
+- `cbsh2-rtc-aij-2021` PDF p.6 Theorem 2: mutually disjunctive constraint set による分割が CBS の完全性・最適性を保存。
+- `cbsh-icaps-2018` PDF pp.1–4（全 5 ページも検索）: conflict graph、matching、minimum vertex cover、zero-cost edge で goal に接続する node の `h=0` 条件。CBSH 固有の完全性・最適性を明示する定理・補題は確認できなかった。
+- `ma-cbs-socs-2012` PDF pp.2–6: threshold `B`、Algorithm 1、meta-constraint と merge 時の継承、`B=0` / `B=∞` の連続体。
+- `cbs-aij-2015` PDF pp.19–20: coupled low level と constraint merging の要件、CBS の証明の MA-CBS への拡張。
+
+公開実装は参照していない。`cbsh2` / `cbsh2-rtc` は USC 独自ライセンスで `copy_allowed: false` のため、コードを読まず、論文と独立実装だけを使用した。第三者コードの取り込みは無く、`THIRD_PARTY_NOTICES.md` は変更していない。
+
+### 実装
+
+- `src/solvers/cbs/constraint-semantics.ts` に正負 constraint の共通判定を追加。positive vertex / edge を対象 agent の必須条件として頂点・遷移・goal suffix で強制し、他 agent には vertex、edge-swap、following の暗黙の禁止として適用した。
+- DS の positive child は、現在 path が正制約またはその含意へ違反する全 agent を再計画する。split agent は論文 §4.2 の Random 方策を `context.random()` で選び、conflict 選択は既存の earliest 規則を維持した。`P / ¬P` が場合を尽くす理由を `core.ts` にコメントした。
+- `src/solvers/cbs/conflict-graph.ts` に cardinal conflict graph 下界を追加。関与 agent 18 体以下は exact minimum vertex cover、超過時は deterministic maximal matching 下界とし、近似 vertex cover は使わない。CBSH は `(g+h, conflict 数, g, FIFO)` で選び、PC+BP を再利用。cardinal edge が無い bypass node は `h=0` とし、zero-cost edge 越しに正の `h` を持ち越さない。
+- `src/solvers/cbs/joint-low-level.ts` に最大 3 体の制約付き joint-state A* を追加。zero-cost commit mask により final arrival と goal 再離脱を区別し、group SOC を正確に最小化する。
+- MA-CBS は CT node ごとに meta-agent partition、root-to-node の conflict count、subject / opponent 付き constraint record を保持。merge 後は内部 constraint を除き、外部 constraint を元 agent に残す。`extra.mergeThreshold` は既定 `B=1`、`0` 以上の整数または `Infinity`。UI の空欄を `Infinity` とした。
+- meta-agent の hard cap は 3 体。上限超過は `node-limit`、`failureReason: limit-exceeded`、`input-too-large` warning を返し、解なしとは主張しない。`merge-meta-agent` event を追加した。
+- registry、Simulator UI、3 解説 MDX、実装ノート、マニフェスト、IMPLEMENTATION_STATUS を同期した。
+
+### テスト
+
+- `tests/unit/batch10-cbs.test.ts` を追加。positive vertex / edge の対象 agent と他 agent への含意、DS の正負 branch と決定性、exact MVC / matching fallback、CBSH の zero-cost bypass、MA-CBS の `B=0` / `B=∞`、constraint 継承、上限警告を固定した。
+- `tests/unit/solver-invariants.test.ts` の SOC 最適手法へ `cbsh`、`disjoint-splitting`、`ma-cbs` を追加。25 個のランダム one-shot 盤面で certified joint-state oracle と一致した。
+- E2E に新 3 ページの runnable 表示と、MA-CBS の B 入力・B=0 実行を追加した。
+
+### 理論保証
+
+- `disjoint-splitting`: `complete: conditional / optimal: true` を維持。CBS 自身の条件を引き継ぐ意味であり、無条件 complete へ上げていない。
+- `ma-cbs`: `complete: conditional / optimal: true` を維持。complete / optimal / constraint-respecting な coupled low level と正しい constraint merging が条件。
+- `cbsh`: `complete: unknown / optimal: unknown` を維持。admissible heuristic の説明だけから保証を推測せず、全 5 ページで明示定理・補題を確認できなかったことを `guarantee_evidence` に記録した。
+
+### 品質ゲート
+
+- `npm ci`: passed。`npm audit` は作業前からの high 4 件を報告したが、依存更新は行っていない。
+- `npm run sources:validate`: errors=0 warnings=15。既存 14 件に、公開実装未登録の runnable `ma-cbs` warning が 1 件加わった。
+- `npm run format:check`: passed。
+- `npm run lint`: passed。
+- `npm run typecheck`: 0 errors（既存 Astro `z` deprecation hints 22 件）。
+- `npm test`: 24 files / 416 tests passed。
+- `npm run build`: 68 pages built。
+- `npm run test:e2e`: Chromium / mobile 62 tests passed。
+
+### 未対応
+
+- DS: landmark 区間だけの再探索、MDD Singletons / Width agent 選択、Disjoint3。
+- CBSH: 親 vertex cover からの増分計算、MDD cache、DG / WDG と CBSH2。
+- MA-CBS: 4 体以上の meta-agent、EPEA* / OD / M* coupled low level、Merge-and-Restart、recursive MA-CBS、大規模 benchmark 最適化。
+
+次工程は未実装一覧に残る `primal` / `primal2` だが、学習済みモデルとライセンスを確認できるまで `explanation-only` を維持する。

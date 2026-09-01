@@ -49,7 +49,7 @@ const isStructural = (rule: string) => !/同時刻に同じセル|edge swap|foll
 const NO_CONFLICT_RESOLUTION = new Set(["bfs", "astar"]);
 
 /** 実装として sum of costs 最適を主張できる手法。 */
-const SOC_OPTIMAL = ["cbs", "icbs", "icts", "mstar"];
+const SOC_OPTIMAL = ["cbs", "icbs", "cbsh", "disjoint-splitting", "ma-cbs", "icts", "mstar"];
 
 /** 実装として完全性を主張できる手法（探索上限内）。 */
 const COMPLETE = ["cbs", "icbs", "mstar", "lacam", "lacam-star", "bcbs", "ecbs"];

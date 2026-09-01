@@ -90,6 +90,19 @@ test.describe("サイト全体", () => {
     await expect(page.getByText(/理論保証はありません/)).toBeVisible();
   });
 
+  test("Batch 10 の CBS 派生ページは実行可能状態と差異を表示する", async ({ page }) => {
+    for (const [path, name] of [
+      ["disjoint-splitting", "Disjoint Splitting"],
+      ["cbsh", "CBSH"],
+      ["ma-cbs", "MA-CBS"],
+    ] as const) {
+      await page.goto(`./algorithms/${path}/`);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
+      await expect(page.getByText("シミュレータで実行可")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "サイト上の実装との差異" })).toBeVisible();
+    }
+  });
+
   test("比較表を絞り込める", async ({ page }) => {
     await page.goto("./compare/");
     const rows = page.locator("#compare-table tbody tr");
@@ -255,6 +268,26 @@ test.describe("シミュレータ", () => {
     await page.getByRole("button", { name: "実行" }).click();
     await expect(page.getByText(/sum of costs/)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".solver-warnings")).toContainText("one-shot Scenario");
+  });
+
+  test("MA-CBS は UI から併合閾値 B を動かせる", async ({ page }) => {
+    const algorithmSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "アルゴリズム", exact: true }) });
+    const solverSelect = algorithmSection.getByRole("combobox");
+    await expect(solverSelect.locator('option[value="disjoint-splitting"]')).toHaveCount(1);
+    await expect(solverSelect.locator('option[value="cbsh"]')).toHaveCount(1);
+    await solverSelect.selectOption("ma-cbs");
+    const threshold = page.getByLabel("併合閾値 B");
+    await expect(threshold).toHaveValue("1");
+    await threshold.fill("0");
+    await page.getByLabel("プリセット").selectOption("swap-conflict");
+    await page.getByRole("button", { name: "実行" }).click();
+    await expect(page.locator(".run-outcome")).toContainText("解が求まりました", {
+      timeout: 30_000,
+    });
+    await threshold.fill("");
+    await expect(threshold).toHaveValue("");
   });
 
   /*

@@ -1,4 +1,5 @@
 import type {
+  AgentId,
   AgentSpec,
   Conflict,
   Constraint,
@@ -22,14 +23,21 @@ import {
   type CbsLowLevelStopReason,
   type ConstrainedSearchOutput,
 } from "./low-level.js";
+import { pathViolatesConstraints } from "./constraint-semantics.js";
+import { cardinalConflictGraphLowerBound, type ConflictGraphLowerBound } from "./conflict-graph.js";
+import { constrainedJointAStar } from "./joint-low-level.js";
+import { activeConstraintsForGroup, type MetaConstraintRecord } from "./ma-constraints.js";
 
-export type CbsVariant = "cbs" | "bcbs" | "ecbs" | "icbs" | "eecbs";
+export type CbsVariant =
+  "cbs" | "bcbs" | "ecbs" | "icbs" | "eecbs" | "cbsh" | "ma-cbs" | "disjoint-splitting";
 
 export interface CbsRunConfig {
   readonly variant: CbsVariant;
   readonly lowLevelWeight: number;
   readonly highLevelWeight: number;
   readonly requestedBound?: number;
+  readonly mergeThreshold?: number;
+  readonly maxMetaAgentSize?: number;
   readonly optionWarnings?: readonly SolverWarning[];
   readonly optionError?: string;
 }
@@ -38,6 +46,9 @@ interface CtNode {
   readonly id: string;
   readonly parentId?: string;
   readonly constraints: readonly Constraint[];
+  readonly constraintRecords: readonly MetaConstraintRecord[];
+  readonly groups: readonly (readonly AgentId[])[];
+  readonly conflictCounts: ReadonlyMap<string, number>;
   readonly lowerBounds: readonly number[];
   readonly lowerBound: number;
   readonly sequence: number;
@@ -90,6 +101,7 @@ export async function solveCbsVariant(
   let stopState: StopState | null = null;
   let sawHorizonCutoff = false;
   const onlineErrors: OnlineErrors = { distanceSum: 0, costSum: 0, samples: 0 };
+  const heuristicCache = new WeakMap<CtNode, ConflictGraphLowerBound>();
 
   if (!limitCheck.ok) return finish(limitCheck.result!);
   if (config.optionError) return finish(errorResult(config.optionError, "invalid-scenario"));
@@ -139,6 +151,9 @@ export async function solveCbsVariant(
 
   const root = makeNode({
     constraints: [],
+    constraintRecords: [],
+    groups: agents.map((agent) => [agent.id]),
+    conflictCounts: new Map(),
     paths: rootPaths,
     lowerBounds: rootLowerBounds,
     depth: 0,
@@ -153,13 +168,14 @@ export async function solveCbsVariant(
       return finish(failureResult(abort, "limit-exceeded"));
     }
 
-    const selection = selectNode(open, config, onlineErrors);
+    const selection = selectNode(open, config, onlineErrors, heuristicFor);
     open.splice(selection.index, 1);
     let current = selection.node;
     const highLevelStop = consumeExpansion();
     if (highLevelStop !== "ok") {
       return finish(failureResult(highLevelStop, "limit-exceeded"));
     }
+    const selectedHeuristic = config.variant === "cbsh" ? heuristicFor(current).value : 0;
     emit({
       type: "expand-node",
       state: {
@@ -168,6 +184,9 @@ export async function solveCbsVariant(
         nodeId: current.id,
         cost: current.cost,
         lowerBound: current.lowerBound,
+        ...(config.variant === "cbsh"
+          ? { heuristic: selectedHeuristic, priority: current.cost + selectedHeuristic }
+          : {}),
         conflicts: current.conflicts.length,
         selectedFrom: selection.source,
       },
@@ -204,7 +223,7 @@ export async function solveCbsVariant(
 
       let chosenConflict: Conflict;
       let branches: readonly Branch[];
-      if (config.variant === "icbs") {
+      if (config.variant === "icbs" || config.variant === "cbsh") {
         const choice = classifyAndChoose(current);
         const stopped = stopResultIfNeeded();
         if (stopped) return finish(stopped);
@@ -220,6 +239,10 @@ export async function solveCbsVariant(
               branch.node.conflicts.length < current.conflicts.length,
           );
           if (bypass?.node) {
+            // CBSH p.4 の zero-cost edge 条件: PC が cardinal conflict を先に
+            // 選ぶため bypass 対象 node には cardinal edge がなく、h=0 である。
+            // same-cost child へ移る前後ともこの値を再計算し、正の h を zero-cost
+            // edge 越しに持ち越さない。
             // Bypass child の constraint も引き継ぐ。paths だけ親へ移すと、後続の
             // replan が bypass 前の経路を再び選べてしまう。
             current = bypass.node;
@@ -231,6 +254,38 @@ export async function solveCbsVariant(
             continue;
           }
         }
+      } else if (config.variant === "disjoint-splitting") {
+        chosenConflict = current.conflicts[0]!;
+        emit({ type: "detect-conflict", conflict: chosenConflict });
+        branches = createDisjointBranches(current, chosenConflict);
+        const stopped = stopResultIfNeeded();
+        if (stopped) return finish(stopped);
+      } else if (config.variant === "ma-cbs") {
+        chosenConflict = current.conflicts[0]!;
+        emit({ type: "detect-conflict", conflict: chosenConflict });
+        const nextCounts = incrementConflictCount(current.conflictCounts, chosenConflict);
+        const groupA = groupForAgent(current.groups, chosenConflict.agentA);
+        const groupB = groupForAgent(current.groups, chosenConflict.agentB);
+        const mergeCount = conflictsBetweenGroups(nextCounts, groupA, groupB);
+        if (mergeCount > (config.mergeThreshold ?? 1)) {
+          const merged = [...groupA, ...groupB];
+          const cap = config.maxMetaAgentSize ?? 3;
+          if (merged.length > cap) {
+            warnings.push({
+              code: "input-too-large",
+              message: `MA-CBS は ${merged.length} 体の meta-agent 併合を要求しましたが、ブラウザ版の上限は ${cap} 体です。解の非存在を証明せず打ち切りました。`,
+            });
+            return finish(failureResult("node-limit", "limit-exceeded"));
+          }
+          const mergedNode = createMergedNode(current, groupA, groupB, nextCounts);
+          const stopped = stopResultIfNeeded();
+          if (stopped) return finish(stopped);
+          if (mergedNode) open.push(mergedNode);
+          break;
+        }
+        branches = createMetaBranches(current, chosenConflict, nextCounts);
+        const stopped = stopResultIfNeeded();
+        if (stopped) return finish(stopped);
       } else {
         chosenConflict = current.conflicts[0]!;
         emit({ type: "detect-conflict", conflict: chosenConflict });
@@ -292,6 +347,9 @@ export async function solveCbsVariant(
   function makeNode(input: {
     readonly parent?: CtNode;
     readonly constraints: readonly Constraint[];
+    readonly constraintRecords: readonly MetaConstraintRecord[];
+    readonly groups: readonly (readonly AgentId[])[];
+    readonly conflictCounts: ReadonlyMap<string, number>;
     readonly paths: readonly TimedPath[];
     readonly lowerBounds: readonly number[];
     readonly depth: number;
@@ -305,6 +363,9 @@ export async function solveCbsVariant(
       id: `ct-${sequence}`,
       ...(input.parent ? { parentId: input.parent.id } : {}),
       constraints: input.constraints,
+      constraintRecords: input.constraintRecords,
+      groups: input.groups,
+      conflictCounts: input.conflictCounts,
       paths: input.paths,
       lowerBounds: input.lowerBounds,
       lowerBound: input.lowerBounds.reduce((sum, value) => sum + value, 0),
@@ -329,40 +390,212 @@ export async function solveCbsVariant(
     const constraints = constraintsFor(conflict);
     const branches: Branch[] = [];
     for (const constraint of constraints) {
-      emit({ type: "add-constraint", constraint });
-      const agentIndex = agents.findIndex((agent) => agent.id === constraint.agentId);
-      if (agentIndex < 0) {
-        stopState = "node-limit";
-        continue;
-      }
-      const agent = agents[agentIndex]!;
-      const childConstraints = [...parent.constraints, constraint];
-      const otherPaths = parent.paths.filter((path) => path.agentId !== agent.id);
+      branches.push(createBranch(parent, constraint));
+    }
+    return branches;
+  }
+
+  function createDisjointBranches(parent: CtNode, conflict: Conflict): readonly Branch[] {
+    const candidates = [conflict.agentA, conflict.agentB] as const;
+    // disjoint-splitting-icaps-2019 PDF p.3 §4.2 の Random 方策。
+    // context.random() を使うので一様乱択であっても同じ seed では決定的になる。
+    const splitAgent = candidates[context.random() < 0.5 ? 0 : 1];
+    const constraints = disjointConstraintsFor(conflict, splitAgent);
+
+    /*
+      ★ 2 枝が場合を尽くす理由。
+        predicate P を「splitAgent が conflict の時空間条件を満たす」とする。
+        - negative child は ¬P の plan をすべて含む。
+        - positive child は P の plan をすべて含む。P が他 agent に含意する
+          collision-avoidance constraint も低レベルで同時に強制する。
+      任意の candidate plan は P または ¬P のちょうど一方に属するため、2 枝は
+      排他的で、親の conflict-free solution 集合を取りこぼさない。
+      （disjoint-splitting-icaps-2019 p.3、cbsh2-rtc-aij-2021 p.6 Theorem 2）
+    */
+    return constraints.map((constraint) => createBranch(parent, constraint));
+  }
+
+  function createBranch(parent: CtNode, constraint: Constraint): Branch {
+    emit({ type: "add-constraint", constraint });
+    const agentIndex = agents.findIndex((agent) => agent.id === constraint.agentId);
+    if (agentIndex < 0) {
+      stopState = "node-limit";
+      return { constraint, agentIndex: 0, node: null };
+    }
+    const childConstraints = [...parent.constraints, constraint];
+    const replanIndices = constraint.positive
+      ? parent.paths.flatMap((path, index) =>
+          pathViolatesConstraints(path, [constraint], scenario.rules) ? [index] : [],
+        )
+      : [agentIndex];
+    const paths = [...parent.paths];
+    const lowerBounds = [...parent.lowerBounds];
+
+    for (const replanIndex of replanIndices) {
+      const agent = agents[replanIndex]!;
+      const otherPaths = paths.filter((path) => path.agentId !== agent.id);
       emit({ type: "low-level-replan", agentId: agent.id, nodeId: parent.id });
       replans += 1;
       const output = planAgent(agent, childConstraints, otherPaths, config.lowLevelWeight);
       generated += output.generated;
       if (!output.path || output.lowerBound === undefined) {
         if (output.reason === "max-time") sawHorizonCutoff = true;
-        branches.push({ constraint, agentIndex, node: null });
-        continue;
+        return { constraint, agentIndex, node: null };
       }
+      paths[replanIndex] = output.path;
+      lowerBounds[replanIndex] = output.lowerBound;
+    }
 
-      const paths = parent.paths.map((path, index) => (index === agentIndex ? output.path! : path));
-      const lowerBounds = parent.lowerBounds.map((value, index) =>
-        index === agentIndex ? output.lowerBound! : value,
+    const child = makeNode({
+      parent,
+      constraints: childConstraints,
+      constraintRecords: parent.constraintRecords,
+      groups: parent.groups,
+      conflictCounts: parent.conflictCounts,
+      paths,
+      lowerBounds,
+      depth: parent.depth + 1,
+    });
+    emitCtNode(child);
+    return { constraint, agentIndex, node: child };
+  }
+
+  function createMetaBranches(
+    parent: CtNode,
+    conflict: Conflict,
+    conflictCounts: ReadonlyMap<string, number>,
+  ): readonly Branch[] {
+    return constraintsFor(conflict).map((representative) => {
+      const subject = groupForAgent(parent.groups, representative.agentId);
+      const opponentId =
+        representative.agentId === conflict.agentA ? conflict.agentB : conflict.agentA;
+      const opponent = groupForAgent(parent.groups, opponentId);
+      // meta-constraint (X,v,t) / (X,e,t): X のどの構成員が同じ時空間を
+      // 使っても相手 meta-agent との conflict が再発するため全員へ複製する。
+      const constraints = subject.map((agentId) => ({ ...representative, agentId }));
+      for (const constraint of constraints) emit({ type: "add-constraint", constraint });
+      const record: MetaConstraintRecord = {
+        constraints,
+        subjectAgentIds: subject,
+        opponentAgentIds: opponent,
+      };
+      const constraintRecords = [...parent.constraintRecords, record];
+      const replanned = replanGroup(
+        parent,
+        subject,
+        activeConstraintsForGroup(constraintRecords, subject),
       );
+      const agentIndex = agents.findIndex((agent) => agent.id === representative.agentId);
+      if (!replanned) return { constraint: representative, agentIndex, node: null };
       const child = makeNode({
         parent,
-        constraints: childConstraints,
-        paths,
-        lowerBounds,
+        constraints: [...parent.constraints, ...constraints],
+        constraintRecords,
+        groups: parent.groups,
+        conflictCounts,
+        paths: replanned.paths,
+        lowerBounds: replanned.lowerBounds,
         depth: parent.depth + 1,
       });
       emitCtNode(child);
-      branches.push({ constraint, agentIndex, node: child });
+      return { constraint: representative, agentIndex, node: child };
+    });
+  }
+
+  function createMergedNode(
+    parent: CtNode,
+    groupA: readonly AgentId[],
+    groupB: readonly AgentId[],
+    conflictCounts: ReadonlyMap<string, number>,
+  ): CtNode | null {
+    const mergedSet = new Set([...groupA, ...groupB]);
+    const merged = agents.flatMap((agent) => (mergedSet.has(agent.id) ? [agent.id] : []));
+    const firstIndex = Math.min(parent.groups.indexOf(groupA), parent.groups.indexOf(groupB));
+    const groups = parent.groups.filter((group) => group !== groupA && group !== groupB);
+    groups.splice(firstIndex, 0, merged);
+    emit({
+      type: "merge-meta-agent",
+      agentIds: merged,
+      threshold: config.mergeThreshold ?? 1,
+      conflictCount: conflictsBetweenGroups(conflictCounts, groupA, groupB),
+    });
+    const replanned = replanGroup(
+      parent,
+      merged,
+      activeConstraintsForGroup(parent.constraintRecords, merged),
+    );
+    if (!replanned) return null;
+    const child = makeNode({
+      parent,
+      constraints: parent.constraints,
+      constraintRecords: parent.constraintRecords,
+      groups,
+      conflictCounts,
+      paths: replanned.paths,
+      lowerBounds: replanned.lowerBounds,
+      depth: parent.depth + 1,
+    });
+    emitCtNode(child);
+    return child;
+  }
+
+  function replanGroup(
+    parent: CtNode,
+    group: readonly AgentId[],
+    constraints: readonly Constraint[],
+  ): { readonly paths: readonly TimedPath[]; readonly lowerBounds: readonly number[] } | null {
+    const indices = group.map((agentId) => agents.findIndex((agent) => agent.id === agentId));
+    if (indices.some((index) => index < 0)) {
+      stopState = "node-limit";
+      return null;
     }
-    return branches;
+    for (const index of indices) {
+      emit({ type: "low-level-replan", agentId: agents[index]!.id, nodeId: parent.id });
+    }
+    replans += indices.length;
+    const paths = [...parent.paths];
+    const lowerBounds = [...parent.lowerBounds];
+
+    if (indices.length === 1) {
+      const index = indices[0]!;
+      const agent = agents[index]!;
+      const otherPaths = paths.filter((path) => path.agentId !== agent.id);
+      const output = planAgent(agent, constraints, otherPaths, 1);
+      generated += output.generated;
+      if (!output.path || output.lowerBound === undefined) {
+        if (output.reason === "max-time") sawHorizonCutoff = true;
+        return null;
+      }
+      paths[index] = output.path;
+      lowerBounds[index] = output.lowerBound;
+      return { paths, lowerBounds };
+    }
+
+    const output = constrainedJointAStar({
+      map: scenario.map,
+      agents: indices.map((index) => agents[index]!),
+      rules: scenario.rules,
+      constraints,
+      maxTime,
+      consumeExpansion,
+      onExpand: (cells, time, f) => {
+        emit({
+          type: "expand-node",
+          state: { phase: "ma-cbs-joint-low-level", agentIds: group, cells, time, f },
+        });
+      },
+    });
+    generated += output.generated;
+    if (!output.paths) {
+      if (output.reason === "max-time") sawHorizonCutoff = true;
+      return null;
+    }
+    for (const path of output.paths) {
+      const index = agents.findIndex((agent) => agent.id === path.agentId);
+      paths[index] = path;
+      lowerBounds[index] = path.positions.length - 1;
+    }
+    return { paths, lowerBounds };
   }
 
   function classifyAndChoose(parent: CtNode): {
@@ -397,6 +630,45 @@ export async function solveCbsVariant(
       }
     }
     return firstSemi ?? firstNon ?? null;
+  }
+
+  function heuristicFor(node: CtNode): ConflictGraphLowerBound {
+    const cached = heuristicCache.get(node);
+    if (cached) return cached;
+    const edges: { agentA: string; agentB: string }[] = [];
+    for (const conflict of node.conflicts) {
+      const increases = constraintsFor(conflict).map((constraint) =>
+        constraintIncreasesCost(node, constraint),
+      );
+      if (stopState) break;
+      if (increases[0] && increases[1]) {
+        edges.push({ agentA: conflict.agentA, agentB: conflict.agentB });
+      }
+    }
+    const result = cardinalConflictGraphLowerBound(edges);
+    heuristicCache.set(node, result);
+    return result;
+  }
+
+  function constraintIncreasesCost(parent: CtNode, constraint: Constraint): boolean {
+    const agentIndex = agents.findIndex((agent) => agent.id === constraint.agentId);
+    if (agentIndex < 0) return true;
+    const agent = agents[agentIndex]!;
+    const otherPaths = parent.paths.filter((path) => path.agentId !== agent.id);
+    const output = planAgent(
+      agent,
+      [...parent.constraints, constraint],
+      otherPaths,
+      config.lowLevelWeight,
+    );
+    generated += output.generated;
+    if (!output.path) {
+      if (output.reason === "max-time") sawHorizonCutoff = true;
+      return true;
+    }
+    const previousCost = parent.paths[agentIndex]!.positions.length - 1;
+    const nextCost = output.path.positions.length - 1;
+    return nextCost > previousCost;
   }
 
   function stopResultIfNeeded(): SolverResult | null {
@@ -441,15 +713,30 @@ export async function solveCbsVariant(
   }
 
   function finish(base: SolverResult): SolverResult {
+    let result = base;
     if (sawHorizonCutoff) {
       warnings.push({
         code: "simplified-behavior",
         message: `有限 horizon ${maxTime} までに必要な低レベル path を見つけられませんでした。理論上の完全性はこの打切りには適用されません。`,
       });
+      /*
+        ★ 打ち切ったなら failureReason も打ち切りだと言うこと。
+
+          `search-exhausted` は「探索空間を尽くした」＝解の非存在の証明を意味する。
+          horizon で切っただけなのにこれを返すと、散文の但し書きでは否定しながら
+          機械可読なフィールドでは証明を主張することになる。読む側は
+          フィールドを信じるので、こちらを直さないと意味がない。
+
+          実際 narrow-corridor で MA-CBS がこの経路に入り、
+          no-solution / search-exhausted を返していた。
+      */
+      if (result.outcome !== "solved" && result.failureReason === "search-exhausted") {
+        result = { ...result, failureReason: "limit-exceeded" };
+      }
     }
-    const beforeTrace = mergeWarnings(base.warnings, warnings);
+    const beforeTrace = mergeWarnings(result.warnings, warnings);
     const eventResult: SolverResult = {
-      ...base,
+      ...result,
       ...(beforeTrace.length > 0 ? { warnings: beforeTrace } : {}),
     };
     emit({ type: "finish", result: eventResult });
@@ -466,11 +753,28 @@ function selectNode(
   open: readonly CtNode[],
   config: CbsRunConfig,
   errors: OnlineErrors,
+  heuristicFor: (node: CtNode) => ConflictGraphLowerBound,
 ): Selection {
-  if (config.variant === "cbs" || config.variant === "icbs") {
+  if (
+    config.variant === "cbs" ||
+    config.variant === "icbs" ||
+    config.variant === "ma-cbs" ||
+    config.variant === "disjoint-splitting"
+  ) {
     const index = bestIndex(open, compareCbs);
     const node = open[index]!;
     return { index, node, lowerBound: node.cost, source: "open" };
+  }
+
+  if (config.variant === "cbsh") {
+    const index = bestIndex(open, (a, b) => compareCbsh(a, b, heuristicFor));
+    const node = open[index]!;
+    return {
+      index,
+      node,
+      lowerBound: node.cost + heuristicFor(node).value,
+      source: "open",
+    };
   }
 
   if (config.variant === "bcbs") {
@@ -535,6 +839,19 @@ function selectNode(
 
 function compareCbs(a: CtNode, b: CtNode): number {
   return a.cost - b.cost || a.conflicts.length - b.conflicts.length || a.sequence - b.sequence;
+}
+
+function compareCbsh(
+  a: CtNode,
+  b: CtNode,
+  heuristicFor: (node: CtNode) => ConflictGraphLowerBound,
+): number {
+  return (
+    a.cost + heuristicFor(a).value - (b.cost + heuristicFor(b).value) ||
+    a.conflicts.length - b.conflicts.length ||
+    a.cost - b.cost ||
+    a.sequence - b.sequence
+  );
 }
 
 function compareFocalNode(a: CtNode, b: CtNode): number {
@@ -648,6 +965,45 @@ function constraintsFor(conflict: Conflict): readonly Constraint[] {
     { kind: "vertex", agentId: conflict.agentA, cell: conflict.cell, time: conflict.time },
     { kind: "vertex", agentId: conflict.agentB, cell: conflict.cell, time: conflict.time - 1 },
   ];
+}
+
+function disjointConstraintsFor(conflict: Conflict, splitAgent: string): readonly Constraint[] {
+  const negative = constraintsFor(conflict).find((constraint) => constraint.agentId === splitAgent);
+  if (!negative) return [];
+  return [negative, { ...negative, positive: true }];
+}
+
+function groupForAgent(
+  groups: readonly (readonly AgentId[])[],
+  agentId: AgentId,
+): readonly AgentId[] {
+  return groups.find((group) => group.includes(agentId)) ?? [agentId];
+}
+
+function incrementConflictCount(
+  counts: ReadonlyMap<string, number>,
+  conflict: Conflict,
+): ReadonlyMap<string, number> {
+  const next = new Map(counts);
+  const key = agentPairKey(conflict.agentA, conflict.agentB);
+  next.set(key, (next.get(key) ?? 0) + 1);
+  return next;
+}
+
+function conflictsBetweenGroups(
+  counts: ReadonlyMap<string, number>,
+  groupA: readonly AgentId[],
+  groupB: readonly AgentId[],
+): number {
+  let total = 0;
+  for (const agentA of groupA) {
+    for (const agentB of groupB) total += counts.get(agentPairKey(agentA, agentB)) ?? 0;
+  }
+  return total;
+}
+
+function agentPairKey(agentA: AgentId, agentB: AgentId): string {
+  return agentA < agentB ? `${agentA}\u0000${agentB}` : `${agentB}\u0000${agentA}`;
 }
 
 function validateInput(

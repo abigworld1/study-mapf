@@ -334,13 +334,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [ma-cbs-socs-2012, cbs-aij-2015]
   implementation_repository_ids: []
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: conditional
     optimal: true
     bounded_suboptimal: false
   guarantee_evidence: "cbs-aij-2015 p.1「MA-CBS is a framework that can be built on top of any optimal and complete MAPF solver in order to enhance its performance.」/ p.19「This constraint-merging mechanism must be designed such that MA-CBS still returns an optimal solution.」完全性は低レベルに使う solver が完全であることに依存するため conditional とした。"
-  notes: "衝突回数が閾値 B を超えたエージェント対をメタエージェントへ併合し、低レベルで結合探索する。B=0 で結合探索、B=∞ で素の CBS になる連続体として説明できる。公開実装は未特定。要調査。"
+  notes: "衝突回数が閾値 B を超えた group をメタエージェントへ併合し、低レベルで結合探索する。本サイトは B=0〜∞ を UI から変更でき、既定 B=1。最大 3 体の制約付き joint A* を使い、それを超える併合要求は node-limit と警告で打ち切る。Merge-and-Restart は未実装。公開実装は未特定。"
 
 - id: icbs
   display_name: "ICBS (Improved CBS)"
@@ -469,13 +469,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [cbsh-icaps-2018]
   implementation_repository_ids: [cbsh2]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: unknown
     optimal: unknown
     bounded_suboptimal: false
-  guarantee_evidence: null
-  notes: "cardinal conflict のグラフ（Conflict Graph）の最小頂点被覆を高レベルの許容ヒューリスティクスにする。"
+  guarantee_evidence: "cbsh-icaps-2018 PDF 全 5 ページを確認。pp.1–3 は cardinal conflict の集約による heuristic を admissible と述べるが、CBSH 固有の完全性・最適性を明示する定理・補題は確認できなかったため unknown のままとする。"
+  notes: "cardinal conflict graph の最小頂点被覆を高レベルの許容 heuristic にする。本サイトは関与 agent 18 体以下で厳密 MVC、それを超える場合は maximal matching 下界へ切り替える。p.4 の zero-cost edge 条件に合わせ、cardinal edge の無い bypass node は h=0 とする。DG / WDG は未実装。"
 
 - id: cbsh2
   display_name: "CBSH2 (改良ヒューリスティクス版 CBS)"
@@ -559,13 +559,13 @@
   problem_types: [classical-mapf]
   primary_paper_ids: [disjoint-splitting-icaps-2019]
   implementation_repository_ids: [cbsh2-rtc]
-  implementation_status: planned
+  implementation_status: runnable
   guarantees:
     complete: conditional
     optimal: true
     bounded_suboptimal: false
   guarantee_evidence: "disjoint-splitting-icaps-2019 p.3「Clearly, disjoint splitting is complete since one of the two constraints must hold for any candidate conflict-free plan in the parent CT node」/ cbsh2-rtc-aij-2021 p.6 Theorem 2「Using two sets of mutually disjunctive constraints to split a CT node preserves the completeness and optimality of CBS.」。complete は CBS と同じく conditional。"
-  notes: "標準分割では 2 つの子ノードの探索空間が重なる。positive constraint（必ずそこを通れ）を導入して重なりを消す。"
+  notes: "同じ agent の negative / positive constraint で排他的に分岐する。本サイトは正制約を対象 agent の必須条件、他 agent の暗黙の禁止として vertex / edge / following へ強制し、違反 path を持つ全 agent を再計画する。split agent は seeded Random。landmark 区間再探索と MDD 選択方策は未実装。"
 
 - id: bcp
   display_name: "BCP (Branch-and-Cut-and-Price)"

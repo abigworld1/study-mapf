@@ -89,7 +89,7 @@ while OPEN is not empty:
 return failure
 ```
 
-原論文 Algorithm 2 のうち CBS に対応する lines 1–10, 19–26 を、サイトの型へ合わせて再構成しています<SourceCitation paperId="cbs-aij-2015" label="Algorithm 2" page={10} />。MA-CBS 用の merge 処理は省略しています。
+原論文 Algorithm 2 のうち CBS に対応する lines 1–10, 19–26 を、サイトの型へ合わせて再構成しています<SourceCitation paperId="cbs-aij-2015" label="Algorithm 2" page={10} />。この CBS Solver 自体は standard split を使い、merge は独立した MA-CBS Solver で試せます。
 
 ## 実装上の注意
 
@@ -118,7 +118,7 @@ high level の tie-break は論文どおり SOC、conflict 数、FIFO です。l
 
 ## サイト上の実装との差異
 
-原論文の graph を 4 近傍 grid に限定し、`maxHorizon`、timeout、共有展開上限、AbortSignal を加えています。following conflict、diagonal、disappear at goal、positive constraint、MA-CBS は未対応です。有限 horizon で打ち切った実行には論文の理論保証を適用しません。
+原論文の graph を 4 近傍 grid に限定し、`maxHorizon`、timeout、共有展開上限、AbortSignal を加えています。diagonal と disappear at goal は未対応です。共有 low level は positive constraint を扱い、Disjoint Splitting と MA-CBS は同じ CBS コア上の独立 Solver として実装しています。有限 horizon で打ち切った実行には論文の理論保証を適用しません。
 
 `libmultirobotplanning` の CBS は確認しましたが、固定ケース比較用 build は環境に `yaml-cpp` header が無く失敗しました。コードは転記していません。
 

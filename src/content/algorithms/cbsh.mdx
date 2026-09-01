@@ -1,0 +1,89 @@
+---
+title: "CBSH"
+algorithmId: cbsh
+originalName: "Adding Heuristics to Conflict-Based Search"
+order: 140
+summary: "cardinal conflict graph の頂点被覆を、CBS 高レベルの許容ヒューリスティクスにする。"
+status: reviewed
+primarySources:
+  - paperId: cbsh-icaps-2018
+    sections: ["3", "3.1", "3.2"]
+    pages: [1, 2, 3, 4]
+lastReviewed: "2026-08-31"
+simulatorSolverId: cbsh
+---
+
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+CBSH は CBS の CT node に許容ヒューリスティクス `h` を加え、`g+h` で OPEN を選ぶ手法です。`g` は現在の paths の SOC、`h` は cardinal conflict をすべて解消するために将来必ず増える SOC の下界です。原論文は cardinal conflict を集約して admissible heuristic を作ると説明します<SourceCitation paperId="cbsh-icaps-2018" page={1} />。
+
+## conflict graph
+
+CT node `N` の conflict graph `G_CF` を次のように作ります。
+
+- 頂点: cardinal conflict に関与する agent
+- 辺: cardinal conflict を起こしている agent 対
+
+1 本の cardinal conflict は、どちらの agent を制約しても path cost が少なくとも 1 増える conflict です。したがって、その conflict だけでも descendant solution の cost は `N.cost+1` 以上であり、`h=1` は許容です<SourceCitation paperId="cbsh-icaps-2018" page={2} />。
+
+複数の辺を同時に数えるには、すべての conflict edge の少なくとも一端を選ぶ必要があります。これは conflict graph の minimum vertex cover です。原論文は matching を使う方法を §3.1、minimum vertex cover を使う方法を §3.2 で説明し、後者の厳密計算が NP-hard であることも述べています<SourceCitation paperId="cbsh-icaps-2018" section="3.1" page={3} /><SourceCitation paperId="cbsh-icaps-2018" section="3.2" page={3} />。
+
+## サイト版の h
+
+- conflict graph の関与 agent が 18 体以下: branch-and-bound で minimum vertex cover size を厳密計算
+- 18 体を超える: deterministic maximal matching の大きさへ切替
+
+後者はサイト上の安全策です。matching の各辺は互いに端点を共有しないため、vertex cover は各辺から別々に 1 頂点以上を選ぶ必要があります。よって matching size は弱くても過大評価しない下界です。近似 vertex cover の大きさは上界になり得るため、`h` には使いません。
+
+## zero-cost edge の落とし穴
+
+原論文は、goal node と 1 本以上の zero-cost edge でつながる non-goal node の admissible `h` は 0 でなければならないと注意しています<SourceCitation paperId="cbsh-icaps-2018" page={4} />。
+
+サイトの helpful bypass は同じ SOC の child へ移るため、この条件が実際に起きます。CBSH は cardinal conflict を先に選び、cardinal でない conflict にだけ bypass を試します。したがって bypass 対象 node の cardinal conflict graph は空で `h=0` です。移動後の child でも graph を再計算し、親の正の `h` を持ち越しません。
+
+## アルゴリズムの手順
+
+1. CT node の各 conflict を 2 branch の最短 cost で分類します。
+2. cardinal conflict だけから conflict graph を作ります。
+3. exact MVC または matching 下界で `h` を求めます。
+4. `(g+h, conflict数, g, FIFO)` が最小の node を展開します。
+5. ICBS と同じ PC と helpful bypass で conflict を処理します。
+6. conflict-free node を返します。
+
+## 疑似コード
+
+```text
+for node in OPEN:
+  E ← cardinal agent pairs in node.conflicts
+  h(node) ← exactMVC(E) if |V(E)| <= 18 else maximalMatching(E)
+
+node ← minimum OPEN by (node.cost + h(node), conflicts, cost, FIFO)
+if no cardinal conflict and helpful same-cost child exists:
+  assert h(node) == 0
+  continue from bypass child
+otherwise:
+  split the highest-priority conflict
+```
+
+## 理論保証の表示
+
+<Caution title="このサイトでは CBSH 固有の保証を unknown のままにしています">
+  `cbsh-icaps-2018` PDF 全 5 ページを確認し、ヒューリスティクスが admissible
+  である説明は確認しました。 ただし CBSH
+  の完全性・最適性を明示する定理・補題は見つからなかったため、推論でマニフェストを埋めていません。
+  実装は小規模 oracle と SOC が一致することを継続テストしています。
+</Caution>
+
+## サイト上の実装との差異
+
+親 node の vertex cover から増分計算する最適化、MDD cache、CBSH2 の dependency graph / weighted dependency graph は未実装です。大規模 graph の maximal matching fallback はブラウザ版独自です。`cbsh2` / `cbsh2-rtc` の公開コードはライセンス上取り込まず、本実装では参照していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="cbsh" />
+
+verbose trace の CT `expand-node` には `heuristic` と `priority` が入ります。helpful bypass が出る node では `heuristic: 0` であることを確認できます。

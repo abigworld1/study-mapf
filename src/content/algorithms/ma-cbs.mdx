@@ -1,0 +1,92 @@
+---
+title: "MA-CBS"
+algorithmId: ma-cbs
+originalName: "Meta-Agent Conflict-Based Search"
+order: 120
+summary: "衝突が閾値 B を超えた group を併合し、結合低レベルで解く CBS の連続体。"
+status: reviewed
+primarySources:
+  - paperId: ma-cbs-socs-2012
+    pages: [2, 3, 5, 6]
+  - paperId: cbs-aij-2015
+    sections: ["8.5", "8.6"]
+    pages: [19, 20]
+lastReviewed: "2026-08-31"
+simulatorSolverId: ma-cbs
+---
+
+import Caution from "@/components/sources/Caution.astro";
+import SourceCitation from "@/components/sources/SourceCitation.astro";
+import SimulatorLink from "@/components/SimulatorLink.astro";
+
+## 概要
+
+MA-CBS は、繰り返し衝突する agent を meta-agent へ併合する CBS です。衝突回数が閾値 `B` を超えるまでは CBS と同じように制約で分岐し、超えたら両 group を 1 個の joint low-level problem として解きます<SourceCitation paperId="ma-cbs-socs-2012" page={2} />。
+
+## B で見える連続体
+
+- `B=∞`: `should-merge()` は常に false となり、素の CBS
+- 小さい `B`: 繰り返す衝突対だけを早く結合
+- `B=0`: 最初の衝突で結合し、論文では A\*+ID と同等
+
+素の CBS が `B=∞` に当たることは Algorithm 1 周辺で説明され<SourceCitation paperId="ma-cbs-socs-2012" label="Algorithm 1" page={3} />、`B=0` の対応は p.6 に示されています<SourceCitation paperId="ma-cbs-socs-2012" page={6} />。サイトでは `B` を UI から動かし、同じ問題が分離探索と結合探索の間でどう変わるか観察できます。
+
+## 状態と遷移
+
+各 CT node は通常の constraints、paths、SOC に加えて次を持ちます。
+
+- agent を互いに素な group へ分けた meta-agent partition
+- root からその node までに観測した agent 対の conflict count
+- constraint を課した subject group と、その相手 group の記録
+
+衝突した 2 group 間の count 合計が `B` を超えたら group を併合し、新 group だけを joint A\* で再計画します。超えなければ各 group を subject とする 2 child を作ります。
+
+## meta-constraint の継承
+
+meta-agent `X` への constraint `(X,v,t)` は、`X` のどの構成員も `v,t` を使わないという意味です。後で 2 group を併合するとき、両者間の内部 constraint は結合 low level 自身が衝突を防ぐため捨てます。一方、外部 group に対する constraint は、それを課された元 agent に残します。この区別は原論文 p.5 の constraint merging に基づきます<SourceCitation paperId="ma-cbs-socs-2012" page={5} />。
+
+## 結合低レベルと SOC
+
+サイト版は最大 3 体の joint-state A\* を使います。state は全構成員の cell、時刻、最終到着済み mask です。
+
+goal に居るだけでは path を終了扱いにせず、「以後ずっと待って全制約を守れる」ときだけ zero-cost で commit します。これにより、いったん goal に着いた後で他 agent を通すため離れる path も正しく SOC に数えます。heuristic は未 commit agent の true distance の和です。
+
+## 疑似コード
+
+```text
+node ← minimum CT node by (SOC, conflicts, FIFO)
+conflict ← earliestConflict(node.paths)
+increment node.conflictCount[conflict.agentPair]
+X, Y ← groups containing the conflicting agents
+
+if conflictsBetween(X, Y) > B:
+  if |X union Y| > 3: return node-limit with warning
+  Z ← merge(X, Y)
+  drop constraints internal to Z
+  node.paths[Z] ← optimalJointAStar(Z, externalConstraints)
+  OPEN.push(node)
+else:
+  branch with a meta-constraint for X and one for Y
+```
+
+## 理論保証と安全上限
+
+マニフェストでは完全性を `conditional`、最適性を `true` としています。MA-CBS の coupled low level は complete、constraint-respecting、optimal でなければならず、constraint merging も最適性を保つ必要があります<SourceCitation paperId="cbs-aij-2015" section="8.5" page={19} />。CBS の証明を MA-CBS へ拡張する説明は §8.6 にあります<SourceCitation paperId="cbs-aij-2015" section="8.6" page={20} />。
+
+<Caution title="4 体以上へ併合すると、解なしではなく打切りです">
+  joint state は cell 数の agent 数乗で増えます。ブラウザ版は meta-agent を 3 体までに制限し、
+  それを超える merge が必要なら `node-limit` と `input-too-large` warning を返します。
+  有効な解を見つけずに止めたもので、解の非存在を証明した結果ではありません。
+</Caution>
+
+既定値 `B=1` は教材盤面で merge を観察しやすくするサイト上の選択で、論文が指定した既定値ではありません。有限 `maxHorizon`、展開上限、timeout、AbortSignal による打切りも理論保証の対象外です。
+
+## サイト上の実装との差異
+
+4 体以上の meta-agent、EPEA\* / OD / M\* を使う coupled low level、Merge-and-Restart、recursive MA-CBS、大規模 benchmark 用最適化は未実装です。MA-CBS の公開実装はマニフェストで特定できておらず、公開コードは参照・転記していません。
+
+## 実験してみる
+
+<SimulatorLink solverId="ma-cbs" />
+
+「併合閾値 B」を `0` にすると最初の衝突で `merge-meta-agent` が出ます。空欄にすると `B=∞` となり、同じ入力を CBS として処理します。既定は `1` です。

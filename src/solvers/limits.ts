@@ -92,6 +92,7 @@ const DETAILED_EXTRA = new Set<string>([
   "create-ct-node",
   "low-level-replan",
   "bypass",
+  "merge-meta-agent",
   "update-priority-dag",
   "replan-lower-priority-agent",
   "priority-order",

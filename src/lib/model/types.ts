@@ -569,6 +569,13 @@ export type SolverEvent =
   | { readonly type: "low-level-replan"; readonly agentId: AgentId; readonly nodeId?: string }
   /** バイパス（子ノードを作らず経路だけ差し替え）した。 */
   | { readonly type: "bypass"; readonly agentId: AgentId; readonly conflict: Conflict }
+  /** MA-CBS: 2 つの group を 1 つの meta-agent へ併合した。 */
+  | {
+      readonly type: "merge-meta-agent";
+      readonly agentIds: readonly AgentId[];
+      readonly threshold: number;
+      readonly conflictCount: number;
+    }
   // ------------------------------------------------------------ PBS
   /** 優先順位の半順序（DAG）を更新した。 */
   | {
